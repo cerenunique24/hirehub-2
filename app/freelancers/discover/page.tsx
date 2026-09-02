@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   Search,
   ChevronDown,
@@ -42,6 +42,7 @@ export default function DiscoverPage() {
       .select(
         "id, title, description, budget, location, project_type, created_at, skills"
       )
+      .eq("status", "open")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -88,7 +89,7 @@ export default function DiscoverPage() {
     const diffMs = now.getTime() - createdAt.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return "Bugün";
+    if (diffDays <= 0) return "Bugün";
     if (diffDays === 1) return "1 gün önce";
     if (diffDays < 7) return `${diffDays} gün önce`;
 
@@ -206,7 +207,7 @@ export default function DiscoverPage() {
                     type="button"
                     onClick={() => toggleFavorite(project.id)}
                     className="rounded-full p-2 transition hover:bg-gray-100"
-                    aria-label="Favorilere ekle"
+                    aria-label={isFavorite ? "Favorilerden çıkar" : "Favorilere ekle"}
                   >
                     <Heart
                       size={20}
@@ -267,12 +268,12 @@ export default function DiscoverPage() {
                     Detay
                   </Link>
 
-                  <button
-                    type="button"
+                  <Link
+                    href={`/freelancers/discover/${project.id}?apply=true`}
                     className="rounded-xl bg-black px-6 py-3 text-white transition hover:bg-gray-800"
                   >
                     Teklif Ver
-                  </button>
+                  </Link>
                 </div>
               </div>
             );
