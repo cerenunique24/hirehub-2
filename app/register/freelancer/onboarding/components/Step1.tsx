@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import type { OnboardingData } from "../page";
 
 type Step1Props = {
+  data: OnboardingData;
+  onChange: (updates: Partial<OnboardingData>) => void;
   onNext: () => void;
 };
 
@@ -21,20 +24,25 @@ const expertiseOptions = [
   "WordPress",
 ];
 
-export default function Step1({ onNext }: Step1Props) {
-  const [expertise, setExpertise] = useState<string[]>([]);
+export default function Step1({
+  data,
+  onChange,
+  onNext,
+}: Step1Props) {
   const [skill, setSkill] = useState("");
-  const [skills, setSkills] = useState<string[]>([]);
-  const [about, setAbout] = useState("");
 
   const toggleExpertise = (item: string) => {
-    if (expertise.includes(item)) {
-      setExpertise(expertise.filter((x) => x !== item));
+    if (data.expertise.includes(item)) {
+      onChange({
+        expertise: data.expertise.filter((x) => x !== item),
+      });
       return;
     }
 
-    if (expertise.length < 2) {
-      setExpertise([...expertise, item]);
+    if (data.expertise.length < 2) {
+      onChange({
+        expertise: [...data.expertise, item],
+      });
     }
   };
 
@@ -42,25 +50,28 @@ export default function Step1({ onNext }: Step1Props) {
     const value = skill.trim();
 
     if (!value) return;
+    if (data.skills.includes(value)) return;
 
-    if (skills.includes(value)) return;
+    onChange({
+      skills: [...data.skills, value],
+    });
 
-    setSkills([...skills, value]);
     setSkill("");
   };
 
   const removeSkill = (item: string) => {
-    setSkills(skills.filter((x) => x !== item));
+    onChange({
+      skills: data.skills.filter((x) => x !== item),
+    });
   };
 
   const canContinue =
-    expertise.length > 0 &&
-    skills.length > 0 &&
-    about.length >= 80;
+    data.expertise.length > 0 &&
+    data.skills.length > 0 &&
+    data.about.length >= 80;
 
   return (
     <>
-
       <h1 className="text-4xl font-bold">
         Profilini oluştur
       </h1>
@@ -71,10 +82,7 @@ export default function Step1({ onNext }: Step1Props) {
 
       <div className="mt-10 space-y-8">
 
-        {/* Uzmanlık */}
-
         <div>
-
           <label className="font-semibold">
             Uzmanlık Alanları
           </label>
@@ -89,30 +97,24 @@ export default function Step1({ onNext }: Step1Props) {
                 type="button"
                 key={item}
                 onClick={() => toggleExpertise(item)}
-                className={`px-4 py-2 rounded-full border transition
-                  ${
-                    expertise.includes(item)
-                      ? "bg-black text-white border-black"
-                      : "bg-white hover:bg-gray-50"
-                  }`}
+                className={`px-4 py-2 rounded-full border transition ${
+                  data.expertise.includes(item)
+                    ? "bg-black text-white border-black"
+                    : "bg-white hover:bg-gray-50"
+                }`}
               >
                 {item}
               </button>
             ))}
           </div>
-
         </div>
 
-        {/* Yetenekler */}
-
         <div>
-
           <label className="font-semibold">
             Yeteneklerin
           </label>
 
           <div className="flex gap-3 mt-3">
-
             <input
               value={skill}
               onChange={(e) => setSkill(e.target.value)}
@@ -133,12 +135,10 @@ export default function Step1({ onNext }: Step1Props) {
             >
               Ekle
             </button>
-
           </div>
 
           <div className="flex flex-wrap gap-2 mt-4">
-
-            {skills.map((item) => (
+            {data.skills.map((item) => (
               <span
                 key={item}
                 className="bg-gray-100 rounded-full px-4 py-2 text-sm flex items-center gap-2"
@@ -152,25 +152,21 @@ export default function Step1({ onNext }: Step1Props) {
                 >
                   ×
                 </button>
-
               </span>
             ))}
-
           </div>
-
         </div>
 
-        {/* Hakkında */}
-
         <div>
-
           <label className="font-semibold">
             Kendinden Bahset
           </label>
 
           <textarea
-            value={about}
-            onChange={(e) => setAbout(e.target.value)}
+            value={data.about}
+            onChange={(e) =>
+              onChange({ about: e.target.value })
+            }
             rows={6}
             maxLength={500}
             placeholder="Deneyimlerini, uzmanlığını ve çalışma tarzını anlat..."
@@ -178,10 +174,9 @@ export default function Step1({ onNext }: Step1Props) {
           />
 
           <div className="flex justify-between mt-2 text-sm">
-
             <span
               className={
-                about.length >= 80
+                data.about.length >= 80
                   ? "text-green-600"
                   : "text-red-500"
               }
@@ -190,29 +185,25 @@ export default function Step1({ onNext }: Step1Props) {
             </span>
 
             <span className="text-gray-400">
-              {about.length}/500
+              {data.about.length}/500
             </span>
-
           </div>
-
         </div>
 
         <button
           type="button"
           disabled={!canContinue}
           onClick={onNext}
-          className={`w-full py-4 rounded-full font-semibold transition
-            ${
-              canContinue
-                ? "bg-black text-white"
-                : "bg-gray-300 text-white cursor-not-allowed"
-            }`}
+          className={`w-full py-4 rounded-full font-semibold transition ${
+            canContinue
+              ? "bg-black text-white"
+              : "bg-gray-300 text-white cursor-not-allowed"
+          }`}
         >
           Devam Et
         </button>
 
       </div>
-
     </>
   );
 }

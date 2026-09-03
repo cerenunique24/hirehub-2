@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const categories = [
   "UI/UX Design",
@@ -31,6 +32,7 @@ const prices = [
 ];
 
 export default function FreelancerSetupPage() {
+  const router = useRouter();
   const [category, setCategory] = useState("");
 
   const [skillInput, setSkillInput] = useState("");
@@ -214,17 +216,7 @@ export default function FreelancerSetupPage() {
 
 <button
   type="button"
-  onClick={() => {
-    import { useRouter } from "next/navigation";
-
-    const router = useRouter();
-    
-    // ...
-    
-    onClick={() => {
-      router.push("/register/freelancer/verify");
-    }}
-  }}
+  onClick={() => router.push("/register/freelancer/verify")}
   disabled={
     !category ||
     skills.length === 0 ||

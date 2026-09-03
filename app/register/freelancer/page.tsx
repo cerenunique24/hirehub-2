@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Eye, EyeOff } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function FreelancerRegisterPage() {
-
   const router = useRouter();
-
+  const supabase = createClient();
 
   const [form, setForm] = useState({
     firstName: "",
@@ -17,14 +17,10 @@ export default function FreelancerRegisterPage() {
     confirmPassword: "",
   });
 
-
   const [error, setError] = useState("");
-
+  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-
 
   const rules = [
     {
@@ -45,34 +41,18 @@ export default function FreelancerRegisterPage() {
     },
   ];
 
+  const passwordValid = rules.every((rule) => rule.valid);
 
-
-  const passwordValid = rules.every(
-    (rule) => rule.valid
-  );
-
-
-
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement>
-  ) {
-
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({
       ...form,
       [e.target.name]: e.target.value,
     });
-
   }
 
-
-
-
-  function handleSubmit(
-    e: React.FormEvent
-  ) {
-
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
+    setError("");
 
     if (
       !form.firstName ||
@@ -81,129 +61,72 @@ export default function FreelancerRegisterPage() {
       !form.password ||
       !form.confirmPassword
     ) {
-
       setError("Lütfen tüm alanları doldur.");
       return;
-
     }
-
-
 
     if (!passwordValid) {
-
       setError("Şifre kurallarını tamamla.");
       return;
-
     }
 
-
-
-    if (
-      form.password !== form.confirmPassword
-    ) {
-
+    if (form.password !== form.confirmPassword) {
       setError("Şifreler eşleşmiyor.");
       return;
-
     }
 
+    setLoading(true);
 
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: form.email,
+      password: form.password,
+      options: {
+        data: {
+          first_name: form.firstName,
+          last_name: form.lastName,
+          role: "freelancer",
+        },
+      },
+    });
 
-    setError("");
+    if (signUpError) {
+      setError(signUpError.message);
+      setLoading(false);
+      return;
+    }
 
-    router.push(
-      "/register/freelancer/verify"
-    );
-
+    router.push("/register/freelancer/verify");
   }
 
-
-
-
-
   return (
-
-    <main
-      className="
-        min-h-screen
-        bg-[#F7F8FA]
-        flex
-        items-center
-        justify-center
-        px-6
-      "
-    >
-
-      <div
-        className="
-          w-full
-          max-w-md
-          bg-white
-          rounded-3xl
-          p-8
-          shadow-sm
-        "
-      >
-
-
+    <main className="min-h-screen bg-[#F7F8FA] flex items-center justify-center px-6">
+      <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-sm">
         <h1 className="text-3xl font-semibold">
           Kayıt Oluştur
         </h1>
-
 
         <p className="mt-2 text-sm text-gray-500">
           Freelancer hesabını oluşturmak için bilgilerini gir.
         </p>
 
-
-
-
-        <form
-          onSubmit={handleSubmit}
-          className="mt-8 space-y-4"
-        >
-
-
-
+        <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-
             <input
               name="firstName"
               placeholder="Ad"
               value={form.firstName}
               onChange={handleChange}
-              className="
-                h-12
-                border
-                rounded-xl
-                px-4
-                text-sm
-                outline-none
-                focus:border-black
-              "
+              className="h-12 border rounded-xl px-4 text-sm outline-none focus:border-black"
             />
-
 
             <input
               name="lastName"
               placeholder="Soyad"
               value={form.lastName}
               onChange={handleChange}
-              className="
-                h-12
-                border
-                rounded-xl
-                px-4
-                text-sm
-                outline-none
-                focus:border-black
-              "
+              className="h-12 border rounded-xl px-4 text-sm outline-none focus:border-black"
             />
-
           </div>
-
-
-
 
           <input
             name="email"
@@ -211,240 +134,101 @@ export default function FreelancerRegisterPage() {
             placeholder="E-posta"
             value={form.email}
             onChange={handleChange}
-            className="
-              w-full
-              h-12
-              border
-              rounded-xl
-              px-4
-              text-sm
-              outline-none
-              focus:border-black
-            "
+            className="w-full h-12 border rounded-xl px-4 text-sm outline-none focus:border-black"
           />
 
-
-
-
-
-          {/* Şifre */}
-
           <div className="relative">
-
             <input
               name="password"
               type={showPassword ? "text" : "password"}
               placeholder="Şifre"
               value={form.password}
               onChange={handleChange}
-              className="
-                w-full
-                h-12
-                border
-                rounded-xl
-                px-4
-                pr-12
-                text-sm
-                outline-none
-                focus:border-black
-              "
+              className="w-full h-12 border rounded-xl px-4 pr-12 text-sm outline-none focus:border-black"
             />
-
 
             <button
               type="button"
-              onClick={() =>
-                setShowPassword(!showPassword)
-              }
-              className="
-                absolute
-                right-4
-                top-1/2
-                -translate-y-1/2
-                text-gray-400
-                hover:text-black
-              "
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
             >
-
-              {
-                showPassword
-                ? <EyeOff size={18}/>
-                : <Eye size={18}/>
-              }
-
+              {showPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}
             </button>
-
-
           </div>
 
-
-
-
-
-          {/* Şifre Kuralları */}
-
-          <div
-            className="
-              rounded-xl
-              bg-gray-50
-              p-4
-              space-y-2
-            "
-          >
-
-            {
-              rules.map((rule)=>(
+          <div className="rounded-xl bg-gray-50 p-4 space-y-2">
+            {rules.map((rule) => (
+              <div
+                key={rule.label}
+                className="flex items-center gap-2 text-sm"
+              >
                 <div
-                  key={rule.label}
-                  className="
-                    flex
-                    items-center
-                    gap-2
-                    text-sm
-                  "
+                  className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                    rule.valid
+                      ? "bg-green-500 text-white"
+                      : "bg-gray-200 text-gray-400"
+                  }`}
                 >
+                  <Check size={12} />
+                </div>
 
-                  <div
-                    className={`
-                      w-5
-                      h-5
-                      rounded-full
-                      flex
-                      items-center
-                      justify-center
-                      ${
-                        rule.valid
-                        ? "bg-green-500 text-white"
-                        : "bg-gray-200 text-gray-400"
-                      }
-                    `}
-                  >
-
-                    <Check size={12}/>
-
-                  </div>
-
-
-                  <span
-                    className={
-                      rule.valid
+                <span
+                  className={
+                    rule.valid
                       ? "text-gray-900"
                       : "text-gray-500"
-                    }
-                  >
-                    {rule.label}
-                  </span>
-
-
-                </div>
-              ))
-            }
-
+                  }
+                >
+                  {rule.label}
+                </span>
+              </div>
+            ))}
           </div>
 
-
-
-
-
-          {/* Şifre Tekrar */}
-
           <div className="relative">
-
             <input
               name="confirmPassword"
-              type={
-                showConfirmPassword
-                ? "text"
-                : "password"
-              }
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="Şifre Tekrar"
               value={form.confirmPassword}
               onChange={handleChange}
-              className="
-                w-full
-                h-12
-                border
-                rounded-xl
-                px-4
-                pr-12
-                text-sm
-                outline-none
-                focus:border-black
-              "
+              className="w-full h-12 border rounded-xl px-4 pr-12 text-sm outline-none focus:border-black"
             />
-
 
             <button
               type="button"
               onClick={() =>
-                setShowConfirmPassword(
-                  !showConfirmPassword
-                )
+                setShowConfirmPassword(!showConfirmPassword)
               }
-              className="
-                absolute
-                right-4
-                top-1/2
-                -translate-y-1/2
-                text-gray-400
-                hover:text-black
-              "
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
             >
-
-              {
-                showConfirmPassword
-                ? <EyeOff size={18}/>
-                : <Eye size={18}/>
-              }
-
+              {showConfirmPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}
             </button>
-
-
           </div>
 
-
-
-
-
-          {
-            error && (
-              <p className="text-sm text-red-500">
-                {error}
-              </p>
-            )
-          }
-
-
-
-
+          {error && (
+            <p className="text-sm text-red-500">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"
-            className="
-              w-full
-              h-12
-              rounded-xl
-              bg-black
-              text-white
-              text-sm
-              font-medium
-              hover:bg-gray-800
-              transition
-            "
+            disabled={loading}
+            className="w-full h-12 rounded-xl bg-black text-white text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
           >
-            Kayıt Oluştur
+            {loading ? "Hesap oluşturuluyor..." : "Kayıt Oluştur"}
           </button>
-
-
-
         </form>
-
-
       </div>
-
-
     </main>
-
   );
-
 }

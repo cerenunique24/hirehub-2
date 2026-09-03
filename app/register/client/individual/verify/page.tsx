@@ -218,9 +218,9 @@ export default function IndividualVerifyPage() {
                   key={index}
 
 
-                  ref={(el)=>
-                    inputs.current[index]=el
-                  }
+                  ref={(el) => {
+                    inputs.current[index] = el;
+                  }}
 
 
                   value={item}

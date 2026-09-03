@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import type { OnboardingData } from "../page";
 
 type Step2Props = {
+  data: OnboardingData;
+  onChange: (updates: Partial<OnboardingData>) => void;
   onBack: () => void;
   onNext: () => void;
 };
 
 export default function Step2({
+  data,
+  onChange,
   onBack,
   onNext,
 }: Step2Props) {
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [portfolio, setPortfolio] = useState("");
-  const [experience, setExperience] = useState("");
-
   const handlePhoto = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -22,21 +22,26 @@ export default function Step2({
 
     if (!file) return;
 
-    setPhoto(URL.createObjectURL(file));
+    onChange({
+      photo: file,
+    });
   };
 
   const portfolioValid =
-    portfolio === "" ||
-    /^https?:\/\/.+/i.test(portfolio);
+    data.portfolio === "" ||
+    /^https?:\/\/.+/i.test(data.portfolio);
 
   const canContinue =
-    photo !== null &&
-    experience !== "" &&
+    data.photo !== null &&
+    data.experience !== "" &&
     portfolioValid;
+
+  const photoPreview = data.photo
+    ? URL.createObjectURL(data.photo)
+    : null;
 
   return (
     <>
-
       <h1 className="text-4xl font-bold">
         Portfolyo ve Deneyim
       </h1>
@@ -47,10 +52,7 @@ export default function Step2({
 
       <div className="mt-10 space-y-8">
 
-        {/* Profil Fotoğrafı */}
-
         <div>
-
           <label className="font-semibold">
             Profil Fotoğrafı
           </label>
@@ -58,27 +60,20 @@ export default function Step2({
           <div className="mt-4 flex items-center gap-6">
 
             <div className="w-32 h-32 rounded-full overflow-hidden border bg-gray-100">
-
-              {photo ? (
-
+              {photoPreview ? (
                 <img
-                  src={photo}
+                  src={photoPreview}
                   alt="Profil"
                   className="w-full h-full object-cover"
                 />
-
               ) : (
-
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm">
                   Fotoğraf
                 </div>
-
               )}
-
             </div>
 
             <label className="cursor-pointer bg-black text-white px-6 py-3 rounded-full">
-
               Fotoğraf Yükle
 
               <input
@@ -87,25 +82,22 @@ export default function Step2({
                 hidden
                 onChange={handlePhoto}
               />
-
             </label>
 
           </div>
-
         </div>
 
-        {/* Portfolyo */}
-
         <div>
-
           <label className="font-semibold">
             Portfolyo Linki
           </label>
 
           <input
-            value={portfolio}
+            value={data.portfolio}
             onChange={(e) =>
-              setPortfolio(e.target.value)
+              onChange({
+                portfolio: e.target.value,
+              })
             }
             placeholder="https://behance.net/kullaniciadi"
             className="w-full border rounded-xl px-5 py-4 mt-3"
@@ -120,49 +112,29 @@ export default function Step2({
           >
             Behance, Dribbble, Github veya kişisel web sitesi ekleyebilirsin.
           </p>
-
         </div>
 
-        {/* Deneyim */}
-
         <div>
-
           <label className="font-semibold">
             Deneyim Seviyesi
           </label>
 
           <select
-            value={experience}
+            value={data.experience}
             onChange={(e) =>
-              setExperience(e.target.value)
+              onChange({
+                experience: e.target.value,
+              })
             }
             className="w-full border rounded-xl px-5 py-4 mt-3"
           >
-            <option value="">
-              Seçiniz
-            </option>
-
-            <option value="junior">
-              Junior (0-2 yıl)
-            </option>
-
-            <option value="mid">
-              Mid-Level (2-5 yıl)
-            </option>
-
-            <option value="senior">
-              Senior (5+ yıl)
-            </option>
-
-            <option value="lead">
-              Lead / Principal
-            </option>
-
+            <option value="">Seçiniz</option>
+            <option value="junior">Junior (0-2 yıl)</option>
+            <option value="mid">Mid-Level (2-5 yıl)</option>
+            <option value="senior">Senior (5+ yıl)</option>
+            <option value="lead">Lead / Principal</option>
           </select>
-
         </div>
-
-        {/* Butonlar */}
 
         <div className="flex gap-4">
 
@@ -188,7 +160,6 @@ export default function Step2({
         </div>
 
       </div>
-
     </>
   );
 }

@@ -1,5 +1,5 @@
 import Sidebar from "./components/Sidebar";
-import Header from "./components/Header";
+import DashboardNavbar from "./components/DashboardNavbar";
 
 export default function FreelancersLayout({
   children,
@@ -8,21 +8,17 @@ export default function FreelancersLayout({
 }) {
   return (
     <div className="flex min-h-screen bg-surface">
-
       <aside className="w-64 shrink-0">
         <Sidebar />
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <main className="flex-1 overflow-x-hidden p-6">
+          <DashboardNavbar />
 
-        <Header />
-
-        <main className="flex-1 p-6 overflow-x-hidden">
           {children}
         </main>
-
       </div>
-
     </div>
   );
 }

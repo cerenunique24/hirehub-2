@@ -173,9 +173,9 @@ code.map(
 
 key={index}
 
-ref={(el)=>
-inputs.current[index]=el
-}
+ref={(el) => {
+  inputs.current[index] = el;
+}}
 
 value={item}
 

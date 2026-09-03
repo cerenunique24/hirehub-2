@@ -1,20 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import type { OnboardingData } from "../page";
 
 type Step3Props = {
+  data: OnboardingData;
+  onChange: (updates: Partial<OnboardingData>) => void;
   onBack: () => void;
   onNext: () => void;
 };
 
 export default function Step3({
+  data,
+  onChange,
   onBack,
   onNext,
 }: Step3Props) {
-  const [availability, setAvailability] = useState("");
-  const [workTypes, setWorkTypes] = useState<string[]>([]);
-  const [languages, setLanguages] = useState<string[]>([]);
-
   const workOptions = [
     "Uzaktan",
     "Hibrit",
@@ -29,29 +29,40 @@ export default function Step3({
   ];
 
   const toggleWork = (item: string) => {
-    if (workTypes.includes(item)) {
-      setWorkTypes(workTypes.filter((x) => x !== item));
+    if (data.workTypes.includes(item)) {
+      onChange({
+        workTypes: data.workTypes.filter(
+          (x) => x !== item
+        ),
+      });
     } else {
-      setWorkTypes([...workTypes, item]);
+      onChange({
+        workTypes: [...data.workTypes, item],
+      });
     }
   };
 
   const toggleLanguage = (item: string) => {
-    if (languages.includes(item)) {
-      setLanguages(languages.filter((x) => x !== item));
+    if (data.languages.includes(item)) {
+      onChange({
+        languages: data.languages.filter(
+          (x) => x !== item
+        ),
+      });
     } else {
-      setLanguages([...languages, item]);
+      onChange({
+        languages: [...data.languages, item],
+      });
     }
   };
 
   const canContinue =
-    availability !== "" &&
-    workTypes.length > 0 &&
-    languages.length > 0;
+    data.availability !== "" &&
+    data.workTypes.length > 0 &&
+    data.languages.length > 0;
 
   return (
     <>
-
       <h1 className="text-4xl font-bold">
         Çalışma Tercihlerin
       </h1>
@@ -62,17 +73,18 @@ export default function Step3({
 
       <div className="mt-10 space-y-8">
 
-        {/* Müsaitlik */}
-
         <div>
-
           <label className="font-semibold">
             Haftalık Müsaitlik
           </label>
 
           <select
-            value={availability}
-            onChange={(e) => setAvailability(e.target.value)}
+            value={data.availability}
+            onChange={(e) =>
+              onChange({
+                availability: e.target.value,
+              })
+            }
             className="w-full border rounded-xl px-5 py-4 mt-3"
           >
             <option value="">Seçiniz</option>
@@ -81,26 +93,21 @@ export default function Step3({
             <option>20-40 saat</option>
             <option>Tam zamanlı</option>
           </select>
-
         </div>
 
-        {/* Çalışma Şekli */}
-
         <div>
-
           <label className="font-semibold">
             Çalışma Tercihi
           </label>
 
           <div className="flex flex-wrap gap-3 mt-4">
-
             {workOptions.map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => toggleWork(item)}
                 className={`px-4 py-2 rounded-full border transition ${
-                  workTypes.includes(item)
+                  data.workTypes.includes(item)
                     ? "bg-black text-white border-black"
                     : "bg-white"
                 }`}
@@ -108,28 +115,22 @@ export default function Step3({
                 {item}
               </button>
             ))}
-
           </div>
-
         </div>
 
-        {/* Diller */}
-
         <div>
-
           <label className="font-semibold">
             Bildiğin Diller
           </label>
 
           <div className="flex flex-wrap gap-3 mt-4">
-
             {languageOptions.map((item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => toggleLanguage(item)}
                 className={`px-4 py-2 rounded-full border transition ${
-                  languages.includes(item)
+                  data.languages.includes(item)
                     ? "bg-black text-white border-black"
                     : "bg-white"
                 }`}
@@ -137,9 +138,7 @@ export default function Step3({
                 {item}
               </button>
             ))}
-
           </div>
-
         </div>
 
         <div className="flex gap-4">
@@ -166,7 +165,6 @@ export default function Step3({
         </div>
 
       </div>
-
     </>
   );
 }

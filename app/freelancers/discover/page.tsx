@@ -35,28 +35,70 @@ export default function DiscoverPage() {
 
   const loadProjects = async () => {
     const supabase = createClient();
+
     setLoading(true);
 
-    const { data, error } = await supabase
-      .from("projects")
-      .select(
-        "id, title, description, budget, location, project_type, created_at, skills"
-      )
-      .eq("status", "open")
-      .order("created_at", { ascending: false });
+    try {
+      // Giriş yapan kullanıcıyı al
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (error) {
-      console.error("Projects load error:", error);
+      if (userError || !user) {
+        console.error("User load error:", userError);
+        setProjects([]);
+        return;
+      }
+
+      // Kullanıcının daha önce teklif verdiği projeleri al
+      const { data: proposals, error: proposalsError } = await supabase
+        .from("proposals")
+        .select("project_id")
+        .eq("freelancer_id", user.id);
+
+      if (proposalsError) {
+        console.error("Proposals load error:", proposalsError);
+        setProjects([]);
+        return;
+      }
+
+      // Teklif verilmiş proje ID'lerini oluştur
+      const submittedProjectIds = new Set(
+        (proposals ?? []).map((proposal) => proposal.project_id)
+      );
+
+      // Açık projeleri al
+      const { data, error } = await supabase
+        .from("projects")
+        .select(
+          "id, title, description, budget, location, project_type, created_at, skills"
+        )
+        .eq("status", "open")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Projects load error:", error);
+        setProjects([]);
+      } else {
+        // Daha önce teklif verilen projeleri keşfet listesinden çıkar
+        const availableProjects = (data ?? []).filter(
+          (project) => !submittedProjectIds.has(project.id)
+        );
+
+        setProjects(availableProjects);
+      }
+    } catch (error) {
+      console.error("Discover page error:", error);
       setProjects([]);
-    } else {
-      setProjects(data ?? []);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
+
     if (!query) return projects;
 
     return projects.filter((project) => {
@@ -86,6 +128,7 @@ export default function DiscoverPage() {
   const formatDate = (date: string) => {
     const createdAt = new Date(date);
     const now = new Date();
+
     const diffMs = now.getTime() - createdAt.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
@@ -111,7 +154,10 @@ export default function DiscoverPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Projeleri Keşfet</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          Projeleri Keşfet
+        </h1>
+
         <p className="mt-2 text-gray-500">
           Sana uygun projeleri keşfet ve hemen teklif gönder.
         </p>
@@ -121,6 +167,7 @@ export default function DiscoverPage() {
         <div className="flex gap-4">
           <div className="flex flex-1 items-center gap-3 rounded-xl border border-gray-200 px-4 py-3">
             <Search size={18} className="text-gray-400" />
+
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -128,6 +175,7 @@ export default function DiscoverPage() {
               className="w-full outline-none"
             />
           </div>
+
           <button
             type="button"
             onClick={() => setSearch(search.trim())}
@@ -138,18 +186,23 @@ export default function DiscoverPage() {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          {["Kategori", "Bütçe", "Süre", "Remote", "Deneyim", "Sırala"].map(
-            (item) => (
-              <button
-                key={item}
-                type="button"
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm transition hover:bg-gray-100"
-              >
-                {item}
-                <ChevronDown size={16} />
-              </button>
-            )
-          )}
+          {[
+            "Kategori",
+            "Bütçe",
+            "Süre",
+            "Remote",
+            "Deneyim",
+            "Sırala",
+          ].map((item) => (
+            <button
+              key={item}
+              type="button"
+              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm transition hover:bg-gray-100"
+            >
+              {item}
+              <ChevronDown size={16} />
+            </button>
+          ))}
         </div>
       </div>
 
@@ -160,6 +213,7 @@ export default function DiscoverPage() {
           </span>{" "}
           proje bulundu
         </p>
+
         <button
           type="button"
           className="rounded-lg border border-gray-200 px-4 py-2 text-sm transition hover:bg-gray-100"
@@ -179,6 +233,7 @@ export default function DiscoverPage() {
           <h2 className="text-lg font-semibold text-gray-900">
             Henüz proje bulunamadı
           </h2>
+
           <p className="mt-2 text-sm text-gray-500">
             Yeni projeler yayınlandığında burada görünecek.
           </p>
@@ -200,14 +255,21 @@ export default function DiscoverPage() {
                     <h2 className="text-xl font-semibold text-gray-900">
                       {project.title}
                     </h2>
-                    <p className="mt-1 text-gray-500">HireHub Projesi</p>
+
+                    <p className="mt-1 text-gray-500">
+                      HireHub Projesi
+                    </p>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => toggleFavorite(project.id)}
                     className="rounded-full p-2 transition hover:bg-gray-100"
-                    aria-label={isFavorite ? "Favorilerden çıkar" : "Favorilere ekle"}
+                    aria-label={
+                      isFavorite
+                        ? "Favorilerden çıkar"
+                        : "Favorilere ekle"
+                    }
                   >
                     <Heart
                       size={20}
