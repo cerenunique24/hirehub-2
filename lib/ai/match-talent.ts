@@ -1,95 +1,2654 @@
-import { coalitions } from "@/mocks/coalitions";
-import { users } from "@/mocks/users";
-import type { ProjectAnalysis, TalentMatchingResult } from "@/types/ai";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { ProjectAnalysis } from "@/types/ai";
+
+import { matchSkills } from "@/lib/matching";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
+type Profile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  title: string | null;
+  bio: string | null;
+  skills: string[] | null;
+  availability: string | null;
+  experience: string | number | null;
+  expertise: string | null;
+  role: string | null;
+};
+
+type PortfolioItem = {
+  id: string;
+  title: string | null;
+  category: string | null;
+  description: string | null;
+  skills: string[] | null;
+};
+
+/**
+ * Yeni sistemde project_roles tablosu kullanılmıyor.
+ *
+ * Roller:
+ * projects.budget_breakdown
+ *
+ * JSONB alanında tutuluyor.
+ */
+type BudgetBreakdownItem = {
+  roleId?: string;
+  role?: string;
+  name?: string;
+  memberCount?: number;
+  budgetPerPerson?: number;
+  budget?: number;
+  duration?: string;
+  responsibilities?: string[];
+  skills?: string[];
+  requiredSkills?: string[];
+  preferredSkills?: string[];
+  reason?: string;
+};
+
+type ProjectRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  skills: string[] | null;
+  category: string | null;
+  budget_breakdown: BudgetBreakdownItem[] | null;
+};
+
+export type TalentMatch = {
+  id: string;
+  name: string;
+  title?: string;
+  avatar?: string;
+  role: string;
+  score: number;
+  skills: string[];
+  availability:
+    | "available"
+    | "partially_available"
+    | "busy";
+  reason: string;
+  memberCount?: number;
+  budgetPerPerson?: number;
+  budget?: number;
+};
+
+export type RoleMatchInput = {
+  name: string;
+  memberCount?: number;
+  budgetPerPerson?: number;
+  budget?: number;
+  responsibilities?: string[];
+  skills: string[];
+  preferredSkills?: string[];
+  reason?: string;
+};
+
+export type RoleMatching = {
+  role: string;
+  freelancers: TalentMatch[];
+  memberCount?: number;
+  budgetPerPerson?: number;
+  budget?: number;
+};
+
+export type FreelancerRoleMatch = {
+  roleId: string;
+  role: string;
+  score: number;
+  reason: string;
+  memberCount?: number;
+
+  /**
+   * Bütçe yalnızca eşleşen rol için döndürülür.
+   *
+   * 0 ise client tarafından bu rol için
+   * görünür bir bütçe tanımlanmamış kabul edilir.
+   */
+  budgetPerPerson?: number;
+  budget?: number;
+};
+
+type MatchCalculation = {
+  score: number;
+  reason: string;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Client / AI Matching                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Client tarafında proje rollerine freelancer eşleştirir.
+ *
+ * Bu fonksiyon proje oluşturulurken kullanılır.
+ *
+ * Önemli:
+ * - Tüm freelancer profilleri değerlendirilir.
+ * - Müsait olmayan freelancerlar silinmez.
+ * - Availability sadece bilgi olarak döner.
+ * - Bütçe matching skorunu etkilemez.
+ * - Her rol kendi freelancer listesini alır.
+ */
 export async function matchTalent(
-  analysis: ProjectAnalysis
-): Promise<TalentMatchingResult> {
-  await delay(800);
+  supabase: SupabaseClient,
+  analysis: ProjectAnalysis,
+  roles?: RoleMatchInput[]
+): Promise<RoleMatching[]> {
+  const rolesToMatch = buildRolesToMatch(
+    analysis,
+    roles
+  );
 
-  const requiredSkills = analysis.requiredSkills.map((s) => s.toLowerCase());
-
-  const recommendedFreelancers = users.map((user) => {
-    const skills = inferFreelancerSkills(user.username);
-    const overlap = skills.filter((skill) =>
-      requiredSkills.some(
-        (required) =>
-          skill.toLowerCase().includes(required) ||
-          required.includes(skill.toLowerCase())
-      )
-    );
-
-    const matchScore = Math.min(95, 60 + overlap.length * 12);
-
-    return {
-      userId: user.id,
-      name: `${user.name} ${user.surname}`,
-      username: user.username,
-      avatar: user.avatar,
-      skills,
-      matchScore,
-      reasons: buildFreelancerReasons(overlap, analysis),
-      hourlyRate: "₺750 / saat",
-    };
-  }).sort((a, b) => b.matchScore - a.matchScore);
-
-  const recommendedCoalitions = coalitions.map((coalition) => {
-    const overlap = coalition.skills.filter((skill) =>
-      requiredSkills.some(
-        (required) =>
-          skill.toLowerCase().includes(required) ||
-          required.includes(skill.toLowerCase())
-      )
-    );
-
-    const matchScore = Math.min(98, coalition.aiScore - 10 + overlap.length * 5);
-
-    return {
-      coalitionId: coalition.id,
-      name: coalition.name,
-      skills: coalition.skills,
-      matchScore,
-      reasons: [
-        `Strong overlap with ${overlap.length} required skills`,
-        `${coalition.completedProjects} completed projects`,
-        `Rated ${coalition.rating}/5 by clients`,
-      ],
-      memberCount: coalition.members.length,
-      rating: coalition.rating,
-    };
-  }).sort((a, b) => b.matchScore - a.matchScore);
-
-  return {
-    recommendedFreelancers,
-    recommendedCoalitions,
-  };
-}
-
-function inferFreelancerSkills(username: string): string[] {
-  const skillMap: Record<string, string[]> = {
-    ahmetylmz: ["Next.js", "React", "TypeScript", "Frontend Development"],
-    zeynepdmr: ["UI Design", "Figma", "UX Research", "Design Systems"],
-  };
-
-  return skillMap[username] ?? ["General Freelance", "Communication"];
-}
-
-function buildFreelancerReasons(
-  overlap: string[],
-  analysis: ProjectAnalysis
-): string[] {
-  const reasons: string[] = [];
-
-  if (overlap.length > 0) {
-    reasons.push(`Matches ${overlap.length} required skills: ${overlap.join(", ")}`);
+  if (rolesToMatch.length === 0) {
+    return [];
   }
 
-  reasons.push(`Relevant for ${analysis.category} projects`);
-  reasons.push("Available for collaboration");
+  const profiles =
+    await getFreelancerProfiles(supabase);
 
-  return reasons;
+  return rolesToMatch.map((role) => {
+    const freelancers: TalentMatch[] = [];
+
+    const memberCount =
+      normalizePositiveInteger(
+        role.memberCount,
+        1
+      );
+
+    const budgetPerPerson =
+      normalizeMoney(
+        role.budgetPerPerson
+      );
+
+    const budget =
+      normalizeMoney(
+        role.budget ??
+          memberCount * budgetPerPerson
+      );
+
+    for (const profile of profiles) {
+      const freelancerSkills =
+        normalizeSkills(profile.skills);
+
+      const result = calculateMatch({
+        profile,
+        requiredRole: role.name,
+        requiredSkills: uniqueStrings(
+          role.skills
+        ),
+        preferredSkills: uniqueStrings(
+          role.preferredSkills ?? []
+        ),
+        responsibilities: uniqueStrings(
+          role.responsibilities ?? []
+        ),
+        freelancerSkills,
+      });
+
+      if (result.score <= 0) {
+        continue;
+      }
+
+      const availability =
+        normalizeAvailability(
+          profile.availability
+        );
+
+      freelancers.push({
+        id: profile.id,
+        name: getProfileName(profile),
+        title:
+          profile.title ||
+          profile.expertise ||
+          undefined,
+        avatar:
+          profile.avatar_url ||
+          undefined,
+        role: role.name,
+        score: result.score,
+        skills: freelancerSkills,
+        availability,
+        reason: result.reason,
+        memberCount,
+        budgetPerPerson,
+        budget,
+      });
+    }
+
+    freelancers.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+
+      return (
+        availabilitySortValue(
+          a.availability
+        ) -
+        availabilitySortValue(
+          b.availability
+        )
+      );
+    });
+
+    return {
+      role: role.name,
+      freelancers:
+        deduplicateMatches(
+          freelancers
+        ),
+      memberCount,
+      budgetPerPerson,
+      budget,
+    };
+  });
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/* -------------------------------------------------------------------------- */
+/* Freelancer → Project Matching                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Freelancer proje detay / Discover sayfası için matching.
+ *
+ * Roller projects.budget_breakdown içerisinden okunur.
+ *
+ * MATCHING KURALI
+ *
+ * Genel proje skill'inin uyuşması tek başına freelancerı
+ * role uygun kabul etmez.
+ *
+ * Freelancerın gerçekten role bağlı olduğunu gösteren
+ * en az bir güçlü role-specific sinyal gerekir:
+ *
+ * 1. Profil title / expertise / bio → rol
+ * 2. Role-specific skill → freelancer skill
+ * 3. Portfolio → rol
+ *
+ * Responsibilities tek başına yeterli değildir.
+ *
+ * Ayrıca %55'in altında kalan sonuçlar Discover'da
+ * gerçek eşleşme olarak kabul edilmez.
+ *
+ * ÖNEMLİ:
+ * Response yalnızca eşleşen rolleri içerir.
+ *
+ * Böylece eşleşmeyen rollerin bütçeleri response'a
+ * dahil edilmez.
+ */
+export async function matchFreelancerToProjectRoles(
+  supabase: SupabaseClient,
+  projectId: string,
+  freelancerId: string
+): Promise<FreelancerRoleMatch[]> {
+  const [
+    { data: projectData, error: projectError },
+    { data: profileData, error: profileError },
+    { data: portfolioData, error: portfolioError },
+  ] = await Promise.all([
+    supabase
+      .from("projects")
+      .select(
+        `
+          id,
+          title,
+          description,
+          skills,
+          category,
+          budget_breakdown
+        `
+      )
+      .eq("id", projectId)
+      .single(),
+
+    supabase
+      .from("profiles")
+      .select(
+        [
+          "id",
+          "first_name",
+          "last_name",
+          "avatar_url",
+          "title",
+          "bio",
+          "skills",
+          "availability",
+          "experience",
+          "expertise",
+          "role",
+        ].join(", ")
+      )
+      .eq("id", freelancerId)
+      .eq("role", "freelancer")
+      .single(),
+
+    supabase
+      .from("portfolio_items")
+      .select(
+        `
+          id,
+          title,
+          category,
+          description,
+          skills
+        `
+      )
+      .eq(
+        "freelancer_id",
+        freelancerId
+      )
+      .order("created_at", {
+        ascending: false,
+      }),
+  ]);
+
+  /* ---------------------------------------------------------------------- */
+  /* Errors                                                                 */
+  /* ---------------------------------------------------------------------- */
+
+  if (projectError) {
+    throw projectError;
+  }
+
+  if (profileError) {
+    throw profileError;
+  }
+
+  if (portfolioError) {
+    throw portfolioError;
+  }
+
+  if (!projectData) {
+    return [];
+  }
+
+  if (!profileData) {
+    return [];
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Normalize                                                              */
+  /* ---------------------------------------------------------------------- */
+
+  const project =
+    normalizeProject(
+      projectData as unknown as Record<
+        string,
+        unknown
+      >
+    );
+
+  const profile =
+    normalizeProfile(
+      profileData as unknown as Record<
+        string,
+        unknown
+      >
+    );
+
+  const portfolioItems = (
+    (portfolioData ?? []) as unknown[]
+  ).map((item) =>
+    normalizePortfolioItem(
+      item as Record<
+        string,
+        unknown
+      >
+    )
+  );
+
+  const projectSkills =
+    normalizeSkills(
+      project.skills
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Roles                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  const roles =
+    normalizeBudgetBreakdown(
+      project.budget_breakdown
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* No roles                                                               */
+  /* ---------------------------------------------------------------------- */
+
+  if (roles.length === 0) {
+    const fallbackRole: BudgetBreakdownItem = {
+      roleId: "fallback-single-role",
+      role: "Tek Freelancer",
+      memberCount: 1,
+      skills: projectSkills,
+      requiredSkills: projectSkills,
+    };
+
+    roles.push(fallbackRole);
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Match                                                                  */
+  /* ---------------------------------------------------------------------- */
+
+  const results: FreelancerRoleMatch[] = [];
+
+  for (
+    let index = 0;
+    index < roles.length;
+    index++
+  ) {
+    const projectRole =
+      roles[index];
+
+    const roleName =
+      getRoleName(
+        projectRole,
+        index
+      );
+
+    const budgetInfo =
+      getBudgetInfo(
+        projectRole
+      );
+
+    const projectRoleRecord = {
+      id:
+        projectRole.roleId ??
+        `budget-role-${index}`,
+
+      role_name:
+        roleName,
+
+      required_count:
+        projectRole.memberCount ??
+        1,
+    };
+
+    const calculation =
+      calculateFreelancerProjectRoleMatch({
+        project,
+        projectRole:
+          projectRoleRecord,
+        profile,
+        portfolioItems,
+        projectSkills,
+        roleData: projectRole,
+      });
+
+    /**
+     * ÖNEMLİ: düşük skorlu bir rol asla listeden düşürülmez.
+     *
+     * Ürün kuralı: "%40 eşleşen freelancer da teklif gönderebilmeli"
+     * — eşleşme yüzdesi yalnızca bilgilendirme amaçlıdır, teklif
+     * gönderimini engelleyen bir kapı DEĞİLDİR. Önceki sürümde
+     * 40 puanın altındaki roller response'tan tamamen çıkarılıyordu;
+     * bu da Discover ekranında "uygun eşleşme yok" görünüp teklif
+     * formunun tamamen kilitlenmesine yol açıyordu.
+     *
+     * Bütçe gizliliği yine korunuyor: yalnızca gerçekten eşleşen
+     * (>= 40) roller için per-person bütçe döndürülür, düşük
+     * skorlu roller bütçesiz döner.
+     */
+    const isRealMatch = calculation.score >= 40;
+
+    results.push({
+      roleId:
+        projectRole.roleId ??
+        `budget-role-${index}`,
+
+      role: roleName,
+
+      score:
+        calculation.score,
+
+      reason:
+        calculation.reason,
+
+      memberCount:
+        budgetInfo.memberCount ??
+        normalizePositiveInteger(
+          projectRole.memberCount,
+          1
+        ),
+
+      /**
+       * Bütçe sadece gerçekten eşleşen (>= 40) rol için döndürülür.
+       * Eğer client bütçe girmemişse normalizeMoney() zaten 0 döndürür.
+       */
+      budgetPerPerson: isRealMatch
+        ? budgetInfo.budgetPerPerson
+        : 0,
+
+      budget: isRealMatch
+        ? budgetInfo.budget
+        : 0,
+    });
+  }
+
+  return results.sort(
+    (a, b) =>
+      b.score - a.score
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Freelancer Project Role Calculation                                        */
+/* -------------------------------------------------------------------------- */
+
+function calculateFreelancerProjectRoleMatch({
+  project,
+  projectRole,
+  profile,
+  portfolioItems,
+  projectSkills,
+  roleData,
+}: {
+  project: ProjectRecord;
+  projectRole: {
+    id: string;
+    role_name: string;
+    required_count: number;
+  };
+  profile: Profile;
+  portfolioItems: PortfolioItem[];
+  projectSkills: string[];
+  roleData: BudgetBreakdownItem;
+}): MatchCalculation {
+  const roleName =
+    projectRole.role_name;
+
+  /**
+   * team_required !== true olan (tek freelancer) projelerde
+   * gerçek bir rol adı yok; "Tek Freelancer" fallback'ine karşı
+   * role-text / portfolio-role-text karşılaştırması yapmak
+   * anlamsız ve skoru gereksiz yere düşürür. Bu durumda genel
+   * proje skill'leri doğrudan ana sinyal olarak kullanılır.
+   */
+  const isGeneralProjectRole =
+    roleData.roleId === "fallback-single-role";
+
+  const freelancerSkills =
+    normalizeSkills(
+      profile.skills
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Role-specific skills                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  const roleSkills =
+    uniqueStrings([
+      ...normalizeSkills(
+        roleData.skills ?? null
+      ),
+
+      ...normalizeSkills(
+        roleData.requiredSkills ?? null
+      ),
+    ]);
+
+  const rolePreferredSkills =
+    uniqueStrings(
+      roleData.preferredSkills ??
+        []
+    );
+
+  const roleResponsibilities =
+    uniqueStrings(
+      roleData.responsibilities ??
+        []
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Profile texts                                                           */
+  /* ---------------------------------------------------------------------- */
+
+  const roleTexts = [
+    profile.title,
+    profile.expertise,
+    profile.bio,
+  ].filter(
+    (
+      value
+    ): value is string =>
+      typeof value === "string" &&
+      value.trim().length > 0
+  );
+
+  /* ---------------------------------------------------------------------- */
+  /* Role score                                                              */
+  /* ---------------------------------------------------------------------- */
+
+  const roleScore =
+    calculateRoleTextScore(
+      roleName,
+      roleTexts
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Role skills                                                             */
+  /* ---------------------------------------------------------------------- */
+
+  const roleSkillMatch =
+    roleSkills.length > 0
+      ? matchSkills(
+          roleSkills,
+          freelancerSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  const preferredSkillMatch =
+    rolePreferredSkills.length > 0
+      ? matchSkills(
+          rolePreferredSkills,
+          freelancerSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  /* ---------------------------------------------------------------------- */
+  /* Project skills                                                          */
+  /* ---------------------------------------------------------------------- */
+
+  const projectSkillMatch =
+    projectSkills.length > 0
+      ? matchSkills(
+          projectSkills,
+          freelancerSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  /**
+   * team_required !== true projelerde tek "rol", projenin TÜM
+   * skill listesi olabiliyor (10+ öğe). Sadece recall (matched /
+   * required) kullanmak, becerilerinin büyük kısmı bu projeyle
+   * doğrudan alakalı olan bir freelancer'ı bile eşiğin altında
+   * bırakabiliyor. Bu yüzden recall ile precision'ın (matched /
+   * freelancerSkills) daha iyisini alıyoruz — yalnızca genel
+   * proje rolü için.
+   */
+  const generalSkillPercentage =
+    isGeneralProjectRole && freelancerSkills.length > 0
+      ? Math.max(
+          roleSkillMatch.percentage,
+          Math.round(
+            (roleSkillMatch.matchingSkills.length /
+              freelancerSkills.length) *
+              100
+          )
+        )
+      : roleSkillMatch.percentage;
+
+  /* ---------------------------------------------------------------------- */
+  /* Portfolio skills                                                        */
+  /* ---------------------------------------------------------------------- */
+
+  const portfolioSkills =
+    uniqueStrings(
+      portfolioItems.flatMap(
+        (item) =>
+          item.skills ?? []
+      )
+    );
+
+  const portfolioSkillMatch =
+    projectSkills.length > 0 &&
+    portfolioSkills.length > 0
+      ? matchSkills(
+          projectSkills,
+          portfolioSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  /* ---------------------------------------------------------------------- */
+  /* Portfolio role score                                                    */
+  /* ---------------------------------------------------------------------- */
+
+  const portfolioRoleScore =
+    calculateRoleTextScore(
+      roleName,
+      portfolioItems.flatMap(
+        (item) =>
+          [
+            item.title,
+            item.category,
+            item.description,
+          ].filter(
+            (
+              value
+            ): value is string =>
+              typeof value ===
+                "string" &&
+              value.trim()
+                .length > 0
+          )
+      )
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Experience                                                              */
+  /* ---------------------------------------------------------------------- */
+
+  const experienceScore =
+    calculateExperienceScore(
+      profile.experience
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Responsibilities                                                       */
+  /* ---------------------------------------------------------------------- */
+
+  const responsibilityScore =
+    calculateResponsibilityScore(
+      roleResponsibilities,
+      profile,
+      freelancerSkills
+    );
+
+  /* ---------------------------------------------------------------------- */
+  /* Skill weighting                                                         */
+  /* ---------------------------------------------------------------------- */
+
+  let weightedSkillScore = 0;
+
+  if (isGeneralProjectRole) {
+    /**
+     * Tek freelancer / team_required !== true projelerde tek
+     * sinyal proje skill'leridir (recall+precision karışımı).
+     */
+    weightedSkillScore = generalSkillPercentage;
+  } else if (roleSkills.length > 0) {
+    /**
+     * Role-specific skill açık ara en önemli
+     * skill sinyalidir.
+     */
+    weightedSkillScore =
+      roleSkillMatch.percentage *
+        0.75 +
+      preferredSkillMatch.percentage *
+        0.10 +
+      projectSkillMatch.percentage *
+        0.15;
+  } else if (
+    projectSkills.length > 0
+  ) {
+    /**
+     * Rol-specific skill yoksa proje skill'leri
+     * kullanılabilir fakat ağırlığı sınırlıdır.
+     */
+    weightedSkillScore =
+      projectSkillMatch.percentage *
+        0.75 +
+      preferredSkillMatch.percentage *
+        0.25;
+  }
+
+  /* ---------------------------------------------------------------------- */
+  /* Final score                                                             */
+  /* ---------------------------------------------------------------------- */
+
+  /**
+   * Genel proje rolünde (tek freelancer) rol adı "Tek Freelancer"
+   * olduğu için roleScore / portfolioRoleScore (rol METNİ karşılaştırması)
+   * anlamsızdır ve skoru gereksiz yere seyreltir. Bu durumda ağırlık
+   * neredeyse tamamen skill uyumuna ve deneyime verilir.
+   */
+  let score = isGeneralProjectRole
+    ? weightedSkillScore * 0.9 +
+      experienceScore * 0.1
+    : weightedSkillScore * 0.35 +
+      roleScore * 0.30 +
+      responsibilityScore * 0.15 +
+      portfolioRoleScore * 0.15 +
+      experienceScore * 0.05;
+
+  /**
+   * Çok güçlü profil + role-specific skill.
+   */
+  if (
+    roleScore >= 80 &&
+    roleSkillMatch.percentage >= 70
+  ) {
+    score = Math.max(
+      score,
+      90
+    );
+  }
+
+  /**
+   * Güçlü profil + portfolyo uyumu.
+   */
+  if (
+    roleScore >= 70 &&
+    portfolioRoleScore >= 70
+  ) {
+    score = Math.max(
+      score,
+      80
+    );
+  }
+
+  /**
+   * Role-specific skill çok güçlüyse profil başlığının
+   * birebir aynı olması şart değil.
+   */
+  if (
+    roleSkillMatch.percentage >= 80
+  ) {
+    score = Math.max(
+      score,
+      75
+    );
+  }
+
+  /**
+   * Hiçbir temel role sinyali yoksa kesinlikle eşleşme yok.
+   */
+  if (
+    roleScore === 0 &&
+    roleSkillMatch.percentage === 0 &&
+    portfolioRoleScore === 0 &&
+    responsibilityScore === 0
+  ) {
+    score = 0;
+  }
+
+  const finalScore =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        Math.round(score)
+      )
+    );
+
+  const matchingSkills =
+    uniqueStrings([
+      ...roleSkillMatch.matchingSkills,
+      ...preferredSkillMatch.matchingSkills,
+      ...projectSkillMatch.matchingSkills,
+      ...portfolioSkillMatch.matchingSkills,
+    ]);
+
+  const availability =
+    normalizeAvailability(
+      profile.availability
+    );
+
+  const reason =
+    buildFreelancerProjectReason({
+      roleName,
+      roleScore,
+      responsibilityScore,
+      portfolioRoleScore,
+      experienceScore,
+      matchingSkills,
+      finalScore,
+      availability,
+    });
+
+  return {
+    score: finalScore,
+    reason,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role matching                                                              */
+/* -------------------------------------------------------------------------- */
+
+function calculateRoleTextScore(
+  requiredRole: string,
+  candidateTexts: string[]
+): number {
+  const required =
+    normalizeText(
+      requiredRole
+    );
+
+  if (!required) {
+    return 0;
+  }
+
+  const aliases =
+    getRoleAliases(required);
+
+  const roleCandidates = [
+    required,
+    ...aliases,
+  ];
+
+  let bestScore = 0;
+
+  for (
+    const candidateRole of roleCandidates
+  ) {
+    const requiredWords =
+      getMeaningfulWords(
+        candidateRole
+      );
+
+    if (
+      requiredWords.length === 0
+    ) {
+      continue;
+    }
+
+    for (
+      const candidateText of candidateTexts
+    ) {
+      const normalizedCandidate =
+        normalizeText(
+          candidateText
+        );
+
+      if (!normalizedCandidate) {
+        continue;
+      }
+
+      /**
+       * Birebir rol ifadesi varsa en güçlü eşleşme.
+       */
+      if (
+        normalizedCandidate.includes(
+          candidateRole
+        )
+      ) {
+        bestScore = Math.max(
+          bestScore,
+          100
+        );
+
+        continue;
+      }
+
+      const candidateWords =
+        getMeaningfulWords(
+          normalizedCandidate
+        );
+
+      const matchingWords =
+        requiredWords.filter(
+          (word) =>
+            candidateWords.includes(
+              word
+            )
+        );
+
+      if (
+        matchingWords.length === 0
+      ) {
+        continue;
+      }
+
+      const percentage =
+        (matchingWords.length /
+          requiredWords.length) *
+        100;
+
+      bestScore = Math.max(
+        bestScore,
+        percentage
+      );
+    }
+  }
+
+  return Math.round(
+    Math.min(
+      100,
+      bestScore
+    )
+  );
+}
+
+function getRoleAliases(
+  role: string
+): string[] {
+  const normalized =
+    normalizeText(role);
+
+  const aliasGroups: Record<
+    string,
+    string[]
+  > = {
+    "ui ux tasarim": [
+      "ui ux designer",
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "product design",
+    ],
+
+    "ui ux designer": [
+      "ui ux tasarim",
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "product design",
+    ],
+
+    "product designer": [
+      "ui ux designer",
+      "ui ux tasarim",
+      "product design",
+      "ux designer",
+      "ui designer",
+    ],
+
+    "frontend gelistirme": [
+      "frontend developer",
+      "front end developer",
+      "web developer",
+      "frontend engineer",
+    ],
+
+    "frontend developer": [
+      "frontend gelistirme",
+      "front end developer",
+      "web developer",
+      "frontend engineer",
+    ],
+
+    "backend gelistirme": [
+      "backend developer",
+      "back end developer",
+      "backend engineer",
+    ],
+
+    "backend developer": [
+      "backend gelistirme",
+      "back end developer",
+      "backend engineer",
+    ],
+
+    "web tasarim": [
+      "web designer",
+      "ui designer",
+      "ui ux designer",
+      "product designer",
+    ],
+
+    "web design": [
+      "web designer",
+      "ui designer",
+      "ui ux designer",
+      "product designer",
+    ],
+
+    "grafik tasarim": [
+      "graphic designer",
+      "visual designer",
+      "brand designer",
+    ],
+
+    "graphic designer": [
+      "grafik tasarim",
+      "visual designer",
+      "brand designer",
+    ],
+
+    "marka tasarimi": [
+      "brand designer",
+      "branding designer",
+      "graphic designer",
+      "visual designer",
+      "marka tasarimcisi",
+      "grafik tasarimci",
+    ],
+
+    "marka tasarimcisi": [
+      "brand designer",
+      "branding designer",
+      "graphic designer",
+      "visual designer",
+      "marka tasarimi",
+      "grafik tasarimci",
+    ],
+
+    "brand designer": [
+      "marka tasarimi",
+      "branding designer",
+      "graphic designer",
+      "visual designer",
+      "marka tasarimcisi",
+    ],
+
+    "grafik tasarimci": [
+      "graphic designer",
+      "visual designer",
+      "brand designer",
+      "grafik tasarim",
+      "marka tasarimi",
+      "marka tasarimcisi",
+    ],
+
+    "mobil uygulama": [
+      "mobile developer",
+      "mobile app developer",
+      "ios developer",
+      "android developer",
+      "react native developer",
+      "flutter developer",
+    ],
+
+    "mobile developer": [
+      "mobil uygulama",
+      "mobile app developer",
+      "ios developer",
+      "android developer",
+      "react native developer",
+      "flutter developer",
+    ],
+
+    "yazilim gelistirme": [
+      "software developer",
+      "software engineer",
+      "developer",
+    ],
+
+    "software developer": [
+      "yazilim gelistirme",
+      "software engineer",
+      "developer",
+    ],
+
+    "dijital pazarlama": [
+      "digital marketing",
+      "digital marketing specialist",
+      "digital marketer",
+      "marketing specialist",
+      "seo specialist",
+      "social media specialist",
+      "dijital pazarlama uzmani",
+    ],
+
+    "dijital pazarlama uzmani": [
+      "digital marketing",
+      "digital marketing specialist",
+      "digital marketer",
+      "marketing specialist",
+      "dijital pazarlama",
+    ],
+
+    "digital marketing": [
+      "dijital pazarlama",
+      "dijital pazarlama uzmani",
+      "digital marketing specialist",
+      "digital marketer",
+      "marketing specialist",
+    ],
+
+    "seo": [
+      "seo specialist",
+      "seo uzmani",
+      "search engine optimization",
+      "dijital pazarlama",
+      "digital marketing",
+    ],
+
+    "social media": [
+      "social media specialist",
+      "social media manager",
+      "sosyal medya uzmani",
+      "sosyal medya yoneticisi",
+      "dijital pazarlama",
+      "digital marketing",
+    ],
+
+    "sosyal medya": [
+      "social media specialist",
+      "social media manager",
+      "social media",
+      "dijital pazarlama",
+      "digital marketing",
+    ],
+
+    "icerik uretimi": [
+      "content creator",
+      "content writer",
+      "copywriter",
+      "content specialist",
+      "content",
+    ],
+
+    "content creator": [
+      "icerik uretimi",
+      "content writer",
+      "copywriter",
+      "content specialist",
+    ],
+
+    "content": [
+      "content creator",
+      "content writer",
+      "copywriter",
+      "content specialist",
+      "icerik uretimi",
+    ],
+
+    "ui ux": [
+      "ui ux designer",
+      "ui ux tasarim",
+      "ui designer",
+      "ux designer",
+      "product designer",
+    ],
+
+    "frontend": [
+      "frontend developer",
+      "frontend gelistirme",
+      "front end developer",
+      "web developer",
+    ],
+
+    "backend": [
+      "backend developer",
+      "backend gelistirme",
+      "back end developer",
+    ],
+  };
+
+  return (
+    aliasGroups[normalized] ??
+    []
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Client matching helpers                                                    */
+/* -------------------------------------------------------------------------- */
+
+function calculateMatch({
+  profile,
+  requiredRole,
+  requiredSkills,
+  preferredSkills,
+  responsibilities,
+  freelancerSkills,
+}: {
+  profile: Profile;
+  requiredRole: string;
+  requiredSkills: string[];
+  preferredSkills: string[];
+  responsibilities: string[];
+  freelancerSkills: string[];
+}): MatchCalculation {
+  const skillMatch =
+    requiredSkills.length > 0
+      ? matchSkills(
+          requiredSkills,
+          freelancerSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  const preferredSkillMatch =
+    preferredSkills.length > 0
+      ? matchSkills(
+          preferredSkills,
+          freelancerSkills
+        )
+      : {
+          percentage: 0,
+          matchingSkills: [],
+        };
+
+  let weightedSkillScore = 0;
+
+  if (
+    requiredSkills.length > 0
+  ) {
+    weightedSkillScore =
+      skillMatch.percentage *
+        0.85 +
+      preferredSkillMatch.percentage *
+        0.15;
+  } else if (
+    preferredSkills.length > 0
+  ) {
+    weightedSkillScore =
+      preferredSkillMatch.percentage;
+  }
+
+  const roleScore =
+    calculateRoleScore(
+      requiredRole,
+      profile
+    );
+
+  const responsibilityScore =
+    calculateResponsibilityScore(
+      responsibilities,
+      profile,
+      freelancerSkills
+    );
+
+  const experienceScore =
+    calculateExperienceScore(
+      profile.experience
+    );
+
+  let score =
+    weightedSkillScore * 0.45 +
+    roleScore * 0.25 +
+    responsibilityScore * 0.15 +
+    experienceScore * 0.15;
+
+  if (
+    weightedSkillScore === 0 &&
+    roleScore === 0 &&
+    responsibilityScore === 0
+  ) {
+    score = 0;
+  }
+
+  if (
+    roleScore >= 80 &&
+    weightedSkillScore >= 80
+  ) {
+    score = Math.max(
+      score,
+      85
+    );
+  }
+
+  const finalScore =
+    Math.min(
+      100,
+      Math.max(
+        0,
+        Math.round(score)
+      )
+    );
+
+  const matchingSkills =
+    uniqueStrings([
+      ...skillMatch.matchingSkills,
+      ...preferredSkillMatch.matchingSkills,
+    ]);
+
+  const availability =
+    normalizeAvailability(
+      profile.availability
+    );
+
+  const reason =
+    buildMatchReason({
+      requiredRole,
+      matchingSkills,
+      roleScore,
+      responsibilityScore,
+      experienceScore,
+      availability,
+      finalScore,
+    });
+
+  return {
+    score: finalScore,
+    reason,
+  };
+}
+
+function calculateRoleScore(
+  requiredRole: string,
+  profile: Profile
+): number {
+  const candidateTexts = [
+    profile.title,
+    profile.expertise,
+    profile.bio,
+  ].filter(
+    (
+      value
+    ): value is string =>
+      typeof value === "string" &&
+      value.trim().length > 0
+  );
+
+  return calculateRoleTextScore(
+    requiredRole,
+    candidateTexts
+  );
+}
+
+function calculateResponsibilityScore(
+  responsibilities: string[],
+  profile: Profile,
+  freelancerSkills: string[]
+): number {
+  if (
+    responsibilities.length === 0
+  ) {
+    return 0;
+  }
+
+  const profileText = [
+    profile.title,
+    profile.expertise,
+    profile.bio,
+    ...freelancerSkills,
+  ]
+    .filter(
+      (
+        value
+      ): value is string =>
+        typeof value === "string" &&
+        value.trim().length > 0
+    )
+    .join(" ");
+
+  if (!profileText) {
+    return 0;
+  }
+
+  const normalizedProfile =
+    normalizeText(
+      profileText
+    );
+
+  let total = 0;
+
+  for (
+    const responsibility of responsibilities
+  ) {
+    const words =
+      getMeaningfulWords(
+        normalizeText(
+          responsibility
+        )
+      );
+
+    if (
+      words.length === 0
+    ) {
+      continue;
+    }
+
+    const matchingWords =
+      words.filter((word) =>
+        normalizedProfile.includes(
+          word
+        )
+      );
+
+    if (
+      matchingWords.length === 0
+    ) {
+      continue;
+    }
+
+    total +=
+      (matchingWords.length /
+        words.length) *
+      100;
+  }
+
+  return Math.round(
+    Math.min(
+      100,
+      total /
+        responsibilities.length
+    )
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Experience                                                                 */
+/* -------------------------------------------------------------------------- */
+
+function calculateExperienceScore(
+  experience:
+    | string
+    | number
+    | null
+): number {
+  if (
+    experience === null ||
+    experience === undefined ||
+    experience === ""
+  ) {
+    return 50;
+  }
+
+  if (
+    typeof experience === "number"
+  ) {
+    return scoreYears(
+      experience
+    );
+  }
+
+  const text =
+    normalizeText(
+      String(experience)
+    );
+
+  const numberMatch =
+    text.match(
+      /\d+(?:[.,]\d+)?/
+    );
+
+  if (numberMatch) {
+    const years = Number(
+      numberMatch[0].replace(
+        ",",
+        "."
+      )
+    );
+
+    if (
+      Number.isFinite(years)
+    ) {
+      return scoreYears(
+        years
+      );
+    }
+  }
+
+  if (
+    text.includes("senior") ||
+    text.includes("uzman") ||
+    text.includes("kidemli")
+  ) {
+    return 90;
+  }
+
+  if (
+    text.includes("mid") ||
+    text.includes("orta seviye")
+  ) {
+    return 75;
+  }
+
+  if (
+    text.includes("junior") ||
+    text.includes("baslangic")
+  ) {
+    return 55;
+  }
+
+  return 50;
+}
+
+function scoreYears(
+  years: number
+): number {
+  if (years >= 7) return 100;
+  if (years >= 5) return 90;
+  if (years >= 3) return 80;
+  if (years >= 2) return 70;
+  if (years >= 1) return 60;
+
+  return 40;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Reasons                                                                    */
+/* -------------------------------------------------------------------------- */
+
+function buildMatchReason({
+  requiredRole,
+  matchingSkills,
+  roleScore,
+  responsibilityScore,
+  experienceScore,
+  availability,
+  finalScore,
+}: {
+  requiredRole: string;
+  matchingSkills: string[];
+  roleScore: number;
+  responsibilityScore: number;
+  experienceScore: number;
+  availability:
+    | "available"
+    | "partially_available"
+    | "busy";
+  finalScore: number;
+}): string {
+  const reasons: string[] = [];
+
+  if (roleScore >= 80) {
+    reasons.push(
+      `${requiredRole} rolüyle güçlü uyum`
+    );
+  } else if (
+    roleScore >= 50
+  ) {
+    reasons.push(
+      `${requiredRole} rolüyle uyumlu profil`
+    );
+  }
+
+  if (
+    matchingSkills.length > 0
+  ) {
+    reasons.push(
+      `Eşleşen yetenekler: ${matchingSkills
+        .slice(0, 5)
+        .join(", ")}`
+    );
+  }
+
+  if (
+    responsibilityScore >= 70
+  ) {
+    reasons.push(
+      "Proje sorumluluklarıyla uyumlu deneyim"
+    );
+  }
+
+  if (
+    experienceScore >= 80
+  ) {
+    reasons.push(
+      "Deneyim seviyesi proje için uygun"
+    );
+  }
+
+  if (
+    availability ===
+    "partially_available"
+  ) {
+    reasons.push(
+      "Kısmen müsait"
+    );
+  }
+
+  if (
+    availability === "busy"
+  ) {
+    reasons.push(
+      "Şu anda meşgul"
+    );
+  }
+
+  if (
+    reasons.length === 0
+  ) {
+    reasons.push(
+      `Proje gereksinimleriyle %${finalScore} uyum`
+    );
+  }
+
+  return (
+    reasons.join(". ") + "."
+  );
+}
+
+function buildFreelancerProjectReason({
+  roleName,
+  roleScore,
+  responsibilityScore,
+  portfolioRoleScore,
+  experienceScore,
+  matchingSkills,
+  finalScore,
+  availability,
+}: {
+  roleName: string;
+  roleScore: number;
+  responsibilityScore: number;
+  portfolioRoleScore: number;
+  experienceScore: number;
+  matchingSkills: string[];
+  finalScore: number;
+  availability:
+    | "available"
+    | "partially_available"
+    | "busy";
+}): string {
+  const reasons: string[] = [];
+
+  if (
+    roleScore >= 80
+  ) {
+    reasons.push(
+      `${roleName} rolüyle güçlü profil uyumu`
+    );
+  } else if (
+    roleScore >= 50
+  ) {
+    reasons.push(
+      `${roleName} rolüyle uyumlu profil`
+    );
+  }
+
+  if (
+    matchingSkills.length > 0
+  ) {
+    reasons.push(
+      `Eşleşen yetenekler: ${matchingSkills
+        .slice(0, 5)
+        .join(", ")}`
+    );
+  }
+
+  if (
+    portfolioRoleScore >= 80
+  ) {
+    reasons.push(
+      "Portfolyondaki çalışmalar bu rolle güçlü şekilde örtüşüyor"
+    );
+  } else if (
+    portfolioRoleScore >= 50
+  ) {
+    reasons.push(
+      "Portfolyonda bu rolle ilişkili çalışmalar bulunuyor"
+    );
+  }
+
+  if (
+    responsibilityScore >= 70
+  ) {
+    reasons.push(
+      "Proje sorumluluklarıyla uyumlu deneyim"
+    );
+  }
+
+  if (
+    experienceScore >= 80
+  ) {
+    reasons.push(
+      "Deneyim seviyen proje için uygun"
+    );
+  }
+
+  if (
+    availability ===
+    "partially_available"
+  ) {
+    reasons.push(
+      "Kısmen müsait"
+    );
+  }
+
+  if (
+    availability === "busy"
+  ) {
+    reasons.push(
+      "Şu anda meşgul"
+    );
+  }
+
+  if (
+    reasons.length === 0
+  ) {
+    reasons.push(
+      `Proje gereksinimleriyle %${finalScore} uyum`
+    );
+  }
+
+  return (
+    reasons.join(". ") + "."
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Role building                                                              */
+/* -------------------------------------------------------------------------- */
+
+function buildRolesToMatch(
+  analysis: ProjectAnalysis,
+  roles?: RoleMatchInput[]
+): RoleMatchInput[] {
+  if (
+    Array.isArray(roles) &&
+    roles.length > 0
+  ) {
+    return roles
+      .filter(
+        (role) =>
+          role &&
+          typeof role.name ===
+            "string" &&
+          role.name.trim()
+      )
+      .map((role) => {
+        const memberCount =
+          normalizePositiveInteger(
+            role.memberCount,
+            1
+          );
+
+        const budgetPerPerson =
+          normalizeMoney(
+            role.budgetPerPerson
+          );
+
+        const budget =
+          normalizeMoney(
+            role.budget ??
+              memberCount *
+                budgetPerPerson
+          );
+
+        return {
+          name:
+            role.name.trim(),
+
+          memberCount,
+
+          budgetPerPerson,
+
+          budget,
+
+          responsibilities:
+            uniqueStrings(
+              role.responsibilities ??
+                []
+            ),
+
+          skills:
+            uniqueStrings(
+              role.skills ?? []
+            ),
+
+          preferredSkills:
+            uniqueStrings(
+              role.preferredSkills ??
+                []
+            ),
+
+          reason:
+            typeof role.reason ===
+            "string"
+              ? role.reason
+              : undefined,
+        };
+      });
+  }
+
+  if (
+    !analysis ||
+    !Array.isArray(
+      analysis.roleDetails
+    )
+  ) {
+    return [];
+  }
+
+  return analysis.roleDetails
+    .filter(
+      (role) =>
+        role &&
+        typeof role.role ===
+          "string" &&
+        role.role.trim()
+    )
+    .map((role) => ({
+      name:
+        role.role.trim(),
+
+      memberCount: 1,
+
+      budgetPerPerson: 0,
+
+      budget: 0,
+
+      responsibilities: [],
+
+      skills:
+        uniqueStrings(
+          role.requiredSkills ??
+            []
+        ),
+
+      preferredSkills:
+        uniqueStrings(
+          role.preferredSkills ??
+            []
+        ),
+    }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Profile queries                                                            */
+/* -------------------------------------------------------------------------- */
+
+async function getFreelancerProfiles(
+  supabase: SupabaseClient
+): Promise<Profile[]> {
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("profiles")
+    .select(
+      [
+        "id",
+        "first_name",
+        "last_name",
+        "avatar_url",
+        "title",
+        "bio",
+        "skills",
+        "availability",
+        "experience",
+        "expertise",
+        "role",
+      ].join(", ")
+    )
+    .eq(
+      "role",
+      "freelancer"
+    );
+
+  if (error) {
+    throw error;
+  }
+
+  const rows =
+    (data ?? []) as unknown as Record<
+      string,
+      unknown
+    >[];
+
+  return rows
+    .map(normalizeProfile)
+    .filter(
+      (profile) =>
+        profile.id.length > 0
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Normalizers                                                                */
+/* -------------------------------------------------------------------------- */
+
+function normalizeProfile(
+  profile: Record<
+    string,
+    unknown
+  >
+): Profile {
+  return {
+    id: String(
+      profile.id ?? ""
+    ),
+
+    first_name:
+      typeof profile.first_name ===
+      "string"
+        ? profile.first_name
+        : null,
+
+    last_name:
+      typeof profile.last_name ===
+      "string"
+        ? profile.last_name
+        : null,
+
+    avatar_url:
+      typeof profile.avatar_url ===
+      "string"
+        ? profile.avatar_url
+        : null,
+
+    title:
+      typeof profile.title ===
+      "string"
+        ? profile.title
+        : null,
+
+    bio:
+      typeof profile.bio ===
+      "string"
+        ? profile.bio
+        : null,
+
+    skills:
+      Array.isArray(
+        profile.skills
+      )
+        ? profile.skills.filter(
+            (
+              skill
+            ): skill is string =>
+              typeof skill ===
+              "string"
+          )
+        : null,
+
+    availability:
+      typeof profile.availability ===
+      "string"
+        ? profile.availability
+        : null,
+
+    experience:
+      typeof profile.experience ===
+        "string" ||
+      typeof profile.experience ===
+        "number"
+        ? profile.experience
+        : null,
+
+    expertise:
+      typeof profile.expertise ===
+      "string"
+        ? profile.expertise
+        : null,
+
+    role:
+      typeof profile.role ===
+      "string"
+        ? profile.role
+        : null,
+  };
+}
+
+function normalizePortfolioItem(
+  item: Record<
+    string,
+    unknown
+  >
+): PortfolioItem {
+  return {
+    id: String(
+      item.id ?? ""
+    ),
+
+    title:
+      typeof item.title ===
+      "string"
+        ? item.title
+        : null,
+
+    category:
+      typeof item.category ===
+      "string"
+        ? item.category
+        : null,
+
+    description:
+      typeof item.description ===
+      "string"
+        ? item.description
+        : null,
+
+    skills:
+      Array.isArray(
+        item.skills
+      )
+        ? item.skills.filter(
+            (
+              skill
+            ): skill is string =>
+              typeof skill ===
+              "string"
+          )
+        : null,
+  };
+}
+
+function normalizeProject(
+  project: Record<
+    string,
+    unknown
+  >
+): ProjectRecord {
+  return {
+    id: String(
+      project.id ?? ""
+    ),
+
+    title: String(
+      project.title ?? ""
+    ),
+
+    description:
+      typeof project.description ===
+      "string"
+        ? project.description
+        : null,
+
+    skills:
+      Array.isArray(
+        project.skills
+      )
+        ? project.skills.filter(
+            (
+              skill
+            ): skill is string =>
+              typeof skill ===
+              "string"
+          )
+        : null,
+
+    category:
+      typeof project.category ===
+      "string"
+        ? project.category
+        : null,
+
+    budget_breakdown:
+      normalizeBudgetBreakdown(
+        project.budget_breakdown
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Budget breakdown                                                           */
+/* -------------------------------------------------------------------------- */
+
+function normalizeBudgetBreakdown(
+  value: unknown
+): BudgetBreakdownItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(
+      (item) =>
+        item &&
+        typeof item ===
+          "object"
+    )
+    .map((item) => {
+      const record =
+        item as Record<
+          string,
+          unknown
+        >;
+
+      return {
+        roleId:
+          typeof record.roleId ===
+          "string"
+            ? record.roleId
+            : undefined,
+
+        role:
+          typeof record.role ===
+          "string"
+            ? record.role
+            : undefined,
+
+        name:
+          typeof record.name ===
+          "string"
+            ? record.name
+            : undefined,
+
+        memberCount:
+          typeof record.memberCount ===
+          "number"
+            ? record.memberCount
+            : undefined,
+
+        budgetPerPerson:
+          typeof record.budgetPerPerson ===
+          "number"
+            ? record.budgetPerPerson
+            : undefined,
+
+        budget:
+          typeof record.budget ===
+          "number"
+            ? record.budget
+            : undefined,
+
+        duration:
+          typeof record.duration ===
+          "string"
+            ? record.duration
+            : undefined,
+
+        responsibilities:
+          Array.isArray(
+            record.responsibilities
+          )
+            ? record.responsibilities.filter(
+                (
+                  item
+                ): item is string =>
+                  typeof item ===
+                  "string"
+              )
+            : undefined,
+
+        skills:
+          Array.isArray(
+            record.skills
+          )
+            ? record.skills.filter(
+                (
+                  item
+                ): item is string =>
+                  typeof item ===
+                  "string"
+              )
+            : undefined,
+
+        requiredSkills:
+          Array.isArray(
+            record.requiredSkills
+          )
+            ? record.requiredSkills.filter(
+                (
+                  item
+                ): item is string =>
+                  typeof item ===
+                  "string"
+              )
+            : undefined,
+
+        preferredSkills:
+          Array.isArray(
+            record.preferredSkills
+          )
+            ? record.preferredSkills.filter(
+                (
+                  item
+                ): item is string =>
+                  typeof item ===
+                  "string"
+              )
+            : undefined,
+
+        reason:
+          typeof record.reason ===
+          "string"
+            ? record.reason
+            : undefined,
+      };
+    });
+}
+
+function getRoleName(
+  role: BudgetBreakdownItem,
+  index: number
+): string {
+  const name =
+    role.role ??
+    role.name;
+
+  if (
+    typeof name === "string" &&
+    name.trim()
+  ) {
+    return name.trim();
+  }
+
+  return `Rol ${index + 1}`;
+}
+
+function getBudgetInfo(
+  role: BudgetBreakdownItem
+): {
+  memberCount?: number;
+  budgetPerPerson?: number;
+  budget?: number;
+} {
+  return {
+    memberCount:
+      normalizePositiveInteger(
+        role.memberCount,
+        1
+      ),
+
+    budgetPerPerson:
+      normalizeMoney(
+        role.budgetPerPerson
+      ),
+
+    budget:
+      normalizeMoney(
+        role.budget
+      ),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Availability                                                               */
+/* -------------------------------------------------------------------------- */
+
+function normalizeAvailability(
+  value: string | null
+):
+  | "available"
+  | "partially_available"
+  | "busy" {
+  if (!value) {
+    return "available";
+  }
+
+  const normalized =
+    normalizeText(value);
+
+  if (
+    normalized ===
+      "available" ||
+    normalized ===
+      "musait" ||
+    normalized ===
+      "available now" ||
+    normalized ===
+      "yeni projelere acik"
+  ) {
+    return "available";
+  }
+
+  if (
+    normalized ===
+      "partially_available" ||
+    normalized ===
+      "partially available" ||
+    normalized ===
+      "partially-available" ||
+    normalized ===
+      "kismen musait"
+  ) {
+    return "partially_available";
+  }
+
+  if (
+    normalized ===
+      "busy" ||
+    normalized ===
+      "mesgul" ||
+    normalized ===
+      "unavailable" ||
+    normalized ===
+      "unavailable now"
+  ) {
+    return "busy";
+  }
+
+  if (
+    normalized.includes(
+      "haftada"
+    )
+  ) {
+    return "available";
+  }
+
+  return "available";
+}
+
+function availabilitySortValue(
+  availability:
+    | "available"
+    | "partially_available"
+    | "busy"
+): number {
+  if (
+    availability ===
+    "available"
+  ) {
+    return 0;
+  }
+
+  if (
+    availability ===
+    "partially_available"
+  ) {
+    return 1;
+  }
+
+  return 2;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Utilities                                                                  */
+/* -------------------------------------------------------------------------- */
+
+function getProfileName(
+  profile: Profile
+): string {
+  const name = [
+    profile.first_name,
+    profile.last_name,
+  ]
+    .filter(
+      (
+        value
+      ): value is string =>
+        typeof value ===
+          "string" &&
+        value.trim()
+          .length > 0
+    )
+    .join(" ")
+    .trim();
+
+  return (
+    name ||
+    "Freelancer"
+  );
+}
+
+function normalizeSkills(
+  skills: string[] | null
+): string[] {
+  if (!Array.isArray(skills)) {
+    return [];
+  }
+
+  return uniqueStrings(
+    skills
+  );
+}
+
+function uniqueStrings(
+  values: unknown[]
+): string[] {
+  const result: string[] = [];
+
+  const seen =
+    new Set<string>();
+
+  for (
+    const value of values
+  ) {
+    if (
+      typeof value !==
+      "string"
+    ) {
+      continue;
+    }
+
+    const trimmed =
+      value.trim();
+
+    if (!trimmed) {
+      continue;
+    }
+
+    const normalized =
+      normalizeText(
+        trimmed
+      );
+
+    if (
+      seen.has(
+        normalized
+      )
+    ) {
+      continue;
+    }
+
+    seen.add(
+      normalized
+    );
+
+    result.push(
+      trimmed
+    );
+  }
+
+  return result;
+}
+
+function normalizeText(
+  value: string
+): string {
+  return value
+    .toLocaleLowerCase(
+      "tr-TR"
+    )
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .replace(
+      /ı/g,
+      "i"
+    )
+    .replace(
+      /ğ/g,
+      "g"
+    )
+    .replace(
+      /ü/g,
+      "u"
+    )
+    .replace(
+      /ş/g,
+      "s"
+    )
+    .replace(
+      /ö/g,
+      "o"
+    )
+    .replace(
+      /ç/g,
+      "c"
+    )
+    .trim()
+    .replace(
+      /\s+/g,
+      " "
+    );
+}
+
+function getMeaningfulWords(
+  value: string
+): string[] {
+  const stopWords =
+    new Set([
+      "ve",
+      "veya",
+      "ile",
+      "icin",
+      "bir",
+      "bu",
+      "the",
+      "a",
+      "an",
+      "of",
+      "for",
+      "and",
+    ]);
+
+  return value
+    .split(
+      /[\s,/|&+\\_-]+/
+    )
+    .map((word) =>
+      word.trim()
+    )
+    .filter(
+      (word) =>
+        word.length >= 3 &&
+        !stopWords.has(
+          word
+        )
+    );
+}
+
+function normalizePositiveInteger(
+  value: unknown,
+  fallback: number
+): number {
+  if (
+    typeof value !==
+      "number" ||
+    !Number.isFinite(value)
+  ) {
+    return fallback;
+  }
+
+  return Math.max(
+    1,
+    Math.floor(value)
+  );
+}
+
+function normalizeMoney(
+  value: unknown
+): number {
+  if (
+    typeof value !==
+      "number" ||
+    !Number.isFinite(value)
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.round(value)
+  );
+}
+
+function deduplicateMatches(
+  matches: TalentMatch[]
+): TalentMatch[] {
+  const map = new Map<
+    string,
+    TalentMatch
+  >();
+
+  for (
+    const match of matches
+  ) {
+    const key =
+      `${match.id}::${normalizeText(
+        match.role
+      )}`;
+
+    const existing =
+      map.get(key);
+
+    if (
+      !existing ||
+      match.score >
+        existing.score
+    ) {
+      map.set(
+        key,
+        match
+      );
+    }
+  }
+
+  return Array.from(
+    map.values()
+  );
 }

@@ -75,6 +75,10 @@ export default function Home() {
             Freelancerlar
           </Link>
 
+          <Link href="/premium" className="font-medium text-gray-900">
+            Premium
+          </Link>
+
           <span>
             Projeler
           </span>
@@ -211,7 +215,7 @@ export default function Home() {
 
           >
 
-            HireHub, müşterileri profesyonel freelancerlar
+            CollaCrew, müşterileri profesyonel freelancerlar
             ve ekiplerle buluşturan yeni nesil çalışma
             platformudur.
 

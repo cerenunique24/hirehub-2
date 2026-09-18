@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
 import {
   ArrowLeft,
   CalendarDays,
@@ -12,23 +13,28 @@ import {
   MessageCircle,
   Wallet,
 } from "lucide-react";
+
 import { createClient } from "@/lib/supabase/client";
+
+type Project = {
+  id: string;
+  client_id: string;
+  title: string;
+  project_type: string | null;
+  description: string | null;
+  budget: number | null;
+};
 
 type Proposal = {
   id: string;
   project_id: string;
-  bid_amount: number;
-  delivery_days: number;
-  cover_letter: string;
-  status: string;
+  freelancer_id: string;
+  bid_amount: number | null;
+  delivery_days: number | null;
+  cover_letter: string | null;
+  status: string | null;
   created_at: string;
-  project: {
-    id: string;
-    title: string;
-    project_type: string | null;
-    description: string | null;
-    budget: number | null;
-  } | null;
+  project: Project | null;
 };
 
 type ProposalDetailPageProps = {
@@ -40,97 +46,196 @@ type ProposalDetailPageProps = {
 export default function ProposalDetailPage({
   params,
 }: ProposalDetailPageProps) {
+  const supabase = useMemo(() => createClient(), []);
+
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
-    params.then(({ id }) => {
+    async function resolveParams() {
+      const { id } = await params;
       setProposalId(id);
-    });
+    }
+
+    void resolveParams();
   }, [params]);
 
   useEffect(() => {
-    if (proposalId) {
-      loadProposal(proposalId);
-    }
-  }, [proposalId]);
-
-  const loadProposal = async (id: string) => {
-    const supabase = createClient();
-
-    setLoading(true);
-    setErrorMessage("");
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setErrorMessage("Teklif detayını görmek için giriş yapmalısınız.");
-      setLoading(false);
+    if (!proposalId) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("proposals")
-      .select(
-        `
-          id,
-          project_id,
-          bid_amount,
-          delivery_days,
-          cover_letter,
-          status,
-          created_at,
-          project:projects (
-            id,
-            title,
-            project_type,
-            description,
-            budget
+    async function loadProposal() {
+      setLoading(true);
+      setErrorMessage("");
+
+      try {
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+
+        if (userError || !user) {
+          setErrorMessage(
+            "Teklif detayını görmek için giriş yapmalısınız."
+          );
+          return;
+        }
+
+        /*
+         * Önce teklifin kendisini alıyoruz.
+         */
+        const {
+          data: proposalData,
+          error: proposalError,
+        } = await supabase
+          .from("proposals")
+          .select(
+            `
+              id,
+              project_id,
+              freelancer_id,
+              bid_amount,
+              delivery_days,
+              cover_letter,
+              status,
+              created_at
+            `
           )
-        `
-      )
-      .eq("id", id)
-      .eq("freelancer_id", user.id)
-      .single();
+          .eq("id", proposalId)
+          .eq("freelancer_id", user.id)
+          .single();
 
-    if (error) {
-      console.error("Proposal detail load error:", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+        if (proposalError || !proposalData) {
+          console.error(
+            "Proposal detail load error:",
+            proposalError
+              ? {
+                  message: proposalError.message,
+                  details: proposalError.details,
+                  hint: proposalError.hint,
+                  code: proposalError.code,
+                }
+              : "Teklif bulunamadı."
+          );
 
-      setProposal(null);
-      setErrorMessage("Teklif detayları yüklenemedi.");
-      setLoading(false);
-      return;
+          setErrorMessage(
+            "Teklif detayları yüklenemedi veya bu teklife erişim yetkiniz yok."
+          );
+
+          return;
+        }
+
+        /*
+         * Projeyi ayrı sorguluyoruz.
+         *
+         * Burada relation kullanmıyoruz. Böylece
+         * proposals -> projects ilişkisinin Supabase
+         * tarafından otomatik çözülmesine bağlı kalmıyoruz.
+         */
+        const {
+          data: projectData,
+          error: projectError,
+        } = await supabase
+          .from("projects")
+          .select(
+            `
+              id,
+              client_id,
+              title,
+              project_type,
+              description,
+              budget
+            `
+          )
+          .eq("id", proposalData.project_id)
+          .maybeSingle();
+
+        if (projectError) {
+          console.error(
+            "Project detail load error:",
+            {
+              message: projectError.message,
+              details: projectError.details,
+              hint: projectError.hint,
+              code: projectError.code,
+              projectId: proposalData.project_id,
+            }
+          );
+
+          setErrorMessage(
+            `Proje bilgileri yüklenemedi: ${projectError.message}`
+          );
+
+          return;
+        }
+
+        if (!projectData) {
+          console.error(
+            "Project detail load error: proje bulunamadı",
+            {
+              projectId: proposalData.project_id,
+            }
+          );
+
+          setErrorMessage(
+            "Bu teklifin bağlı olduğu proje bulunamadı."
+          );
+
+          return;
+        }
+
+        const normalizedProposal: Proposal = {
+          id: proposalData.id,
+          project_id: proposalData.project_id,
+          freelancer_id: proposalData.freelancer_id,
+          bid_amount:
+            proposalData.bid_amount !== null
+              ? Number(proposalData.bid_amount)
+              : null,
+          delivery_days:
+            proposalData.delivery_days !== null
+              ? Number(proposalData.delivery_days)
+              : null,
+          cover_letter: proposalData.cover_letter,
+          status: proposalData.status,
+          created_at: proposalData.created_at,
+          project: {
+            id: projectData.id,
+            client_id: projectData.client_id,
+            title: projectData.title,
+            project_type: projectData.project_type,
+            description: projectData.description,
+            budget:
+              projectData.budget !== null
+                ? Number(projectData.budget)
+                : null,
+          },
+        };
+
+        setProposal(normalizedProposal);
+      } catch (error) {
+        console.error(
+          "Unexpected proposal detail error:",
+          error
+        );
+
+        setErrorMessage(
+          "Teklif detayları yüklenirken beklenmeyen bir hata oluştu."
+        );
+      } finally {
+        setLoading(false);
+      }
     }
 
-    const normalizedProposal: Proposal = {
-      id: data.id,
-      project_id: data.project_id,
-      bid_amount: Number(data.bid_amount),
-      delivery_days: Number(data.delivery_days),
-      cover_letter: data.cover_letter,
-      status: data.status,
-      created_at: data.created_at,
-      project: Array.isArray(data.project)
-        ? data.project[0] ?? null
-        : data.project ?? null,
-    };
+    void loadProposal();
+  }, [proposalId, supabase]);
 
-    setProposal(normalizedProposal);
-    setLoading(false);
-  };
-
-  const handleWithdrawProposal = async () => {
+  async function handleWithdrawProposal() {
     if (!proposal) {
       return;
     }
@@ -144,48 +249,61 @@ export default function ProposalDetailPage({
     }
 
     setWithdrawing(true);
+    setErrorMessage("");
 
     try {
-      const supabase = createClient();
-
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        window.alert("Oturum bilgisi bulunamadı.");
+        setErrorMessage(
+          "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın."
+        );
         return;
       }
 
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from("proposals")
         .delete()
         .eq("id", proposal.id)
         .eq("freelancer_id", user.id);
 
-      if (error) {
-        console.error("Proposal withdraw error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
+      if (deleteError) {
+        console.error(
+          "Proposal withdraw error:",
+          {
+            message: deleteError.message,
+            details: deleteError.details,
+            hint: deleteError.hint,
+            code: deleteError.code,
+          }
+        );
 
-        window.alert(
-          "Teklif geri çekilemedi. Lütfen tekrar deneyin."
+        setErrorMessage(
+          `Teklif geri çekilemedi: ${deleteError.message}`
         );
 
         return;
       }
 
       window.location.href = "/freelancers/proposals";
+    } catch (error) {
+      console.error(
+        "Unexpected withdraw error:",
+        error
+      );
+
+      setErrorMessage(
+        "Teklif geri çekilirken beklenmeyen bir hata oluştu."
+      );
     } finally {
       setWithdrawing(false);
     }
-  };
+  }
 
-  const formatPrice = (amount: number | null) => {
+  function formatPrice(amount: number | null) {
     if (amount === null || amount === undefined) {
       return "Belirtilmemiş";
     }
@@ -195,18 +313,22 @@ export default function ProposalDetailPage({
       currency: "TRY",
       maximumFractionDigits: 0,
     }).format(amount);
-  };
+  }
 
-  const formatDate = (date: string) => {
+  function formatDate(date: string) {
+    if (!date) {
+      return "Belirtilmemiş";
+    }
+
     return new Date(date).toLocaleDateString("tr-TR", {
       day: "numeric",
       month: "long",
       year: "numeric",
     });
-  };
+  }
 
-  const getStatusKey = (status: string) => {
-    const normalized = status.toLowerCase();
+  function getStatusKey(status: string | null) {
+    const normalized = status?.toLowerCase() ?? "pending";
 
     if (
       normalized === "accepted" ||
@@ -218,16 +340,15 @@ export default function ProposalDetailPage({
 
     if (
       normalized === "rejected" ||
-      normalized === "reddedildi" ||
-      normalized === "rejected"
+      normalized === "reddedildi"
     ) {
       return "rejected";
     }
 
     return "pending";
-  };
+  }
 
-  const getStatusLabel = (status: string) => {
+  function getStatusLabel(status: string | null) {
     const key = getStatusKey(status);
 
     if (key === "accepted") {
@@ -238,10 +359,10 @@ export default function ProposalDetailPage({
       return "Reddedildi";
     }
 
-    return "Bekleyen";
-  };
+    return "İnceleniyor";
+  }
 
-  const getStatusClass = (status: string) => {
+  function getStatusClass(status: string | null) {
     const key = getStatusKey(status);
 
     if (key === "accepted") {
@@ -253,7 +374,7 @@ export default function ProposalDetailPage({
     }
 
     return "bg-yellow-100 text-yellow-700";
-  };
+  }
 
   if (loading) {
     return (
@@ -284,7 +405,8 @@ export default function ProposalDetailPage({
           </h1>
 
           <p className="mt-2 text-sm text-red-600">
-            {errorMessage || "Bu teklif mevcut değil."}
+            {errorMessage ||
+              "Bu teklif mevcut değil veya erişim yetkiniz yok."}
           </p>
 
           <Link
@@ -299,11 +421,13 @@ export default function ProposalDetailPage({
   }
 
   const project = proposal.project;
-  const isPending = getStatusKey(proposal.status) === "pending";
+  const statusKey = getStatusKey(proposal.status);
+  const isPending = statusKey === "pending";
 
   return (
     <main className="w-full p-8">
       {/* HEADER */}
+
       <div className="mb-8">
         <Link
           href="/freelancers/proposals"
@@ -346,10 +470,18 @@ export default function ProposalDetailPage({
         </div>
       </div>
 
+      {errorMessage && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {errorMessage}
+        </div>
+      )}
+
       {/* MAIN CONTENT */}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           {/* PROJECT */}
+
           <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="mb-6">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -379,10 +511,14 @@ export default function ProposalDetailPage({
           </section>
 
           {/* COVER LETTER */}
+
           <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-                <FileText size={19} className="text-gray-700" />
+                <FileText
+                  size={19}
+                  className="text-gray-700"
+                />
               </div>
 
               <div>
@@ -398,25 +534,30 @@ export default function ProposalDetailPage({
 
             <div className="rounded-xl bg-gray-50 p-5">
               <p className="whitespace-pre-line text-sm leading-7 text-gray-700">
-                {proposal.cover_letter}
+                {proposal.cover_letter ||
+                  "Teklif mesajı eklenmemiş."}
               </p>
             </div>
           </section>
         </div>
 
         {/* SIDEBAR */}
+
         <aside className="space-y-6">
           {/* PROPOSAL INFO */}
+
           <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <h2 className="mb-5 font-semibold text-gray-900">
               Teklif Bilgileri
             </h2>
 
             <div className="space-y-5">
-              {/* PRICE */}
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                  <Wallet size={17} className="text-gray-700" />
+                  <Wallet
+                    size={17}
+                    className="text-gray-700"
+                  />
                 </div>
 
                 <div>
@@ -430,10 +571,12 @@ export default function ProposalDetailPage({
                 </div>
               </div>
 
-              {/* DELIVERY */}
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                  <Clock3 size={17} className="text-gray-700" />
+                  <Clock3
+                    size={17}
+                    className="text-gray-700"
+                  />
                 </div>
 
                 <div>
@@ -442,15 +585,19 @@ export default function ProposalDetailPage({
                   </p>
 
                   <p className="mt-1 font-semibold text-gray-900">
-                    {proposal.delivery_days} gün
+                    {proposal.delivery_days
+                      ? `${proposal.delivery_days} gün`
+                      : "Belirtilmemiş"}
                   </p>
                 </div>
               </div>
 
-              {/* DATE */}
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                  <CalendarDays size={17} className="text-gray-700" />
+                  <CalendarDays
+                    size={17}
+                    className="text-gray-700"
+                  />
                 </div>
 
                 <div>
@@ -465,7 +612,6 @@ export default function ProposalDetailPage({
               </div>
             </div>
 
-            {/* WITHDRAW */}
             {isPending && (
               <button
                 type="button"
@@ -481,6 +627,7 @@ export default function ProposalDetailPage({
           </section>
 
           {/* PROJECT BUDGET */}
+
           <section className="rounded-2xl border border-gray-200 bg-white p-6">
             <h2 className="mb-4 font-semibold text-gray-900">
               Proje Bütçesi
@@ -496,6 +643,7 @@ export default function ProposalDetailPage({
           </section>
 
           {/* MESSAGE */}
+
           <section className="rounded-2xl bg-black p-6 text-white">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
@@ -508,27 +656,41 @@ export default function ProposalDetailPage({
                 </h2>
 
                 <p className="mt-1 text-xs text-white/60">
-                  Proje hakkında iletişime geç
+                  Bu teklif hakkında mesajlaş
                 </p>
               </div>
             </div>
 
-            <Link
-              href="/freelancers/messages"
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-gray-100"
-            >
-              Mesaj Gönder
-              <MessageCircle size={16} />
-            </Link>
+            {project?.client_id ? (
+              <Link
+                href={`/freelancers/messages?user=${encodeURIComponent(
+                  project.client_id
+                )}&proposal=${encodeURIComponent(
+                  proposal.id
+                )}`}
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-gray-100"
+              >
+                Mesaj Gönder
+                <MessageCircle size={16} />
+              </Link>
+            ) : (
+              <div className="mt-5 rounded-xl bg-white/10 px-4 py-3 text-center text-sm text-white/60">
+                Proje sahibi bilgisi bulunamadı.
+              </div>
+            )}
           </section>
         </aside>
       </div>
 
       {/* PROPOSAL PROCESS */}
+
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
-            <CheckCircle2 size={19} className="text-gray-700" />
+            <CheckCircle2
+              size={19}
+              className="text-gray-700"
+            />
           </div>
 
           <div>
@@ -543,14 +705,7 @@ export default function ProposalDetailPage({
         </div>
 
         <div className="grid gap-4 md:grid-cols-4">
-          {/* SENT */}
-          <div
-            className={`rounded-xl border p-4 ${
-              isPending
-                ? "border-yellow-200 bg-yellow-50"
-                : "border-gray-100 bg-gray-50"
-            }`}
-          >
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
             <p className="text-sm font-medium text-gray-900">
               Teklif Gönderildi
             </p>
@@ -560,10 +715,9 @@ export default function ProposalDetailPage({
             </p>
           </div>
 
-          {/* REVIEW */}
           <div
             className={`rounded-xl border p-4 ${
-              isPending
+              statusKey === "pending"
                 ? "border-yellow-200 bg-yellow-50"
                 : "border-gray-100 bg-gray-50"
             }`}
@@ -577,10 +731,9 @@ export default function ProposalDetailPage({
             </p>
           </div>
 
-          {/* ACCEPTED */}
           <div
             className={`rounded-xl border p-4 ${
-              getStatusKey(proposal.status) === "accepted"
+              statusKey === "accepted"
                 ? "border-green-200 bg-green-50"
                 : "border-gray-100 bg-gray-50"
             }`}
@@ -594,8 +747,13 @@ export default function ProposalDetailPage({
             </p>
           </div>
 
-          {/* STARTED */}
-          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <div
+            className={`rounded-xl border p-4 ${
+              statusKey === "accepted"
+                ? "border-blue-200 bg-blue-50"
+                : "border-gray-100 bg-gray-50"
+            }`}
+          >
             <p className="text-sm font-medium text-gray-900">
               Proje Başladı
             </p>

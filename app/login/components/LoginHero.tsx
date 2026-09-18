@@ -21,7 +21,7 @@ export default function LoginHero(){
     max-w-md
     ">
     
-    HireHub ile freelancerlar
+    CollaCrew ile freelancerlar
     ve ekipler doğru projelerde
     bir araya gelir.
     

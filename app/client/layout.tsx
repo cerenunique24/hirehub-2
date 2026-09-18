@@ -1,5 +1,6 @@
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
+import PageContainer from "@/components/layout/PageContainer";
 
 
 export default function ClientLayout({
@@ -16,14 +17,14 @@ export default function ClientLayout({
       <Sidebar />
 
 
-      <div className="flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
 
 
         <Navbar />
 
 
-        <main>
-          {children}
+        <main className="panel-main min-w-0 flex-1 overflow-x-hidden">
+          <PageContainer>{children}</PageContainer>
         </main>
 
 

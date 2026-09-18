@@ -33,3 +33,59 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Authenticated role panels share one layout rhythm.  Existing pages retain
+ * their local structures, while their former outer p-6/p-8 wrappers are
+ * neutralised here to avoid a role-specific second layer of page padding.
+ */
+.panel-page-shell {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding: 1.5rem;
+}
+
+.panel-page-shell > :is([class~="p-6"], [class~="p-8"]) {
+  padding: 0;
+}
+
+.form-control {
+  width: 100%;
+  min-height: 2.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.75rem;
+  background: #fff;
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  color: #171717;
+  outline: none;
+}
+
+.form-control:focus {
+  border-color: #171717;
+  box-shadow: 0 0 0 4px rgb(0 0 0 / 5%);
+}
+
+.project-input {
+  min-height: 3.25rem;
+  border-color: #d4d4d4;
+  border-radius: 0.875rem;
+  padding-inline: 1rem;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.project-input:hover {
+  border-color: #a3a3a3;
+}
+
+textarea.project-input {
+  min-height: 13rem;
+  padding-top: 0.875rem;
+}
+
+@media (min-width: 1024px) {
+  .panel-page-shell {
+    padding: 2rem;
+  }
+}

@@ -61,7 +61,7 @@ export default function FreelancerDashboard() {
             </div>
 
             <div className="rounded-3xl bg-white p-8 shadow-sm">
-              <h2 className="mb-6 text-xl font-semibold">HireHub Önerileri</h2>
+              <h2 className="mb-6 text-xl font-semibold">CollaCrew Önerileri</h2>
               <div className="space-y-4 text-gray-600">
                 <p>✅ Profil fotoğrafı ekle</p>
                 <p>✅ Portfolyo yükle</p>

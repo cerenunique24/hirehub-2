@@ -17,4 +17,13 @@ export const SKILLS = [
     "QA",
     "Motion Design",
     "Brand Design",
+    "Figma",
+    "Prototipleme",
+    "Design System",
+    "Photoshop",
+    "Illustrator",
+    "Wireframing",
+    "User Research",
+    "Copywriting",
+    "SEO",
   ] as const;

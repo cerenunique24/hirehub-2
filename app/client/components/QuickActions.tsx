@@ -5,11 +5,11 @@ export default function QuickActions() {
   return (
     <div className="flex items-center gap-3">
       <Link
-        href="/client/create-project"
+        href="/client/projects/new"
         className="inline-flex items-center gap-2 rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
       >
         <Plus size={16} />
-        New Project
+        Yeni Proje Oluştur
       </Link>
       <Link
         href="/client/ai"
