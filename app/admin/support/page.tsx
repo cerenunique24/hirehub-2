@@ -14,12 +14,18 @@ type Ticket = {
   status: "open" | "in_progress" | "waiting_user" | "resolved" | "closed";
   created_at: string;
   updated_at: string;
-  profiles?: {
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-    role: string | null;
-  } | null;
+  /**
+   * `profiles(...)` embed — Supabase returns the related rows as an array
+   * (one entry for the ticket's user). Read it with `ticket.profiles?.[0]`.
+   */
+  profiles:
+    | {
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        role: string | null;
+      }[]
+    | null;
 };
 
 const statusLabels: Record<Ticket["status"], string> = {
@@ -61,8 +67,9 @@ export default function AdminSupportPage() {
 
     return tickets.filter((ticket) => {
       const matchesStatus = status === "all" || ticket.status === status;
-      const name = [ticket.profiles?.first_name, ticket.profiles?.last_name].filter(Boolean).join(" ");
-      const haystack = [ticket.subject, ticket.description, name, ticket.profiles?.email]
+      const requester = ticket.profiles?.[0] ?? null;
+      const name = [requester?.first_name, requester?.last_name].filter(Boolean).join(" ");
+      const haystack = [ticket.subject, ticket.description, name, requester?.email]
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("tr-TR");
@@ -125,7 +132,8 @@ export default function AdminSupportPage() {
         ) : (
           <div className="divide-y divide-neutral-100">
             {filtered.map((ticket) => {
-              const name = [ticket.profiles?.first_name, ticket.profiles?.last_name]
+              const requester = ticket.profiles?.[0] ?? null;
+              const name = [requester?.first_name, requester?.last_name]
                 .filter(Boolean)
                 .join(" ") || "Kullanıcı";
 
@@ -143,7 +151,7 @@ export default function AdminSupportPage() {
                   </div>
                   <div>
                     <p className="text-sm">{name}</p>
-                    <p className="mt-1 truncate text-xs text-neutral-500">{ticket.profiles?.email}</p>
+                    <p className="mt-1 truncate text-xs text-neutral-500">{requester?.email}</p>
                   </div>
                   <span className="w-fit rounded-full bg-neutral-100 px-3 py-1.5 text-xs text-neutral-700">
                     {statusLabels[ticket.status]}

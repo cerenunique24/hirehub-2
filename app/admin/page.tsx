@@ -18,7 +18,11 @@ type Ticket = {
   status: string;
   priority: string;
   created_at: string;
-  profiles?: { first_name: string | null; last_name: string | null } | null;
+  /**
+   * `profiles(...)` embed — Supabase returns the related rows as an array
+   * (one entry for the ticket's user). Read it with `ticket.profiles?.[0]`.
+   */
+  profiles: { first_name: string | null; last_name: string | null }[] | null;
 };
 
 export default function AdminDashboardPage() {
@@ -106,7 +110,8 @@ export default function AdminDashboardPage() {
         ) : (
           <div className="divide-y divide-neutral-100">
             {tickets.map((ticket) => {
-              const name = [ticket.profiles?.first_name, ticket.profiles?.last_name]
+              const requester = ticket.profiles?.[0] ?? null;
+              const name = [requester?.first_name, requester?.last_name]
                 .filter(Boolean)
                 .join(" ") || "Kullanıcı";
 
