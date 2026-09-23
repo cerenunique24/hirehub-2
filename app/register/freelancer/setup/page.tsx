@@ -1,246 +1,84 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-const categories = [
-  "UI/UX Design",
-  "Graphic Design",
-  "Web Design",
-  "Frontend Development",
-  "Backend Development",
-  "Full Stack Development",
-  "Mobile App Development",
-  "WordPress",
-  "3D Modeling",
-  "Interior Design",
-  "Video Editing",
-  "Digital Marketing",
-  "Content Writing",
-];
-
-const prices = [
-  "₺250 / saat",
-  "₺500 / saat",
-  "₺750 / saat",
-  "₺1.000 / saat",
-  "₺1.250 / saat",
-  "₺1.500 / saat",
-  "₺2.000 / saat",
-  "₺2.500 / saat",
-  "₺3.000+ / saat",
-];
+import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 
 export default function FreelancerSetupPage() {
   const router = useRouter();
-  const [category, setCategory] = useState("");
 
-  const [skillInput, setSkillInput] = useState("");
-
-  const [skills, setSkills] = useState<string[]>([]);
-
-  const [about, setAbout] = useState("");
-
-  const [price, setPrice] = useState("");
-
-  function addSkill(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key !== "Enter") return;
-
-    e.preventDefault();
-
-    const value = skillInput.trim();
-
-    if (!value) return;
-
-    if (skills.includes(value)) return;
-
-    if (skills.length >= 10) return;
-
-    setSkills([...skills, value]);
-
-    setSkillInput("");
-  }
-
-  function removeSkill(skill: string) {
-    setSkills(skills.filter((s) => s !== skill));
-  }
   return (
-    <main className="min-h-screen bg-[#f8f8f8] flex items-center justify-center px-6 py-12">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-3xl items-center justify-center">
+        <div className="w-full rounded-[28px] bg-white shadow-[0_20px_70px_rgba(0,0,0,0.06)] sm:rounded-[32px]">
+          <div className="p-7 sm:p-12">
+            <div className="mx-auto max-w-xl text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
+                <Sparkles size={24} strokeWidth={1.8} />
+              </div>
 
-      <div className="w-full max-w-3xl bg-white rounded-3xl shadow-sm p-10">
+              <p className="mt-6 text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
+                Profil kurulumu
+              </p>
 
-        <h1 className="text-3xl font-bold">
-          Profilini Tamamla
-        </h1>
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
+                Profilini birlikte oluşturalım
+              </h1>
 
-        <p className="text-gray-500 mt-2 mb-10">
-          Freelancer profilini oluşturmak için birkaç bilgi daha gerekiyor.
-        </p>
+              <p className="mx-auto mt-4 max-w-lg text-sm leading-7 text-gray-500 sm:text-base">
+                Sana uygun projeleri ve ekipleri bulabilmemiz için
+                profesyonel profilini birkaç kısa adımda oluşturalım.
+              </p>
 
-        <div className="space-y-8">
-
-          <div>
-
-            <label className="block font-medium mb-2">
-              Uzmanlık Alanı
-            </label>
-
-            <select
-              value={category}
-              onChange={(e)=>setCategory(e.target.value)}
-              className="w-full h-12 border rounded-xl px-4"
-            >
-
-              <option value="">
-                Uzmanlık alanı seç
-              </option>
-
-              {categories.map((item)=>(
-                <option
-                  key={item}
-                  value={item}
-                >
-                  {item}
-                </option>
-              ))}
-
-            </select>
-
-          </div>
-
-          <div>
-
-            <label className="block font-medium mb-2">
-              Yetenekler
-            </label>
-
-            <input
-              value={skillInput}
-              onChange={(e)=>setSkillInput(e.target.value)}
-              onKeyDown={addSkill}
-              placeholder="Figma, React, Next.js..."
-              className="w-full h-12 border rounded-xl px-4"
-            />
-
-            <div className="flex flex-wrap gap-2 mt-4">
-
-              {skills.map((skill)=>(
-
-                <div
-                  key={skill}
-                  className="bg-black text-white rounded-full px-4 py-2 text-sm flex items-center gap-2"
-                >
-
-                  {skill}
-
-                  <button
-                    type="button"
-                    onClick={()=>removeSkill(skill)}
+              <div className="mx-auto mt-8 grid max-w-md gap-3 text-left">
+                {[
+                  "Çalışma alanlarını ve yapabildiğin işleri belirle",
+                  "Becerilerini, deneyimini ve çalışma tercihlerini ekle",
+                  "Yapay zekâ destekli uzmanlık profilini oluştur",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="flex items-start gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3.5"
                   >
-                    ×
-                  </button>
+                    <CheckCircle2
+                      size={18}
+                      className="mt-0.5 shrink-0 text-gray-900"
+                    />
 
-                </div>
+                    <span className="text-sm leading-6 text-gray-600">
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
 
-              ))}
+              <div className="mt-8 flex items-center justify-center gap-2 text-xs text-gray-400">
+                <span>4 adım</span>
+                <span>•</span>
+                <span>Yaklaşık 3 dakika</span>
+              </div>
 
+              <button
+                type="button"
+                onClick={() =>
+                  router.push("/register/freelancer/onboarding")
+                }
+                className="mt-8 flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
+              >
+                Profile başla
+                <ArrowRight size={17} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="mt-3 h-11 px-5 text-sm font-medium text-gray-400 transition hover:text-gray-900"
+              >
+                Daha sonra tamamla
+              </button>
             </div>
-
           </div>
-
-          <div>
-
-<label className="block font-medium mb-2">
-  Kendini Tanıt
-</label>
-
-<textarea
-  value={about}
-  onChange={(e) => setAbout(e.target.value)}
-  maxLength={600}
-  rows={6}
-  placeholder="Kendinden, deneyimlerinden ve çalışma tarzından bahset..."
-  className="w-full border rounded-xl px-4 py-3 resize-none"
-/>
-
-<div className="flex justify-between mt-2 text-sm text-gray-500">
-
-  <span>Minimum 80 karakter önerilir.</span>
-
-  <span>{about.length}/600</span>
-
-</div>
-
-</div>
-
-<div>
-
-<label className="block font-medium mb-2">
-  Saatlik Ücret
-</label>
-
-<select
-  value={price}
-  onChange={(e) => setPrice(e.target.value)}
-  className="w-full h-12 border rounded-xl px-4"
->
-
-  <option value="">
-    Saatlik ücret seç
-  </option>
-
-  {prices.map((item) => (
-
-    <option
-      key={item}
-      value={item}
-    >
-      {item}
-    </option>
-
-  ))}
-
-</select>
-
-</div>
-
-<div className="flex justify-between pt-6">
-
-<button
-  type="button"
-  onClick={() => history.back()}
-  className="px-6 py-3 rounded-xl border font-medium hover:bg-gray-100 transition"
->
-  Geri
-</button>
-
-<button
-  type="button"
-  onClick={() => router.push("/register/freelancer/verify")}
-  disabled={
-    !category ||
-    skills.length === 0 ||
-    about.length < 80 ||
-    !price
-  }
-  className={`px-8 py-3 rounded-xl font-semibold transition ${
-    category &&
-    skills.length > 0 &&
-    about.length >= 80 &&
-    price
-      ? "bg-black text-white hover:bg-gray-900"
-      : "bg-gray-300 text-gray-500 cursor-not-allowed"
-  }`}
->
-  Profili Tamamla
-</button>
-
-</div>
-
-</div>
-
-</div>
-
-</main>
-);
+        </div>
+      </div>
+    </main>
+  );
 }

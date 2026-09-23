@@ -96,7 +96,7 @@ export default function IndividualSetupPage() {
     <main
       className="
       min-h-screen
-      bg-[#fafafa]
+      bg-[var(--color-canvas)]
       flex
       items-center
       justify-center
@@ -110,7 +110,7 @@ export default function IndividualSetupPage() {
         bg-white
         w-full
         max-w-xl
-        rounded-3xl
+        rounded-xl
         shadow-sm
         p-10
         "
@@ -241,7 +241,7 @@ export default function IndividualSetupPage() {
                   ${
                     purpose===item
                     ?
-                    "bg-black text-white"
+                    "bg-[var(--color-primary-600)] text-white"
                     :
                     "bg-white"
                   }
@@ -305,7 +305,7 @@ export default function IndividualSetupPage() {
                 ${
                   categories.includes(item)
                   ?
-                  "bg-black text-white"
+                  "bg-[var(--color-primary-600)] text-white"
                   :
                   "bg-white"
                 }
@@ -401,7 +401,7 @@ export default function IndividualSetupPage() {
           ${
             canContinue
             ?
-            "bg-black text-white"
+            "bg-[var(--color-primary-600)] text-white"
             :
             "bg-gray-300 text-gray-500"
           }

@@ -1,55 +1,45 @@
-import * as React from "react";
+import { forwardRef } from "react";
+import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
 
-type InputProps = React.InputHTMLAttributes<HTMLInputElement> & {
-  label?: string;
-  error?: string;
-};
+/** CollaCrew Design System — Input / Textarea. */
+export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+  hasError?: boolean;
+}
 
-const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = "", ...props }, ref) => {
-    return (
-      <div className="w-full">
-        {label && (
-          <label className="mb-2 block text-sm font-medium text-gray-700">
-            {label}
-          </label>
-        )}
+const BASE =
+  "w-full min-h-[var(--input-height)] rounded-[var(--radius-input)] border bg-[var(--color-surface-1)] px-[var(--input-padding-x)] font-sans text-[length:var(--font-size-body)] leading-5 text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] disabled:cursor-not-allowed disabled:bg-[var(--color-surface-2)] disabled:opacity-60";
 
-        <input
-          ref={ref}
-          className={`
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            bg-white
-            px-4
-            py-3
-            text-gray-900
-            placeholder:text-gray-400
-            outline-none
-            transition
-            duration-200
-            focus:border-black
-            focus:ring-2
-            focus:ring-black/10
-            disabled:cursor-not-allowed
-            disabled:bg-gray-100
-            ${className}
-          `}
-          {...props}
-        />
+const BORDER = "border-[var(--color-border-subtle)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]";
 
-        {error && (
-          <p className="mt-2 text-sm text-red-500">
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  }
-);
+const BORDER_ERROR =
+  "border-[var(--color-error-600)] bg-[var(--color-error-50)] focus:border-[var(--color-error-600)] focus:ring-2 focus:ring-[var(--color-error-50)]";
 
-Input.displayName = "Input";
+export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
+  { hasError, className = "", ...props },
+  ref
+) {
+  return (
+    <input
+      ref={ref}
+      className={[BASE, hasError ? BORDER_ERROR : BORDER, className].join(" ")}
+      {...props}
+    />
+  );
+});
 
-export default Input;
+export interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  hasError?: boolean;
+}
+
+export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+  { hasError, className = "", ...props },
+  ref
+) {
+  return (
+    <textarea
+      ref={ref}
+      className={[BASE, "min-h-[7rem] resize-none py-2 leading-[var(--line-height-body)]", hasError ? BORDER_ERROR : BORDER, className].join(" ")}
+      {...props}
+    />
+  );
+});

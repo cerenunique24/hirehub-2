@@ -140,7 +140,7 @@ return (
 <main
 className="
 min-h-screen
-bg-[#F7F8FA]
+bg-[var(--color-canvas)]
 flex
 items-center
 justify-center
@@ -155,7 +155,7 @@ className="
 w-full
 max-w-xl
 bg-white
-rounded-3xl
+rounded-xl
 p-10
 shadow-sm
 "
@@ -232,7 +232,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -254,7 +254,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -286,7 +286,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -311,7 +311,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -351,7 +351,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -425,7 +425,7 @@ border
 rounded-xl
 px-4
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -479,7 +479,7 @@ rounded-xl
 px-4
 pr-12
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -615,7 +615,7 @@ rounded-xl
 px-4
 pr-12
 outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -664,10 +664,10 @@ className="
 w-full
 h-12
 rounded-xl
-bg-black
+bg-[var(--color-primary-600)]
 text-white
 font-medium
-hover:bg-gray-800
+hover:bg-[var(--color-primary-700)]
 transition
 "
 

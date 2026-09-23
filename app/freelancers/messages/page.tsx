@@ -1,14 +1,25 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Send, Search, MessageCircle } from "lucide-react";
+import { notifyUsers } from "@/lib/notifications";
+import { usePremium } from "@/lib/hooks/usePremium";
+import {
+  Send,
+  Search,
+  MessageCircle,
+  Paperclip,
+  Users,
+} from "lucide-react";
 
 type Profile = {
   id: string;
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  role?: string | null;
 };
 
 type Message = {
@@ -16,6 +27,11 @@ type Message = {
   sender_id: string;
   receiver_id: string;
   content: string;
+  proposal_id: string | null;
+  attachment_url: string | null;
+  attachment_name: string | null;
+  attachment_type: string | null;
+  read_at: string | null;
   created_at: string;
 };
 
@@ -24,36 +40,123 @@ type Conversation = {
   messages: Message[];
   lastMessage: Message;
   unread: number;
+  proposalId: string | null;
+  projectId: string | null;
+  projectTitle: string | null;
 };
 
-export default function MessagesPage() {
-  const supabase = createClient();
+/*
+ * Supabase/PostgREST, proposals.project_id gibi bir foreign key
+ * üzerinden yapılan "many-to-one" embed'i TEK BİR OBJE olarak
+ * döndürür, dizi olarak değil. Kod daha önce `.projects?.[0]?.title`
+ * şeklinde diziymiş gibi okuyordu; bu her zaman undefined dönüp
+ * "Proje" fallback'ine düşüyordu. Bu yardımcı hem obje hem de
+ * (ileride şekli değişirse) dizi durumunu güvenle karşılar.
+ */
+function extractProject(
+  value: unknown
+): { id: string; title: string; status: string | null } | null {
+  if (Array.isArray(value)) {
+    return (
+      (value[0] as { id: string; title: string; status: string | null } | undefined) ?? null
+    );
+  }
 
-  const [activeTab, setActiveTab] = useState("müşteri");
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  if (value && typeof value === "object" && "title" in value) {
+    return value as { id: string; title: string; status: string | null };
+  }
+
+  return null;
+}
+
+function FreelancerMessagesContent() {
+  const supabase = useMemo(() => createClient(), []);
+  const searchParams = useSearchParams();
+
+  const [activeTab, setActiveTab] = useState<
+    "clients" | "teams"
+  >("clients");
+
+  const [currentUserId, setCurrentUserId] = useState<
+    string | null
+  >(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [projectNames, setProjectNames] = useState<
+    Record<string, string>
+  >({});
+
+  const [projectIds, setProjectIds] = useState<
+    Record<string, string>
+  >({});
+
+  const [projectStatuses, setProjectStatuses] = useState<
+    Record<string, string | null>
+  >({});
+
+  const [selectedUserId, setSelectedUserId] = useState<
+    string | null
+  >(null);
+
+  const [selectedProposalId, setSelectedProposalId] =
+    useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
   const [search, setSearch] = useState("");
-
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+
+  const { can: canUseMessagingFeature, loading: premiumLoading } = usePremium();
 
   /*
-   * ---------------------------------------------------------
-   * CURRENT USER
-   * ---------------------------------------------------------
+   * YENİ (henüz hiç mesajı olmayan) KONUŞMA YETKİ KONTROLÜ
+   * ----------------------------------------------------
+   * URL'den gelen ?user=&proposal= ile, hiç mesajı olmayan bir
+   * konuşma açılmaya çalışılıyorsa, gerçek yetki server-side
+   * `/api/messages/send`'de zaten kontrol edilir — ama UI'ın
+   * kullanıcıya "bu konuşma açık, yaz gönder" izlenimi vermemesi
+   * için burada da (RLS'e saygılı, salt-okunur) bir ön kontrol
+   * yapılır. Bu SADECE görüntü amaçlıdır; asıl yetkilendirme
+   * sunucuda tekrarlanır.
    */
+  const [newConversationCheck, setNewConversationCheck] = useState<{
+    key: string;
+    authorized: boolean;
+  } | null>(null);
 
+  /*
+   * URL'DEN GELEN KONUŞMAYI SEÇ
+   *
+   * /freelancers/messages?user=CLIENT_ID&proposal=PROPOSAL_ID
+   */
   useEffect(() => {
+    const userId = searchParams.get("user");
+    const proposalId = searchParams.get("proposal");
+
+    if (userId) {
+      setSelectedUserId(userId);
+    }
+
+    setSelectedProposalId(proposalId);
+  }, [searchParams]);
+
+  /*
+   * MEVCUT KULLANICI
+   */
+  useEffect(() => {
+    let active = true;
+
     const getCurrentUser = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (!active) {
+        return;
+      }
 
       if (!user) {
         setLoading(false);
@@ -63,17 +166,22 @@ export default function MessagesPage() {
       setCurrentUserId(user.id);
     };
 
-    getCurrentUser();
-  }, []);
+    void getCurrentUser();
+
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
 
   /*
-   * ---------------------------------------------------------
-   * LOAD MESSAGES
-   * ---------------------------------------------------------
+   * MESAJLARI YÜKLE
    */
-
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      return;
+    }
+
+    let active = true;
 
     const loadMessages = async () => {
       setLoading(true);
@@ -84,49 +192,142 @@ export default function MessagesPage() {
         .or(
           `sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`
         )
-        .order("created_at", { ascending: true });
+        .order("created_at", {
+          ascending: true,
+        });
+
+      if (!active) {
+        return;
+      }
 
       if (error) {
-        console.error("Mesajlar yüklenemedi:", error);
+        console.error(
+          "Mesajlar yüklenemedi:",
+          error
+        );
         setLoading(false);
         return;
       }
 
-      const loadedMessages = (data || []) as Message[];
+      const loadedMessages = (data ?? []) as Message[];
 
       setMessages(loadedMessages);
 
       /*
-       * Mesajlarda bulunan diğer kullanıcıların ID'lerini buluyoruz.
+       * Mesajların bağlı olduğu tekliflerin
+       * proje isimlerini getir.
        */
+      const proposalIds = [
+        ...new Set(
+          loadedMessages
+            .map(
+              (message) =>
+                message.proposal_id
+            )
+            .filter(
+              (id): id is string =>
+                Boolean(id)
+            )
+        ),
+      ];
 
+      if (proposalIds.length > 0) {
+        const {
+          data: proposalRows,
+          error: proposalError,
+        } = await supabase
+          .from("proposals")
+          .select("id, projects(id, title, status)")
+          .in("id", proposalIds);
+
+        if (proposalError) {
+          console.error(
+            "Teklifler yüklenemedi:",
+            proposalError
+          );
+        }
+
+        const names: Record<string, string> = {};
+        const ids: Record<string, string> = {};
+        const statuses: Record<string, string | null> = {};
+
+        for (const proposal of (proposalRows ?? []) as Array<{
+          id: string;
+          projects: unknown;
+        }>) {
+          const project = extractProject(proposal.projects);
+          names[proposal.id] = project?.title ?? "Proje";
+          if (project?.id) {
+            ids[proposal.id] = project.id;
+            statuses[proposal.id] = project.status;
+          }
+        }
+
+        setProjectNames(names);
+        setProjectIds(ids);
+        setProjectStatuses(statuses);
+      } else {
+        setProjectNames({});
+        setProjectIds({});
+        setProjectStatuses({});
+      }
+
+      /*
+       * Konuşmalardaki diğer kullanıcılar.
+       */
       const otherUserIds = Array.from(
         new Set(
-          loadedMessages
-            .map((message) =>
-              message.sender_id === currentUserId
-                ? message.receiver_id
-                : message.sender_id
-            )
-            .filter(Boolean)
+          loadedMessages.map((message) =>
+            message.sender_id ===
+            currentUserId
+              ? message.receiver_id
+              : message.sender_id
+          )
         )
       );
 
+      /*
+       * URL'den gelen client henüz mesaj
+       * göndermemiş olsa bile profilini getir.
+       */
+      const urlUserId =
+        searchParams.get("user");
+
+      if (
+        urlUserId &&
+        urlUserId !== currentUserId &&
+        !otherUserIds.includes(
+          urlUserId
+        )
+      ) {
+        otherUserIds.push(urlUserId);
+      }
+
       if (otherUserIds.length > 0) {
-        const { data: profileData, error: profileError } =
-          await supabase
-            .from("profiles")
-            .select("id, first_name, last_name, avatar_url")
-            .in("id", otherUserIds);
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
+          .from("profiles")
+          .select(
+            "id, first_name, last_name, avatar_url, role"
+          )
+          .in("id", otherUserIds);
+
+        if (!active) {
+          return;
+        }
 
         if (profileError) {
           console.error(
             "Profiller yüklenemedi:",
             profileError
           );
-        } else {
-          setProfiles((profileData || []) as Profile[]);
         }
+
+        setProfiles(
+          (profileData ?? []) as Profile[]
+        );
       } else {
         setProfiles([]);
       }
@@ -134,22 +335,35 @@ export default function MessagesPage() {
       setLoading(false);
     };
 
-    loadMessages();
-  }, [currentUserId]);
+    void loadMessages();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentUserId,
+    supabase,
+    searchParams,
+  ]);
 
   /*
-   * ---------------------------------------------------------
    * REALTIME
-   * ---------------------------------------------------------
    *
-   * Yeni mesaj geldiğinde sayfayı yenilemeden ekrana ekler.
+   * Client mesaj gönderdiğinde freelancer
+   * ekranına otomatik düşer.
    */
-
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId) {
+      return;
+    }
+
+    let active = true;
+
+    const channelName =
+      `freelancer-messages-${currentUserId}`;
 
     const channel = supabase
-      .channel("messages-realtime")
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -157,224 +371,681 @@ export default function MessagesPage() {
           schema: "public",
           table: "messages",
         },
-        (payload) => {
-          const newMessage = payload.new as Message;
+        async (payload) => {
+          if (!active) {
+            return;
+          }
 
+          const newMessage =
+            payload.new as Message;
+
+          /*
+           * Bu mesaj freelancer ile ilgili değilse
+           * hiçbir şey yapma.
+           */
           if (
-            newMessage.sender_id !== currentUserId &&
-            newMessage.receiver_id !== currentUserId
+            newMessage.sender_id !==
+              currentUserId &&
+            newMessage.receiver_id !==
+              currentUserId
           ) {
             return;
           }
 
           setMessages((current) => {
-            const exists = current.some(
-              (message) => message.id === newMessage.id
-            );
+            if (
+              current.some(
+                (message) =>
+                  message.id ===
+                  newMessage.id
+              )
+            ) {
+              return current;
+            }
 
-            if (exists) return current;
-
-            return [...current, newMessage];
+            return [
+              ...current,
+              newMessage,
+            ];
           });
 
           /*
-           * Yeni mesajın göndereninin profilini de getir.
+           * Karşı tarafı bul.
            */
-
           const otherUserId =
-            newMessage.sender_id === currentUserId
+            newMessage.sender_id ===
+            currentUserId
               ? newMessage.receiver_id
               : newMessage.sender_id;
 
-          const alreadyLoaded = profiles.some(
-            (profile) => profile.id === otherUserId
+          /*
+           * Profilini getir.
+           */
+          const {
+            data: profileData,
+          } = await supabase
+            .from("profiles")
+            .select(
+              "id, first_name, last_name, avatar_url, role"
+            )
+            .eq("id", otherUserId)
+            .maybeSingle();
+
+          if (
+            !active ||
+            !profileData
+          ) {
+            return;
+          }
+
+          setProfiles(
+            (currentProfiles) => {
+              if (
+                currentProfiles.some(
+                  (profile) =>
+                    profile.id ===
+                    profileData.id
+                )
+              ) {
+                return currentProfiles;
+              }
+
+              return [
+                ...currentProfiles,
+                profileData as Profile,
+              ];
+            }
           );
 
-          if (!alreadyLoaded) {
-            supabase
-              .from("profiles")
-              .select("id, first_name, last_name, avatar_url")
-              .eq("id", otherUserId)
-              .single()
-              .then(({ data }) => {
-                if (data) {
-                  setProfiles((current) => {
-                    if (
-                      current.some(
-                        (profile) => profile.id === data.id
-                      )
-                    ) {
-                      return current;
-                    }
+          /*
+           * Yeni mesaj bir teklife bağlıysa
+           * proje adını getir.
+           */
+          if (
+            newMessage.proposal_id &&
+            !projectNames[
+              newMessage.proposal_id
+            ]
+          ) {
+            const {
+              data: proposalData,
+            } = await supabase
+              .from("proposals")
+              .select(
+                "id, projects(id, title, status)"
+              )
+              .eq(
+                "id",
+                newMessage.proposal_id
+              )
+              .maybeSingle();
 
-                    return [...current, data as Profile];
-                  });
-                }
-              });
+            if (
+              active &&
+              proposalData
+            ) {
+              const project = extractProject(
+                proposalData.projects
+              );
+
+              setProjectNames(
+                (current) => ({
+                  ...current,
+                  [newMessage.proposal_id!]:
+                    project?.title ?? "Proje",
+                })
+              );
+
+              if (project?.id) {
+                setProjectIds((current) => ({
+                  ...current,
+                  [newMessage.proposal_id!]: project.id,
+                }));
+                setProjectStatuses((current) => ({
+                  ...current,
+                  [newMessage.proposal_id!]: project.status,
+                }));
+              }
+            }
           }
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      active = false;
+      void supabase.removeChannel(
+        channel
+      );
     };
-  }, [currentUserId, profiles]);
+  }, [
+    currentUserId,
+    supabase,
+    projectNames,
+  ]);
 
   /*
-   * ---------------------------------------------------------
-   * CONVERSATIONS
-   * ---------------------------------------------------------
+   * KONUŞMALAR
+   *
+   * Aynı client ile farklı teklifler
+   * ayrı konuşma olarak tutulur.
    */
-
   const conversations = useMemo(() => {
-    if (!currentUserId) return [];
+    if (!currentUserId) {
+      return [];
+    }
 
-    const conversationMap = new Map<string, Conversation>();
+    const map =
+      new Map<string, Conversation>();
 
     messages.forEach((message) => {
       const otherUserId =
-        message.sender_id === currentUserId
+        message.sender_id ===
+        currentUserId
           ? message.receiver_id
           : message.sender_id;
 
       const profile = profiles.find(
-        (item) => item.id === otherUserId
+        (item) =>
+          item.id === otherUserId
       );
 
-      if (!profile) return;
+      if (!profile) {
+        return;
+      }
 
-      const existing = conversationMap.get(otherUserId);
+      /*
+       * Freelancer sadece client konuşmalarını
+       * görür.
+       */
+      if (
+        profile.role &&
+        profile.role !== "client"
+      ) {
+        return;
+      }
+
+      /*
+       * proposal_id konuşmanın parçası.
+       */
+      const conversationKey =
+        `${otherUserId}:${
+          message.proposal_id ??
+          "legacy"
+        }`;
+
+      const existing =
+        map.get(conversationKey);
 
       const unread =
-        message.receiver_id === currentUserId
+        message.receiver_id ===
+          currentUserId &&
+        !message.read_at
           ? 1
           : 0;
 
       if (!existing) {
-        conversationMap.set(otherUserId, {
+        map.set(conversationKey, {
           user: profile,
           messages: [message],
           lastMessage: message,
           unread,
+          proposalId:
+            message.proposal_id,
+          projectId:
+            message.proposal_id
+              ? projectIds[message.proposal_id] ?? null
+              : null,
+          projectTitle:
+            message.proposal_id
+              ? projectNames[
+                  message.proposal_id
+                ] ?? "Proje"
+              : "Genel konuşma",
         });
       } else {
-        existing.messages.push(message);
+        existing.messages.push(
+          message
+        );
 
         if (
-          new Date(message.created_at).getTime() >
-          new Date(existing.lastMessage.created_at).getTime()
+          new Date(
+            message.created_at
+          ).getTime() >
+          new Date(
+            existing.lastMessage.created_at
+          ).getTime()
         ) {
-          existing.lastMessage = message;
+          existing.lastMessage =
+            message;
         }
 
         existing.unread += unread;
       }
     });
 
-    return Array.from(conversationMap.values()).sort(
-      (a, b) =>
-        new Date(b.lastMessage.created_at).getTime() -
-        new Date(a.lastMessage.created_at).getTime()
-    );
-  }, [messages, profiles, currentUserId]);
+    /*
+     * URL'den belirli bir client + proposal
+     * geldiyse ve henüz mesaj yoksa,
+     * konuşmayı yine de gösterebilmek için
+     * geçici conversation oluştur.
+     */
+    if (selectedUserId) {
+      const selectedProfile =
+        profiles.find(
+          (profile) =>
+            profile.id ===
+            selectedUserId
+        );
 
-  /*
-   * ---------------------------------------------------------
-   * SEARCH
-   * ---------------------------------------------------------
-   */
+      const existingConversation =
+        Array.from(
+          map.values()
+        ).some(
+          (conversation) =>
+            conversation.user.id ===
+              selectedUserId &&
+            conversation.proposalId ===
+              selectedProposalId
+        );
 
-  const filteredConversations = useMemo(() => {
-    if (!search.trim()) {
-      return conversations;
+      if (
+        selectedProfile &&
+        !existingConversation
+      ) {
+        map.set(
+          `${selectedUserId}:${
+            selectedProposalId ??
+            "legacy"
+          }`,
+          {
+            user: selectedProfile,
+            messages: [],
+            lastMessage: {
+              id: "temporary",
+              sender_id: "",
+              receiver_id: "",
+              content: "",
+              proposal_id:
+                selectedProposalId,
+              attachment_url: null,
+              attachment_name: null,
+              attachment_type: null,
+              read_at: null,
+              created_at:
+                new Date().toISOString(),
+            },
+            unread: 0,
+            proposalId:
+              selectedProposalId,
+            projectId:
+              selectedProposalId
+                ? projectIds[selectedProposalId] ?? null
+                : null,
+            projectTitle:
+              selectedProposalId
+                ? projectNames[
+                    selectedProposalId
+                  ] ?? "Proje"
+                : "Genel konuşma",
+          }
+        );
+      }
     }
 
-    const query = search.toLowerCase();
+    return Array.from(
+      map.values()
+    ).sort(
+      (a, b) =>
+        new Date(
+          b.lastMessage.created_at
+        ).getTime() -
+        new Date(
+          a.lastMessage.created_at
+        ).getTime()
+    );
+  }, [
+    messages,
+    profiles,
+    currentUserId,
+    projectNames,
+    projectIds,
+    selectedUserId,
+    selectedProposalId,
+  ]);
 
-    return conversations.filter((conversation) => {
-      const fullName =
-        `${conversation.user.first_name || ""} ${
-          conversation.user.last_name || ""
-        }`.toLowerCase();
+  /*
+   * ARAMA
+   */
+  const filteredConversations =
+    useMemo(() => {
+      if (!search.trim()) {
+        return conversations;
+      }
+
+      const query =
+        search.toLocaleLowerCase(
+          "tr-TR"
+        );
+
+      return conversations.filter(
+        (conversation) => {
+          const name =
+            `${conversation.user.first_name || ""} ${
+              conversation.user.last_name || ""
+            }`.toLocaleLowerCase(
+              "tr-TR"
+            );
+
+          const projectTitle =
+            (
+              conversation.projectTitle ??
+              ""
+            ).toLocaleLowerCase(
+              "tr-TR"
+            );
+
+          return (
+            name.includes(query) ||
+            projectTitle.includes(
+              query
+            ) ||
+            conversation.lastMessage.content
+              .toLocaleLowerCase(
+                "tr-TR"
+              )
+              .includes(query)
+          );
+        }
+      );
+    }, [conversations, search]);
+
+  /*
+   * SEÇİLİ PROFİL
+   */
+  const selectedProfile =
+    profiles.find(
+      (profile) =>
+        profile.id ===
+        selectedUserId
+    );
+
+  /*
+   * SEÇİLİ KONUŞMANIN MESAJLARI
+   *
+   * Burada proposal_id kritik.
+   *
+   * Aynı client ile iki farklı teklif varsa
+   * birbirine karışmaz.
+   */
+  const selectedMessages =
+    messages.filter((message) => {
+      if (
+        !currentUserId ||
+        !selectedUserId
+      ) {
+        return false;
+      }
+
+      const isConversation =
+        (message.sender_id ===
+          currentUserId &&
+          message.receiver_id ===
+            selectedUserId) ||
+        (message.sender_id ===
+          selectedUserId &&
+          message.receiver_id ===
+            currentUserId);
+
+      if (!isConversation) {
+        return false;
+      }
+
+      if (selectedProposalId) {
+        return (
+          message.proposal_id ===
+          selectedProposalId
+        );
+      }
 
       return (
-        fullName.includes(query) ||
-        conversation.lastMessage.content
-          .toLowerCase()
-          .includes(query)
+        message.proposal_id === null
       );
     });
-  }, [conversations, search]);
+
+  const hasExistingThread =
+    selectedMessages.length > 0;
 
   /*
-   * ---------------------------------------------------------
-   * SELECTED CONVERSATION
-   * ---------------------------------------------------------
+   * Yeni (mesajsız) bir konuşma için ön-yetki kontrolü — bkz. yukarı.
+   * Zaten mesajı olan konuşmalar için hiçbir şey değişmez (mevcut
+   * davranış korunur).
    */
+  useEffect(() => {
+    if (
+      !currentUserId ||
+      !selectedUserId ||
+      hasExistingThread
+    ) {
+      return;
+    }
 
-  const selectedConversation = conversations.find(
-    (conversation) =>
-      conversation.user.id === selectedUserId
-  );
+    const key = `${selectedUserId}:${selectedProposalId ?? "none"}`;
 
-  const selectedMessages = messages.filter((message) => {
-    if (!currentUserId || !selectedUserId) return false;
+    let cancelled = false;
 
-    return (
-      (message.sender_id === currentUserId &&
-        message.receiver_id === selectedUserId) ||
-      (message.sender_id === selectedUserId &&
-        message.receiver_id === currentUserId)
-    );
-  });
+    async function checkAuthorization() {
+      if (selectedProposalId) {
+        const { data: proposal } = await supabase
+          .from("proposals")
+          .select("id, project_id")
+          .eq("id", selectedProposalId)
+          .eq("freelancer_id", currentUserId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (!proposal) {
+          setNewConversationCheck({ key, authorized: false });
+          return;
+        }
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("client_id")
+          .eq("id", proposal.project_id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        setNewConversationCheck({
+          key,
+          authorized: project?.client_id === selectedUserId,
+        });
+      } else {
+        // Teklif öncesi / proje bağlamı olmayan yeni konuşma — Pro gerekir.
+        setNewConversationCheck({
+          key,
+          authorized: canUseMessagingFeature("pre_proposal_messaging"),
+        });
+      }
+    }
+
+    void checkAuthorization();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentUserId,
+    selectedUserId,
+    selectedProposalId,
+    hasExistingThread,
+    supabase,
+    canUseMessagingFeature,
+  ]);
+
+  const newConversationKey = selectedUserId
+    ? `${selectedUserId}:${selectedProposalId ?? "none"}`
+    : null;
+
+  const canComposeToSelected =
+    hasExistingThread ||
+    (newConversationCheck?.key === newConversationKey &&
+      newConversationCheck.authorized);
 
   /*
-   * ---------------------------------------------------------
-   * SEND MESSAGE
-   * ---------------------------------------------------------
+   * MESAJLARI OKUNDU YAP
    */
+  useEffect(() => {
+    if (
+      !currentUserId ||
+      !selectedUserId
+    ) {
+      return;
+    }
 
+    const unreadIds =
+      selectedMessages
+        .filter(
+          (message) =>
+            message.sender_id ===
+              selectedUserId &&
+            message.receiver_id ===
+              currentUserId &&
+            !message.read_at
+        )
+        .map(
+          (message) => message.id
+        );
+
+    if (!unreadIds.length) {
+      return;
+    }
+
+    const readAt =
+      new Date().toISOString();
+
+    void supabase
+      .from("messages")
+      .update({
+        read_at: readAt,
+      })
+      .in("id", unreadIds)
+      .then(({ error }) => {
+        if (error) {
+          console.error(
+            "Mesajlar okundu olarak işaretlenemedi:",
+            error
+          );
+          return;
+        }
+
+        setMessages((current) =>
+          current.map((message) =>
+            unreadIds.includes(
+              message.id
+            )
+              ? {
+                  ...message,
+                  read_at: readAt,
+                }
+              : message
+          )
+        );
+      });
+  }, [
+    currentUserId,
+    selectedUserId,
+    selectedProposalId,
+    selectedMessages,
+    supabase,
+  ]);
+
+  /*
+   * MESAJ GÖNDER
+   * ----------------------------------------------------
+   * GÜVENLİK: bu artık doğrudan `messages` tablosuna insert
+   * yapmıyor. Gerçek yetkilendirme (proposal ilişkisi VEYA Pro
+   * entitlement'ı) `/api/messages/send` route'unda server-side
+   * kontrol edilir — `receiver_id`/`proposal_id` URL'den gelse bile
+   * client-side hiçbir şeye güvenilmez. `canComposeToSelected` burada
+   * sadece UI'ı erken durdurmak için var; asıl kapı sunucudadır.
+   */
   const sendMessage = async () => {
-    const text = messageText.trim();
+    const text =
+      messageText.trim();
 
     if (
       !text ||
       !currentUserId ||
       !selectedUserId ||
-      sending
+      sending ||
+      !canComposeToSelected
     ) {
       return;
     }
 
     setSending(true);
+    setSendError("");
 
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
-        sender_id: currentUserId,
-        receiver_id: selectedUserId,
+    const response = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        receiverId: selectedUserId,
+        proposalId: selectedProposalId,
         content: text,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) {
-      console.error("Mesaj gönderilemedi:", error);
+    const responseData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error(
+        "Mesaj gönderilemedi:",
+        responseData
+      );
+
+      setSendError(
+        (responseData as { error?: string }).error ||
+          "Mesaj gönderilemedi."
+      );
+
       setSending(false);
       return;
     }
 
+    const data = responseData.message as Message | undefined;
+
     if (data) {
       setMessages((current) => {
-        const exists = current.some(
-          (message) => message.id === data.id
-        );
+        if (
+          current.some(
+            (message) =>
+              message.id === data.id
+          )
+        ) {
+          return current;
+        }
 
-        if (exists) return current;
-
-        return [...current, data as Message];
+        return [
+          ...current,
+          data,
+        ];
       });
+
+      if (selectedUserId) {
+        await notifyUsers(supabase, [
+          {
+            userId: selectedUserId,
+            type: "message_received",
+            title: "Yeni mesaj geldi",
+            message: text.length > 80 ? `${text.slice(0, 80)}…` : text,
+            link: `/client/messages?user=${encodeURIComponent(currentUserId ?? "")}`,
+          },
+        ]);
+      }
     }
 
     setMessageText("");
@@ -382,677 +1053,477 @@ export default function MessagesPage() {
   };
 
   /*
-   * ---------------------------------------------------------
-   * ENTER KEY
-   * ---------------------------------------------------------
+   * YARDIMCI FONKSİYONLAR
    */
-
-  const handleKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>
+  const getFullName = (
+    profile: Profile
   ) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      sendMessage();
-    }
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * HELPERS
-   * ---------------------------------------------------------
-   */
-
-  const getFullName = (profile: Profile) => {
-    const name =
+    return (
       `${profile.first_name || ""} ${
         profile.last_name || ""
-      }`.trim();
-
-    return name || "Kullanıcı";
+      }`.trim() || "Kullanıcı"
+    );
   };
 
-  const getInitials = (profile: Profile) => {
-    const first =
-      profile.first_name?.charAt(0) || "";
-
-    const last =
-      profile.last_name?.charAt(0) || "";
-
-    return `${first}${last}`.toUpperCase() || "U";
+  const getInitials = (
+    profile: Profile
+  ) => {
+    return (
+      `${profile.first_name?.[0] || ""}${
+        profile.last_name?.[0] || ""
+      }`.toUpperCase() || "U"
+    );
   };
 
-  const formatTime = (date: string) => {
-    return new Date(date).toLocaleTimeString("tr-TR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  /*
-   * ---------------------------------------------------------
-   * UI
-   * ---------------------------------------------------------
-   */
+  const formatTime = (
+    date: string
+  ) =>
+    new Date(date).toLocaleTimeString(
+      "tr-TR",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
 
   return (
-    <main className="p-8 w-full">
-
-      {/* HEADER */}
-
+    <main className="w-full p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">
           Mesajlar
         </h1>
 
         <p className="mt-2 text-sm text-gray-500">
-          Müşteri, ekip ve sistem bildirimlerini yönet.
+          Müşteriler ve ekiplerle iletişimini yönet.
         </p>
       </div>
 
-      {/* MAIN CARD */}
-
-      <div
-        className="
-          w-full
-          h-[calc(100vh-220px)]
-          bg-white
-          border
-          border-gray-200
-          rounded-2xl
-          overflow-hidden
-          flex
-        "
-      >
-
-        {/* ================================================= */}
+      <div className="flex h-[calc(100vh-220px)] overflow-hidden rounded-2xl border border-gray-200 bg-white">
         {/* SOL PANEL */}
-        {/* ================================================= */}
+        <div className="flex w-[340px] shrink-0 flex-col border-r border-gray-200">
+          {/* TABLAR */}
+          <div className="flex gap-2 border-b border-gray-200 p-4">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveTab("clients")
+              }
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+                activeTab === "clients"
+                  ? "bg-[var(--color-primary-600)] text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Müşteriler
+            </button>
 
-        <div
-          className="
-            w-[340px]
-            border-r
-            border-gray-200
-            flex
-            flex-col
-          "
-        >
-
-          {/* TABS */}
-
-          <div
-            className="
-              p-4
-              border-b
-              border-gray-200
-              flex
-              gap-2
-            "
-          >
-
-            {[
-              {
-                label: "Müşteri",
-                value: "müşteri",
-              },
-              {
-                label: "Ekip",
-                value: "ekip",
-              },
-              {
-                label: "Sistem",
-                value: "sistem",
-              },
-            ].map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() =>
-                  setActiveTab(tab.value)
-                }
-                className={`
-                  px-3
-                  py-2
-                  rounded-xl
-                  text-xs
-                  font-medium
-                  ${
-                    activeTab === tab.value
-                      ? "bg-black text-white"
-                      : "bg-gray-100 text-gray-600"
-                  }
-                `}
-              >
-                {tab.label}
-              </button>
-            ))}
-
+            <button
+              type="button"
+              onClick={() =>
+                setActiveTab("teams")
+              }
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+                activeTab === "teams"
+                  ? "bg-[var(--color-primary-600)] text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              Ekipler
+            </button>
           </div>
 
           {/* SEARCH */}
-
           <div className="p-4">
-
             <div className="relative">
-
               <Search
                 size={16}
-                className="
-                  absolute
-                  left-3
-                  top-1/2
-                  -translate-y-1/2
-                  text-gray-400
-                "
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
               />
 
               <input
                 value={search}
                 onChange={(event) =>
-                  setSearch(event.target.value)
+                  setSearch(
+                    event.target.value
+                  )
                 }
                 placeholder="Mesajlarda ara..."
-                className="
-                  w-full
-                  pl-9
-                  pr-4
-                  py-2.5
-                  rounded-xl
-                  bg-gray-100
-                  text-sm
-                  outline-none
-                "
+                className="w-full rounded-xl bg-gray-100 py-2.5 pl-9 pr-4 text-sm outline-none"
               />
-
             </div>
-
           </div>
 
-          {/* LIST */}
+          {/* CLIENTLER */}
+          {activeTab ===
+            "clients" && (
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="p-5 text-center text-sm text-gray-400">
+                  Mesajlar yükleniyor...
+                </div>
+              ) : filteredConversations.length ===
+                0 ? (
+                <div className="flex h-full flex-col items-center justify-center p-5 text-center">
+                  <MessageCircle
+                    size={30}
+                    className="mb-3 text-gray-300"
+                  />
 
-          <div className="flex-1 overflow-y-auto">
+                  <p className="text-sm font-medium">
+                    Henüz mesaj yok
+                  </p>
 
-            {activeTab !== "müşteri" ? (
-              <div
-                className="
-                  h-full
-                  flex
-                  flex-col
-                  items-center
-                  justify-center
-                  px-6
-                  text-center
-                "
-              >
+                  <p className="mt-1 text-xs text-gray-400">
+                    Bir müşteri ile iletişime geçtiğinde burada görünecek.
+                  </p>
+                </div>
+              ) : (
+                filteredConversations.map(
+                  (conversation) => {
+                    const profile =
+                      conversation.user;
 
-                <MessageCircle
-                  size={28}
-                  className="text-gray-300 mb-3"
-                />
+                    const isSelected =
+                      selectedUserId ===
+                        profile.id &&
+                      selectedProposalId ===
+                        conversation.proposalId;
 
-                <p className="text-sm font-medium text-gray-700">
-                  {activeTab === "ekip"
-                    ? "Henüz ekip mesajı yok"
-                    : "Henüz sistem bildirimi yok"}
-                </p>
+                    return (
+                      <button
+                        type="button"
+                        key={`${profile.id}-${
+                          conversation.proposalId ??
+                          "legacy"
+                        }`}
+                        onClick={() => {
+                          setSelectedUserId(
+                            profile.id
+                          );
 
-                <p className="text-xs text-gray-400 mt-1">
-                  Bu bölüm gerçek veri bağlandığında
-                  otomatik olarak dolacak.
-                </p>
-
-              </div>
-            ) : loading ? (
-
-              <div className="p-6 text-center text-sm text-gray-400">
-                Mesajlar yükleniyor...
-              </div>
-
-            ) : filteredConversations.length === 0 ? (
-
-              <div
-                className="
-                  h-full
-                  flex
-                  flex-col
-                  items-center
-                  justify-center
-                  px-6
-                  text-center
-                "
-              >
-
-                <MessageCircle
-                  size={30}
-                  className="text-gray-300 mb-3"
-                />
-
-                <p className="text-sm font-medium text-gray-700">
-                  Henüz mesaj yok
-                </p>
-
-                <p className="text-xs text-gray-400 mt-1">
-                  Bir kullanıcıyla mesajlaşmaya
-                  başladığında burada görünecek.
-                </p>
-
-              </div>
-
-            ) : (
-
-              filteredConversations.map(
-                (conversation) => {
-                  const profile =
-                    conversation.user;
-
-                  const isSelected =
-                    selectedUserId === profile.id;
-
-                  return (
-                    <div
-                      key={profile.id}
-                      onClick={() =>
-                        setSelectedUserId(profile.id)
-                      }
-                      className={`
-                        p-4
-                        flex
-                        gap-3
-                        cursor-pointer
-                        border-b
-                        border-gray-100
-                        transition
-                        ${
+                          setSelectedProposalId(
+                            conversation.proposalId
+                          );
+                        }}
+                        className={`flex w-full gap-3 border-b border-gray-100 p-4 text-left transition ${
                           isSelected
                             ? "bg-gray-50"
                             : "hover:bg-gray-50"
-                        }
-                      `}
-                    >
-
-                      {/* AVATAR */}
-
-                      {profile.avatar_url ? (
-
-                        <img
-                          src={profile.avatar_url}
-                          alt={getFullName(profile)}
-                          className="
-                            w-11
-                            h-11
-                            rounded-full
-                            object-cover
-                            shrink-0
-                          "
-                        />
-
-                      ) : (
-
-                        <div
-                          className="
-                            w-11
-                            h-11
-                            rounded-full
-                            bg-black
-                            text-white
-                            flex
-                            items-center
-                            justify-center
-                            text-xs
-                            font-semibold
-                            shrink-0
-                          "
-                        >
-                          {getInitials(profile)}
-                        </div>
-
-                      )}
-
-                      {/* CONTENT */}
-
-                      <div className="flex-1 min-w-0">
-
-                        <div className="flex justify-between gap-2">
-
-                          <h3 className="text-sm font-semibold truncate">
-                            {getFullName(profile)}
-                          </h3>
-
-                          <span className="text-xs text-gray-400 shrink-0">
-                            {formatTime(
-                              conversation.lastMessage.created_at
+                        }`}
+                      >
+                        {profile.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={
+                              profile.avatar_url
+                            }
+                            alt={getFullName(
+                              profile
                             )}
-                          </span>
+                            className="h-11 w-11 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
+                            {getInitials(
+                              profile
+                            )}
+                          </div>
+                        )}
 
+                        <div className="min-w-0 flex-1">
+                          <div className="flex justify-between gap-2">
+                            <h3 className="truncate text-sm font-semibold text-gray-900">
+                              {getFullName(
+                                profile
+                              )}
+                            </h3>
+
+                            <span className="shrink-0 text-xs text-gray-400">
+                              {formatTime(
+                                conversation
+                                  .lastMessage
+                                  .created_at
+                              )}
+                            </span>
+                          </div>
+
+                          <p className="mt-1 truncate text-sm text-gray-500">
+                            {
+                              conversation.projectTitle
+                            }{" "}
+                            ·{" "}
+                            {conversation
+                              .lastMessage
+                              .content ||
+                              "Yeni konuşma"}
+                          </p>
                         </div>
 
-                        <p className="text-xs text-gray-400 mt-1">
-                          Mesaj
-                        </p>
+                        {conversation.unread >
+                          0 && (
+                          <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                        )}
+                      </button>
+                    );
+                  }
+                )
+              )}
+            </div>
+          )}
 
-                        <p className="text-sm text-gray-600 mt-2 truncate">
-                          {conversation.lastMessage.content}
-                        </p>
+          {/* EKİPLER */}
+          {activeTab === "teams" && (
+            <div className="flex flex-1 flex-col items-center justify-center p-5 text-center">
+              <Users
+                size={32}
+                className="mb-3 text-gray-300"
+              />
 
-                      </div>
-
-                      {/* UNREAD */}
-
-                      {conversation.unread > 0 && (
-                        <span
-                          className="
-                            w-5
-                            h-5
-                            rounded-full
-                            bg-black
-                            text-white
-                            text-xs
-                            flex
-                            items-center
-                            justify-center
-                            shrink-0
-                          "
-                        >
-                          {conversation.unread}
-                        </span>
-                      )}
-
-                    </div>
-                  );
-                }
-              )
-
-            )}
-
-          </div>
-
-        </div>
-
-        {/* ================================================= */}
-        {/* CHAT */}
-        {/* ================================================= */}
-
-        <div className="flex-1 flex flex-col">
-
-          {!selectedConversation ? (
-
-            /* EMPTY CHAT */
-
-            <div
-              className="
-                flex-1
-                flex
-                flex-col
-                items-center
-                justify-center
-                bg-gray-50
-                text-center
-              "
-            >
-
-              <div
-                className="
-                  w-14
-                  h-14
-                  rounded-full
-                  bg-white
-                  border
-                  border-gray-200
-                  flex
-                  items-center
-                  justify-center
-                  mb-4
-                "
-              >
-                <MessageCircle
-                  size={24}
-                  className="text-gray-400"
-                />
-              </div>
-
-              <h2 className="text-sm font-semibold text-gray-700">
-                Bir konuşma seç
-              </h2>
-
-              <p className="text-xs text-gray-400 mt-1">
-                Mesajlaşmaya başlamak için soldan
-                bir kullanıcı seç.
+              <p className="text-sm font-medium text-gray-700">
+                Henüz ekip konuşması yok
               </p>
 
+              <p className="mt-1 text-xs text-gray-400">
+                Coalition ve proje ekipleri burada görünecek.
+              </p>
             </div>
+          )}
+        </div>
 
+        {/* CHAT */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {activeTab === "teams" ? (
+            <div className="flex flex-1 items-center justify-center bg-gray-50 text-sm text-gray-400">
+              Bir ekip konuşması seç.
+            </div>
+          ) : !selectedProfile ? (
+            <div className="flex flex-1 flex-col items-center justify-center bg-gray-50">
+              <MessageCircle
+                size={30}
+                className="mb-3 text-gray-300"
+              />
+
+              <p className="text-sm font-medium">
+                Bir konuşma seç
+              </p>
+
+              <p className="mt-1 text-xs text-gray-400">
+                Soldan bir müşteri seçerek mesajlaşmaya başla.
+              </p>
+            </div>
           ) : (
-
             <>
               {/* CHAT HEADER */}
-
-              <div
-                className="
-                  p-5
-                  border-b
-                  border-gray-200
-                  flex
-                  justify-between
-                  items-center
-                "
-              >
-
-                <div className="flex items-center gap-3">
-
-                  {selectedConversation.user.avatar_url ? (
-
-                    <img
-                      src={
-                        selectedConversation.user.avatar_url
-                      }
-                      alt={getFullName(
-                        selectedConversation.user
-                      )}
-                      className="
-                        w-10
-                        h-10
-                        rounded-full
-                        object-cover
-                      "
-                    />
-
-                  ) : (
-
-                    <div
-                      className="
-                        w-10
-                        h-10
-                        rounded-full
-                        bg-black
-                        text-white
-                        flex
-                        items-center
-                        justify-center
-                        text-xs
-                        font-semibold
-                      "
-                    >
-                      {getInitials(
-                        selectedConversation.user
-                      )}
-                    </div>
-
-                  )}
-
-                  <div>
-
-                    <h2 className="font-semibold">
-                      {getFullName(
-                        selectedConversation.user
-                      )}
-                    </h2>
-
-                    <p className="text-sm text-gray-500">
-                      HireHub kullanıcısı
-                    </p>
-
+              <div className="flex items-center gap-3 border-b border-gray-200 p-5">
+                {selectedProfile.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={
+                      selectedProfile.avatar_url
+                    }
+                    alt={getFullName(
+                      selectedProfile
+                    )}
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
+                    {getInitials(
+                      selectedProfile
+                    )}
                   </div>
+                )}
 
+                <div>
+                  <h2 className="font-semibold text-gray-900">
+                    {getFullName(
+                      selectedProfile
+                    )}
+                  </h2>
+
+                  <p className="text-sm text-gray-500">
+                    {selectedProposalId ? (
+                      <>
+                        {projectIds[selectedProposalId] ? (
+                          <Link
+                            href={`${
+                              projectStatuses[selectedProposalId] === "in_progress" ||
+                              projectStatuses[selectedProposalId] === "completed"
+                                ? `/freelancers/projects/${projectIds[selectedProposalId]}`
+                                : `/freelancers/discover/${projectIds[selectedProposalId]}`
+                            }?ref=messages&user=${encodeURIComponent(
+                              selectedUserId ?? ""
+                            )}&proposal=${encodeURIComponent(
+                              selectedProposalId
+                            )}`}
+                            className="font-medium text-gray-900 hover:underline"
+                          >
+                            {projectNames[selectedProposalId] ?? "Proje"}
+                          </Link>
+                        ) : (
+                          projectNames[selectedProposalId] ?? "Proje"
+                        )}{" "}
+                        · Bu konuşma gönderdiğiniz teklif ile ilgilidir.
+                      </>
+                    ) : (
+                      "Müşteri"
+                    )}
+                  </p>
                 </div>
-
               </div>
 
-              {/* MESSAGES */}
-
-              <div
-                className="
-                  flex-1
-                  p-6
-                  space-y-4
-                  bg-gray-50
-                  overflow-y-auto
-                "
-              >
-
-                {selectedMessages.length === 0 ? (
-
-                  <div
-                    className="
-                      h-full
-                      flex
-                      items-center
-                      justify-center
-                      text-sm
-                      text-gray-400
-                    "
-                  >
+              {/* MESAJLAR */}
+              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-5">
+                {selectedMessages.length ===
+                0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-400">
                     Henüz mesaj yok. İlk mesajı sen gönder.
                   </div>
-
                 ) : (
+                  selectedMessages.map(
+                    (message) => {
+                      const isMe =
+                        message.sender_id ===
+                        currentUserId;
 
-                  selectedMessages.map((message) => {
-
-                    const isMe =
-                      message.sender_id === currentUserId;
-
-                    return (
-                      <div
-                        key={message.id}
-                        className={`
-                          flex
-                          ${
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${
                             isMe
                               ? "justify-end"
                               : "justify-start"
-                          }
-                        `}
-                      >
-
-                        <div
-                          className={`
-                            max-w-[420px]
-                            px-4
-                            py-3
-                            rounded-2xl
-                            text-sm
-                            ${
-                              isMe
-                                ? "bg-black text-white"
-                                : "bg-white border border-gray-200"
-                            }
-                          `}
+                          }`}
                         >
-
-                          <div className="whitespace-pre-wrap break-words">
-                            {message.content}
-                          </div>
-
-                          <span
-                            className="
-                              block
-                              text-[11px]
-                              mt-2
-                              opacity-60
-                            "
+                          <div
+                            className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${
+                              isMe
+                                ? "bg-[var(--color-primary-600)] text-white"
+                                : "border border-gray-200 bg-white text-gray-800"
+                            }`}
                           >
-                            {formatTime(
-                              message.created_at
-                            )}
-                          </span>
+                            <p className="whitespace-pre-wrap break-words">
+                              {
+                                message.content
+                              }
+                            </p>
 
+                            <span className="mt-2 block text-xs opacity-60">
+                              {formatTime(
+                                message.created_at
+                              )}
+                            </span>
+                          </div>
                         </div>
-
-                      </div>
-                    );
-                  })
-
+                      );
+                    }
+                  )
                 )}
-
               </div>
 
-              {/* SEND */}
+              {/* MESAJ INPUT */}
+              {!hasExistingThread &&
+              (premiumLoading ||
+                newConversationCheck?.key !==
+                  newConversationKey) ? (
+                <div className="border-t border-gray-200 p-5 text-center text-sm text-gray-400">
+                  Konuşma kontrol ediliyor...
+                </div>
+              ) : !canComposeToSelected ? (
+                <div className="border-t border-gray-200 bg-gray-50 p-5 text-center">
+                  {selectedProposalId ? (
+                    <p className="text-sm text-gray-500">
+                      Bu konuşmaya mesaj gönderme yetkin yok.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-gray-700">
+                        Teklif göndermeden önce mesajlaşmak Pro paketine özeldir.
+                      </p>
+                      <Link
+                        href="/premium"
+                        className="mt-2 inline-block text-sm font-medium text-gray-900 underline underline-offset-2"
+                      >
+                        Pro Planını İncele
+                      </Link>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="border-t border-gray-200 p-5">
+                  {sendError && (
+                    <p className="mb-3 text-sm text-red-600">{sendError}</p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      aria-label="Dosya ekle"
+                      className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500"
+                    >
+                      <Paperclip size={18} />
+                    </button>
 
-              <div
-                className="
-                  p-5
-                  border-t
-                  border-gray-200
-                  flex
-                  gap-3
-                "
-              >
+                    <input
+                      value={messageText}
+                      onChange={(event) =>
+                        setMessageText(
+                          event.target.value
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key ===
+                          "Enter"
+                        ) {
+                          event.preventDefault();
+                          void sendMessage();
+                        }
+                      }}
+                      placeholder="Mesaj yaz..."
+                      disabled={sending}
+                      className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                    />
 
-                <input
-                  value={messageText}
-                  onChange={(event) =>
-                    setMessageText(event.target.value)
-                  }
-                  onKeyDown={handleKeyDown}
-                  placeholder="Mesaj yaz..."
-                  disabled={sending}
-                  className="
-                    flex-1
-                    px-4
-                    py-3
-                    rounded-xl
-                    bg-gray-100
-                    text-sm
-                    outline-none
-                    disabled:opacity-50
-                  "
-                />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void sendMessage()
+                      }
+                      disabled={
+                        sending ||
+                        !messageText.trim()
+                      }
+                      className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      <Send size={16} />
 
-                <button
-                  onClick={sendMessage}
-                  disabled={
-                    sending ||
-                    !messageText.trim()
-                  }
-                  className="
-                    px-5
-                    rounded-xl
-                    bg-black
-                    text-white
-                    text-sm
-                    flex
-                    items-center
-                    gap-2
-                    disabled:opacity-40
-                    disabled:cursor-not-allowed
-                  "
-                >
-
-                  <Send size={16} />
-
-                  {sending
-                    ? "Gönderiliyor..."
-                    : "Gönder"}
-
-                </button>
-
-              </div>
+                      {sending
+                        ? "Gönderiliyor..."
+                        : "Gönder"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
-
         </div>
-
       </div>
-
     </main>
+  );
+}
+
+export default function FreelancerMessagesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center">
+          <div className="text-sm text-gray-400">
+            Mesajlar yükleniyor...
+          </div>
+        </main>
+      }
+    >
+      <FreelancerMessagesContent />
+    </Suspense>
   );
 }

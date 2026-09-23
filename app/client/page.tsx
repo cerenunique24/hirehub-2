@@ -1,10 +1,10 @@
 export default function ClientRegister() {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-[#fafafa] px-6">
+      <main className="min-h-screen flex items-center justify-center bg-[var(--color-canvas)] px-6">
   
-        <div className="bg-white rounded-3xl shadow-sm p-10 w-full max-w-xl">
+        <div className="bg-white rounded-xl shadow-sm p-10 w-full max-w-xl">
   
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-3xl font-semibold">
             Hesap oluştur
           </h1>
   
@@ -47,7 +47,7 @@ export default function ClientRegister() {
               Kullanım koşullarını kabul ediyorum.
             </label>
   
-            <button className="w-full bg-black text-white py-4 rounded-full mt-4">
+            <button className="w-full bg-[var(--color-primary-600)] text-white py-4 rounded-full mt-4">
               Hesap Oluştur
             </button>
   

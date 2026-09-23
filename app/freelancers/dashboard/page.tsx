@@ -1,670 +1,376 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Briefcase, Clock3, MessageSquare, Send, UserRound } from "lucide-react";
 
-import {
-  Briefcase,
-  Clock,
-  DollarSign,
-  Users,
-  MessageSquare,
-  Eye,
-  CalendarDays,
-  TrendingUp,
-  CheckCircle2,
-  Send,
-  UserCheck,
-} from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { formatDeadlineDate, formatRemainingTime } from "@/lib/utils/deadline";
+import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
+import PerformanceTeaserCard from "@/components/freelancers/PerformanceTeaserCard";
 
 type Profile = {
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  expertise: string | null;
+  skills: string[] | null;
+  profile_completion: number | null;
+  availability_status: string | null;
+};
+
+type Proposal = {
   id: string;
-  expertise?: string | null;
-  skills?: string[] | null;
-  avatar_url?: string | null;
-  profile_completion?: number | null;
-  about?: string | null;
-  experience?: string | null;
+  project_id: string;
+  status: string | null;
+  created_at: string;
+};
+
+type Project = {
+  id: string;
+  title: string;
+  status: string | null;
+};
+
+type Milestone = {
+  id: string;
+  project_id: string;
+  title: string;
+  due_date: string | null;
+  status: string | null;
+  sort_order: number | null;
+};
+
+type ActiveProject = Project & {
+  role: string | null;
+  deadline: string | null;
+  currentMilestone: Milestone | null;
+};
+
+type DashboardData = {
+  profile: Profile | null;
+  activeProjects: ActiveProject[];
+  pendingProposals: number;
+  unreadMessages: number;
+  recentProposals: Array<Proposal & { project: Project | null }>;
 };
 
 export default function FreelancerDashboard() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [userName, setUserName] = useState("Freelancer");
-  const [avatar, setAvatar] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const getProfile = async () => {
-      const supabase = createClient();
+    let active = true;
 
-      try {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) throw userError;
-
-        if (!user) {
-          setLoading(false);
-          return;
-        }
-
-        // Kullanıcının kayıt sırasında Auth'a kaydedilen ismini al
-        const name =
-          user.user_metadata?.first_name ||
-          user.user_metadata?.name ||
-          user.user_metadata?.full_name ||
-          "Freelancer";
-
-        setUserName(name);
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .select(
-          "id, expertise, skills, avatar_url, profile_completion"
-          )
-          .eq("id", user.id)
-          .single();
-
-        if (error) {
-          console.error("PROFILE FETCH ERROR:", error);
-          return;
-        }
-
-        setProfile(data);
-
-        // Supabase'den gelen gerçek avatar URL'sini kullan
-        if (data?.avatar_url) {
-          setAvatar(data.avatar_url);
-        }
-      } catch (error) {
-        console.error("DASHBOARD ERROR:", error);
-      } finally {
-        setLoading(false);
+    async function loadDashboard() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (active) setError("Paneli görüntülemek için giriş yapmanız gerekiyor.");
+        return;
       }
-    };
 
-    getProfile();
-  }, []);
+      const [profileResult, proposalResult, messageResult, membershipResult] = await Promise.all([
+        supabase.from("profiles").select("first_name, last_name, avatar_url, expertise, skills, profile_completion, availability_status").eq("id", user.id).maybeSingle(),
+        supabase.from("proposals").select("id, project_id, status, created_at").eq("freelancer_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("messages").select("id", { count: "exact", head: true }).eq("receiver_id", user.id).is("read_at", null),
+        supabase.from("project_team_members").select("project_id, role").eq("freelancer_id", user.id).eq("status", "active"),
+      ]);
 
-  const expertise =
-    profile?.expertise || "Henüz uzmanlık alanı eklenmemiş";
+      if (proposalResult.error) {
+        if (active) setError(`Teklifler yüklenemedi: ${proposalResult.error.message}`);
+        return;
+      }
 
-  const skills = profile?.skills || [];
+      const proposals = (proposalResult.data ?? []) as Proposal[];
+      const projectIds = [...new Set(proposals.map((proposal) => proposal.project_id))];
+      const projectResult = projectIds.length
+        ? await supabase.from("projects").select("id, title, status").in("id", projectIds)
+        : { data: [], error: null };
 
-  const profileCompletion =
-    profile?.profile_completion ?? 0;
+      if (projectResult.error) {
+        if (active) setError(`Projeler yüklenemedi: ${projectResult.error.message}`);
+        return;
+      }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <p className="text-gray-500">
-          Profil yükleniyor...
-        </p>
-      </div>
-    );
-  }
+      const projectById = new Map(((projectResult.data ?? []) as Project[]).map((project) => [project.id, project]));
+
+      // Ekip üyeliği (project_team_members), hem proposal hem invitation ile
+      // katılan freelancer'ları kapsar. "Aktif proje" burada ürün kuralına
+      // göre projects.status === 'in_progress' olan, gerçekten ekipte
+      // olunan projeler anlamına gelir.
+      type Membership = { project_id: string; role: string | null };
+      const memberships = (membershipResult.data ?? []) as Membership[];
+      const roleByProjectId = new Map(memberships.map((row) => [row.project_id, row.role]));
+      const membershipProjectIds = [...new Set(memberships.map((row) => row.project_id))];
+
+      const memberProjectsMissing = membershipProjectIds.filter((pid) => !projectById.has(pid));
+      const extraProjects = memberProjectsMissing.length
+        ? await supabase.from("projects").select("id, title, status, deadline").in("id", memberProjectsMissing)
+        : { data: [] as Array<Project & { deadline: string | null }> };
+
+      for (const extra of extraProjects.data ?? []) {
+        projectById.set(extra.id, extra as Project);
+      }
+
+      const activeProjectIds = membershipProjectIds.filter((pid) => projectById.get(pid)?.status === "in_progress");
+
+      // Kalan deadline projects.deadline'da yoksa fetch edilmemiş olabilir
+      // (ilk sorgu deadline seçmiyordu) — aktif projeler için ayrıca çekilir.
+      const deadlineResult = activeProjectIds.length
+        ? await supabase.from("projects").select("id, deadline").in("id", activeProjectIds)
+        : { data: [] as Array<{ id: string; deadline: string | null }> };
+      const deadlineByProjectId = new Map((deadlineResult.data ?? []).map((row) => [row.id, row.deadline]));
+
+      const milestoneResult = activeProjectIds.length
+        ? await supabase
+            .from("project_milestones")
+            .select("id, project_id, title, due_date, status, sort_order")
+            .in("project_id", activeProjectIds)
+            .order("sort_order", { ascending: true })
+        : { data: [] as Milestone[] };
+
+      const milestonesByProject = new Map<string, Milestone[]>();
+      for (const milestone of (milestoneResult.data ?? []) as Milestone[]) {
+        const list = milestonesByProject.get(milestone.project_id) ?? [];
+        list.push(milestone);
+        milestonesByProject.set(milestone.project_id, list);
+      }
+
+      function pickCurrentMilestone(projectId: string): Milestone | null {
+        const milestones = milestonesByProject.get(projectId) ?? [];
+
+        return (
+          milestones.find((milestone) => milestone.status === "active") ??
+          milestones.find((milestone) => milestone.status !== "approved") ??
+          null
+        );
+      }
+
+      const activeProjects: ActiveProject[] = activeProjectIds
+        .map((pid) => {
+          const project = projectById.get(pid);
+
+          if (!project) {
+            return null;
+          }
+
+          return {
+            ...project,
+            role: roleByProjectId.get(pid) ?? null,
+            deadline: deadlineByProjectId.get(pid) ?? null,
+            currentMilestone: pickCurrentMilestone(pid),
+          };
+        })
+        .filter((project): project is ActiveProject => project !== null);
+
+      if (active) {
+        setData({
+          profile: (profileResult.data as Profile | null) ?? null,
+          activeProjects,
+          pendingProposals: proposals.filter((proposal) => proposal.status === "pending").length,
+          unreadMessages: messageResult.error ? 0 : messageResult.count ?? 0,
+          recentProposals: proposals.slice(0, 5).map((proposal) => ({ ...proposal, project: projectById.get(proposal.project_id) ?? null })),
+        });
+      }
+    }
+
+    void loadDashboard().finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [supabase]);
+
+  if (loading) return <div className="flex min-h-[60vh] items-center justify-center text-sm text-gray-500">Panel yükleniyor...</div>;
+  if (error) return <div className="m-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>;
+
+  const profile = data?.profile;
+  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "Freelancer";
+  const initials = name.charAt(0).toLocaleUpperCase("tr-TR") || "F";
 
   return (
-    <div className="space-y-6">
-
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div className="flex gap-4 items-center">
-
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={userName}
-              className="w-16 h-16 rounded-full object-cover border border-gray-200"
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-xl font-semibold text-gray-600">
-              {userName.charAt(0).toUpperCase()}
-            </div>
-          )}
-
+    <main className="mx-auto max-w-7xl">
+      <header className="mb-[var(--rhythm-header-gap)] flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {profile?.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.avatar_url} alt={name} className="h-14 w-14 rounded-full object-cover" />
+          ) : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-lg font-semibold text-white">{initials}</div>}
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
-              Hoş geldin, {userName} 👋
-            </h1>
-
-            <p className="text-sm text-gray-500 mt-2">
-              Freelancer hesabının performansını ve projelerini buradan yönetebilirsin.
+            <h1 className="text-2xl font-semibold text-gray-900">Hoş geldin, {name}</h1>
+            <p className="mt-[var(--rhythm-title-gap)] text-sm text-gray-500">
+              Tekliflerini, projelerini ve mesajlarını buradan takip edebilirsin.
             </p>
           </div>
         </div>
+        <Link href="/freelancers/discover" className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-primary-700)]">Proje keşfet</Link>
+      </header>
 
-        <button
-          className="
-            bg-black
-            text-white
-            px-5
-            py-2.5
-            rounded-xl
-            text-sm
-            hover:opacity-90
-            transition
-          "
-        >
-          + Yeni Teklif
-        </button>
-      </div>
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] md:grid-cols-3">
+        <Metric icon={<Briefcase size={19} />} label="Aktif projeler" value={data?.activeProjects.length ?? 0} detail="Ekibinde olduğun, tamamlanmamış projeler" />
+        <Metric icon={<Clock3 size={19} />} label="Bekleyen teklifler" value={data?.pendingProposals ?? 0} detail="Müşteri değerlendirmesini bekliyor" />
+        <Metric icon={<MessageSquare size={19} />} label="Okunmamış mesajlar" value={data?.unreadMessages ?? 0} detail="Yeni gelen mesajlar" />
+      </section>
 
-      {/* KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-        <KpiCard
-          title="Aktif Projeler"
-          value="6"
-          change="+2 bu ay"
-          icon={<Briefcase />}
-        />
-
-        <KpiCard
-          title="Bekleyen Teklif"
-          value="12"
-          change="4 yeni"
-          icon={<Clock />}
-        />
-
-        <KpiCard
-          title="Toplam Kazanç"
-          value="₺48.500"
-          change="+18%"
-          icon={<DollarSign />}
-        />
-
-        <KpiCard
-          title="Profil Ziyareti"
-          value="324"
-          change="+42%"
-          icon={<Users />}
-        />
-      </div>
-
-      {/* Main */}
-      <div className="grid lg:grid-cols-3 gap-6">
-
-        {/* Projects */}
-        <div
-          className="
-            lg:col-span-2
-            bg-white
-            rounded-2xl
-            p-6
-            shadow-sm
-            hover:shadow-md
-            transition
-          "
-        >
-          <div className="flex justify-between mb-6">
-            <h2 className="font-semibold">
-              Aktif Projeler
-            </h2>
-
-            <button className="text-sm text-blue-600">
-              Tümünü Gör
-            </button>
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Aktif projeler</h2>
+              <p className="mt-1 text-sm text-gray-500">Ekibinde olduğun, devam eden projeler</p>
+            </div>
+            <Link href="/freelancers/proposals" className="text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]">Tekliflerim</Link>
           </div>
 
-          <Project
-            title="Fintech Dashboard UI Design"
-            company="Albaraka"
-            progress="70%"
-            status="Devam Ediyor"
-          />
+          {data?.activeProjects.length ? (
+            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
+              {data.activeProjects.map((project) => {
+                const remaining = formatRemainingTime(project.deadline);
+                const deadlineDate = formatDeadlineDate(project.deadline);
+                const milestoneRemaining = project.currentMilestone
+                  ? formatRemainingTime(project.currentMilestone.due_date)
+                  : null;
 
-          <Project
-            title="Mobil Uygulama Tasarımı"
-            company="Startup"
-            progress="45%"
-            status="Revize Bekliyor"
-          />
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/freelancers/projects/${project.id}`}
+                    className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-gray-900">{project.title}</p>
+                        {project.role && <p className="mt-0.5 text-sm text-gray-500">{project.role}</p>}
+                      </div>
+                      <span
+                        className={
+                          "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium " +
+                          (remaining.overdue ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-600")
+                        }
+                      >
+                        {remaining.label}
+                      </span>
+                    </div>
 
-          <Project
-            title="Landing Page"
-            company="SaaS Company"
-            progress="100%"
-            status="Tamamlandı"
-          />
+                    {deadlineDate && (
+                      <p className="mt-2 text-xs text-gray-400">Teslim tarihi: {deadlineDate}</p>
+                    )}
+
+                    {project.currentMilestone && milestoneRemaining && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Mevcut aşama: <span className="font-medium text-gray-700">{project.currentMilestone.title}</span>{" "}
+                        · {milestoneRemaining.label}
+                      </p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty text="Henüz ekibinde olduğun devam eden bir proje yok." />
+          )}
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Son teklifler</h2>
+              <p className="mt-1 text-sm text-gray-500">Gerçek teklif hareketlerin</p>
+            </div>
+            <Send size={18} className="text-gray-400" />
+          </div>
+          {data?.recentProposals.length ? (
+            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
+              {data.recentProposals.map((proposal) => (
+                <Link
+                  key={proposal.id}
+                  href={`/freelancers/proposals/${proposal.id}`}
+                  className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-gray-900">
+                      {proposal.project?.title ?? "Proje bilgisi bulunamadı"}
+                    </p>
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
+                      {statusLabel(proposal.status)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    {new Date(proposal.created_at).toLocaleDateString("tr-TR")}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Empty text="Henüz teklif göndermedin." />
+          )}
+        </div>
+      </section>
+
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
+        <AvailabilityCard
+          status={profile?.availability_status ?? null}
+          activeProjectCount={data?.activeProjects.length ?? 0}
+        />
+        <PerformanceTeaserCard />
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Profil özeti</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Profili tamamlamak, keşfet ekranındaki görünürlüğünü iyileştirir.
+            </p>
+          </div>
+          <Link
+            href="/freelancers/profile"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]"
+          >
+            <UserRound size={16} />
+            Profili düzenle
+          </Link>
         </div>
 
-        {/* Live Panel */}
-        <div
-          className="
-            bg-white
-            rounded-2xl
-            p-6
-            shadow-sm
-            hover:shadow-md
-            transition
-          "
-        >
-          <h2 className="font-semibold mb-6">
-            Canlı Durum
-          </h2>
-
-          <LiveItem
-            icon={<MessageSquare />}
-            title="Mesajlar"
-            value="4 yeni mesaj"
-          />
-
-          <LiveItem
-            icon={<Eye />}
-            title="Profil"
-            value="+24 ziyaret"
-          />
-
-          <LiveItem
-            icon={<CalendarDays />}
-            title="Teslim"
-            value="2 yaklaşan görev"
-          />
+        <div className="mt-[var(--rhythm-group-gap)]">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Profil tamamlanma</span>
+            <span className="font-medium text-gray-900">{profile?.profile_completion ?? 0}%</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-[var(--color-primary-600)]"
+              style={{ width: `${Math.max(0, Math.min(100, profile?.profile_completion ?? 0))}%` }}
+            />
+          </div>
+          {profile?.expertise && <p className="mt-[var(--rhythm-group-gap)] text-sm text-gray-700">{profile.expertise}</p>}
+          {profile?.skills?.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {profile.skills.map((skill) => (
+                <span key={skill} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500">Henüz yetenek eklenmemiş.</p>
+          )}
         </div>
-      </div>
-
- {/* Profile Summary */}
-<div className="bg-white rounded-2xl p-6 shadow-sm">
-  <div className="flex items-center justify-between mb-5">
-    <h2 className="font-semibold">
-      Profil Özeti
-    </h2>
-
-    <button
-      className="text-sm text-blue-600 hover:text-blue-700 transition"
-    >
-      Profili Düzenle
-    </button>
-  </div>
-
-  <div className="flex items-center gap-4">
-    {avatar ? (
-      <img
-        src={avatar}
-        alt={userName}
-        className="w-14 h-14 rounded-full object-cover border border-gray-200"
-      />
-    ) : (
-      <div className="w-14 h-14 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-lg font-semibold text-gray-600">
-        {userName.charAt(0).toUpperCase()}
-      </div>
-    )}
-
-    <div className="min-w-0">
-      <h3 className="font-semibold text-gray-900">
-        {userName}
-      </h3>
-
-      <p className="text-sm text-gray-500 mt-1">
-        {expertise}
-      </p>
-      {profile?.about && (
-  <p className="text-sm text-gray-600 mt-3">
-    {profile.about}
-  </p>
-)}
-
-{profile?.experience && (
-  <p className="text-sm text-gray-500 mt-2">
-    {profile.experience}
-  </p>
-)}
-    </div>
-  </div>
-
-  {skills.length > 0 && (
-    <div className="flex flex-wrap gap-2 mt-5">
-      {skills.slice(0, 4).map((skill) => (
-        <span
-          key={skill}
-          className="bg-gray-100 rounded-full px-3 py-1.5 text-xs text-gray-700"
-        >
-          {skill}
-        </span>
-      ))}
-
-      {skills.length > 4 && (
-        <span className="text-xs text-gray-400 px-2 py-1.5">
-          +{skills.length - 4} daha
-        </span>
-      )}
-    </div>
-  )}
-
-  <div className="mt-6">
-    <div className="flex justify-between items-center mb-2">
-      <span className="text-sm text-gray-500">
-        Profil tamamlanma
-      </span>
-
-      <span className="text-sm font-semibold text-gray-900">
-        {profileCompletion}%
-      </span>
-    </div>
-
-    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-      <div
-        className="h-full bg-black rounded-full transition-all"
-        style={{
-          width: `${profileCompletion}%`,
-        }}
-      />
-    </div>
-  </div>
-</div>
-
-      {/* Analytics Cards */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <InfoCard
-          title="Teklif Başarısı"
-          value="%25 dönüş"
-          icon={<Send />}
-        />
-
-        <InfoCard
-          title="Aktif Durum"
-          value="Online"
-          icon={<TrendingUp />}
-        />
-      </div>
-
-      {/* Recommended Projects */}
-      <div
-        className="
-          bg-white
-          rounded-2xl
-          p-6
-          shadow-sm
-          hover:shadow-md
-          transition
-        "
-      >
-        <h2 className="font-semibold mb-5">
-          Sana Önerilen Projeler
-        </h2>
-
-        <div className="grid md:grid-cols-3 gap-5">
-          <Recommendation
-            title="Fintech Mobile App"
-            price="₺25.000"
-          />
-
-          <Recommendation
-            title="SaaS Dashboard UX"
-            price="₺15.000"
-          />
-
-          <Recommendation
-            title="Landing Page"
-            price="₺8.000"
-          />
-        </div>
-      </div>
-
-      {/* Activity */}
-      <div
-        className="
-          bg-white
-          rounded-2xl
-          p-6
-          shadow-sm
-          hover:shadow-md
-          transition
-        "
-      >
-        <h2 className="font-semibold mb-6">
-          Son Aktiviteler
-        </h2>
-
-        <Timeline
-          icon={<CheckCircle2 />}
-          title="Proje tamamlandı"
-          desc="Fintech Dashboard teslim edildi"
-          time="2 saat önce"
-        />
-
-        <Timeline
-          icon={<MessageSquare />}
-          title="Yeni mesaj"
-          desc="Müşteri revize gönderdi"
-          time="15 dakika önce"
-        />
-
-        <Timeline
-          icon={<TrendingUp />}
-          title="Profil yükseldi"
-          desc="+24 yeni görüntülenme"
-          time="Dün"
-        />
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
-function KpiCard({
-  title,
-  value,
-  change,
-  icon,
-}: {
-  title: string;
-  value: string;
-  change: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div
-      className="
-        bg-white
-        rounded-2xl
-        p-5
-        shadow-sm
-        hover:shadow-md
-        transition
-      "
-    >
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-sm text-gray-500">
-            {title}
-          </p>
-
-          <h3 className="text-3xl font-semibold mt-2">
-            {value}
-          </h3>
-
-          <p className="text-xs text-green-600 mt-2">
-            {change}
-          </p>
-        </div>
-
-        <div
-          className="
-            bg-gray-100
-            w-10
-            h-10
-            rounded-xl
-            flex
-            items-center
-            justify-center
-            shrink-0
-          "
-        >
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
+function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: number; detail: string }) {
+  return <div className="rounded-2xl border border-gray-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p><p className="mt-2 text-xs text-gray-400">{detail}</p></div><div className="rounded-xl bg-gray-100 p-3 text-gray-700">{icon}</div></div></div>;
 }
 
-function Project({
-  title,
-  company,
-  status,
-  progress,
-}: {
-  title: string;
-  company: string;
-  status: string;
-  progress: string;
-}) {
-  return (
-    <div className="mb-5">
-      <div className="flex justify-between">
-        <div>
-          <h3 className="font-medium">
-            {title}
-          </h3>
+function Empty({ text }: { text: string }) { return <p className="mt-5 rounded-xl bg-gray-50 p-5 text-sm text-gray-500">{text}</p>; }
 
-          <p className="text-sm text-gray-500">
-            {company}
-          </p>
-        </div>
-
-        <span className="text-xs bg-gray-100 px-3 py-1 rounded-full">
-          {status}
-        </span>
-      </div>
-
-      <div className="mt-3 h-2 bg-gray-100 rounded-full">
-        <div
-          className="h-full bg-black rounded-full"
-          style={{ width: progress }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function LiveItem({
-  icon,
-  title,
-  value,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="flex gap-3 mb-5">
-      <div className="bg-gray-100 p-2 rounded-lg">
-        {icon}
-      </div>
-
-      <div>
-        <p className="font-medium text-sm">
-          {title}
-        </p>
-
-        <p className="text-xs text-gray-500">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function InfoCard({
-  title,
-  value,
-  icon,
-}: {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div
-      className="
-        bg-white
-        rounded-2xl
-        p-5
-        shadow-sm
-      "
-    >
-      <div className="flex gap-3">
-        <div className="bg-gray-100 p-3 rounded-xl">
-          {icon}
-        </div>
-
-        <div>
-          <p className="text-sm text-gray-500">
-            {title}
-          </p>
-
-          <p className="font-semibold mt-1">
-            {value}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Recommendation({
-  title,
-  price,
-}: {
-  title: string;
-  price: string;
-}) {
-  return (
-    <div
-      className="
-        bg-gray-50
-        rounded-xl
-        p-4
-        hover:bg-gray-100
-        transition
-      "
-    >
-      <h3 className="font-medium">
-        {title}
-      </h3>
-
-      <p className="text-sm text-gray-500 mt-2">
-        {price}
-      </p>
-
-      <button className="text-sm text-blue-600 mt-3">
-        İncele
-      </button>
-    </div>
-  );
-}
-
-function Timeline({
-  icon,
-  title,
-  desc,
-  time,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  time: string;
-}) {
-  return (
-    <div className="flex gap-4 mb-5">
-      <div className="bg-gray-100 p-2 rounded-full h-fit">
-        {icon}
-      </div>
-
-      <div>
-        <p className="font-medium text-sm">
-          {title}
-        </p>
-
-        <p className="text-sm text-gray-500">
-          {desc}
-        </p>
-
-        <p className="text-xs text-gray-400 mt-1">
-          {time}
-        </p>
-      </div>
-    </div>
-  );
+function statusLabel(status: string | null) {
+  if (status === "accepted") return "Kabul edildi";
+  if (status === "rejected") return "Reddedildi";
+  if (status === "in_progress") return "Devam ediyor";
+  if (status === "completed") return "Tamamlandı";
+  return "İnceleniyor";
 }

@@ -50,7 +50,7 @@ export default function ActivityTimeline() {
 
   return (
 
-    <div className="bg-white rounded-2xl border p-6">
+    <div className="bg-white rounded-xl border p-5">
 
 
       <div className="flex justify-between items-center mb-6">

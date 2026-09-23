@@ -1,78 +1,28 @@
-import {
-    LucideIcon,
-  } from "lucide-react";
-  
-  
-  type StatCardProps = {
-    title:string;
-    value:string;
-    description:string;
-    icon:LucideIcon;
-  };
-  
-  
-  export default function StatCard({
-    title,
-    value,
-    description,
-    icon:Icon,
-  }:StatCardProps){
-  
-    return (
-  
-      <div
-        className="
-        bg-white
-        border
-        border-gray-200
-        rounded-3xl
-        p-6
-        "
-      >
-  
-        <div className="flex items-center justify-between">
-  
-  
-          <div>
-  
-            <p className="text-sm text-gray-500">
-              {title}
-            </p>
-  
-  
-            <h2 className="text-3xl font-bold mt-3">
-              {value}
-            </h2>
-  
-  
-            <p className="text-sm text-gray-400 mt-2">
-              {description}
-            </p>
-  
-          </div>
-  
-  
-          <div
-            className="
-            w-12
-            h-12
-            rounded-2xl
-            bg-gray-100
-            flex
-            items-center
-            justify-center
-            "
-          >
-  
-            <Icon size={22}/>
-  
-          </div>
-  
-  
+import type { LucideIcon } from "lucide-react";
+
+type StatCardProps = {
+  title: string;
+  value: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+export default function StatCard({ title, value, description, icon: Icon }: StatCardProps) {
+  return (
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-5 transition hover:border-[var(--color-border-strong)] hover:shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-[var(--color-text-secondary)]">{title}</p>
+
+          <h3 className="mt-3 text-3xl font-semibold text-[var(--color-text-primary)]">{value}</h3>
+
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{description}</p>
         </div>
-  
-  
+
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
+          <Icon size={20} strokeWidth={1.8} />
+        </div>
       </div>
-  
-    );
-  }
+    </div>
+  );
+}

@@ -29,7 +29,7 @@ const jobs = [
   export default function JobsPage() {
   
     return (
-      <main className="min-h-screen bg-[#f7f7f7] px-6 py-10">
+      <main className="min-h-screen bg-[var(--color-canvas)] px-6 py-10">
   
   
         <div className="max-w-6xl mx-auto">
@@ -57,7 +57,7 @@ const jobs = [
   
             {/* Filters */}
   
-            <aside className="bg-white rounded-3xl p-6 h-fit shadow-sm">
+            <aside className="bg-white rounded-xl p-5 h-fit shadow-sm">
   
   
               <h2 className="font-bold text-lg mb-5">
@@ -143,7 +143,7 @@ const jobs = [
   
                 <div
                   key={job.title}
-                  className="bg-white rounded-3xl p-7 shadow-sm hover:shadow-md transition"
+                  className="bg-white rounded-xl p-7 shadow-sm hover:shadow-md transition"
                 >
   
   
@@ -165,7 +165,7 @@ const jobs = [
                     </div>
   
   
-                    <span className="bg-black text-white px-4 py-2 rounded-full text-sm h-fit">
+                    <span className="bg-[var(--color-primary-600)] text-white px-4 py-2 rounded-lg text-sm h-fit">
                       {job.type}
                     </span>
   
@@ -183,7 +183,7 @@ const jobs = [
   
                       <span
                         key={skill}
-                        className="bg-gray-100 px-4 py-2 rounded-full text-sm"
+                        className="bg-gray-100 px-4 py-2 rounded-lg text-sm"
                       >
                         {skill}
                       </span>
@@ -221,7 +221,7 @@ const jobs = [
                       </p>
   
   
-                      <button className="mt-2 bg-black text-white px-6 py-3 rounded-xl">
+                      <button className="mt-2 bg-[var(--color-primary-600)] text-white px-6 py-3 rounded-xl">
                         View Project
                       </button>
   

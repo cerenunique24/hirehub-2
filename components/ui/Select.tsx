@@ -11,37 +11,26 @@ type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   options: Option[];
 };
 
+/** CollaCrew Design System — Select. */
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
   ({ label, error, options, className = "", ...props }, ref) => {
     return (
       <div className="w-full">
         {label && (
-          <label className="mb-2 block text-sm font-medium text-gray-700">
+          <label className="cc-label mb-[var(--rhythm-label-gap)] block text-[var(--color-text-primary)]">
             {label}
           </label>
         )}
 
         <select
           ref={ref}
-          className={`
-            w-full
-            rounded-xl
-            border
-            border-gray-300
-            bg-white
-            px-4
-            py-3
-            text-gray-900
-            outline-none
-            transition
-            duration-200
-            focus:border-black
-            focus:ring-2
-            focus:ring-black/10
-            disabled:cursor-not-allowed
-            disabled:bg-gray-100
-            ${className}
-          `}
+          className={[
+            "h-[var(--input-height)] w-full rounded-[var(--radius-input)] border bg-[var(--color-surface-1)] px-[var(--input-padding-x)] font-sans text-[length:var(--font-size-body)] leading-5 text-[var(--color-text-primary)] outline-none transition disabled:cursor-not-allowed disabled:bg-[var(--color-surface-2)] disabled:opacity-60",
+            error
+              ? "border-[var(--color-error-600)] bg-[var(--color-error-50)] focus:border-[var(--color-error-600)] focus:ring-2 focus:ring-[var(--color-error-50)]"
+              : "border-[var(--color-border-subtle)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]",
+            className,
+          ].join(" ")}
           {...props}
         >
           {options.map((option) => (
@@ -51,11 +40,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
           ))}
         </select>
 
-        {error && (
-          <p className="mt-2 text-sm text-red-500">
-            {error}
-          </p>
-        )}
+        {error && <p className="cc-body-sm mt-[var(--rhythm-label-gap)] text-[var(--color-error-600)]">{error}</p>}
       </div>
     );
   }

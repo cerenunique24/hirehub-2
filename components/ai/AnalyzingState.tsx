@@ -1,47 +1,103 @@
-"use client";
+﻿"use client";
 
-import { Check, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Loader2, Sparkles } from "lucide-react";
 
 const steps = [
-  "Understanding your project",
-  "Identifying required expertise",
-  "Defining project scope",
+  "Projenizi analiz ediyoruz",
+  "Gerekli uzmanlıkları belirliyoruz",
+  "Proje kapsamını oluşturuyoruz",
 ];
 
 export default function AnalyzingState() {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [progress, setProgress] = useState(8);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setProgress((prev) => Math.min(prev + 2, 92));
+    }, 180);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+    }, 2200);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-3xl items-center justify-center">
-      <div className="w-full rounded-3xl bg-white p-10 text-center shadow-sm md:p-14">
-        <div className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-black text-white">
-          <Sparkles size={28} />
+    <div className="flex min-h-[420px] flex-col items-center justify-center px-6">
+      <div className="w-full max-w-xl">
+        <div className="mb-8 flex justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
+            <Sparkles size={28} />
+          </div>
         </div>
 
-        <p className="mb-3 text-sm font-medium text-neutral-400">COLLACREW AI</p>
+        <div className="mb-8 text-center">
+          <h2 className="text-2xl font-semibold text-neutral-900">
+            Projenizi analiz ediyoruz
+          </h2>
 
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
-          Understanding your project
-        </h1>
+          <p className="mt-2 text-sm text-neutral-500">
+            Yapay zeka projeniz için gerekli uzmanlıkları çıkarıyor.
+          </p>
+        </div>
 
-        <p className="mx-auto mt-4 max-w-md text-neutral-500">
-          We are identifying the skills, scope and expertise your project needs.
-        </p>
+        <div className="mb-8 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+          <div
+            className="h-full rounded-full bg-[var(--color-primary-600)] transition-all duration-300"
+            style={{ width: progress + "%" }}
+          ></div>
+        </div>
 
-        <div className="mx-auto mt-10 max-w-sm space-y-3 text-left">
-          {steps.map((item, index) => (
-            <div
-              key={item}
-              className="flex items-center gap-3 rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3"
-            >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white">
-                {index === 0 ? (
-                  <Check size={15} />
-                ) : (
-                  <Sparkles size={14} className="text-neutral-400" />
-                )}
+        <div className="space-y-3">
+          {steps.map((step, index) => {
+            const completed = index < currentStep;
+            const active = index === currentStep;
+
+            return (
+              <div
+                key={step}
+                className={
+                  "flex items-center gap-3 rounded-xl border px-4 py-3 transition-all duration-500 " +
+                  (active
+                    ? "border-neutral-200 bg-neutral-50"
+                    : "border-transparent")
+                }
+              >
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center">
+                  {completed ? (
+                    <Check size={18} className="text-green-600" />
+                  ) : active ? (
+                    <Loader2
+                      size={18}
+                      className="animate-spin text-neutral-900"
+                    />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-neutral-300"></div>
+                  )}
+                </div>
+
+                <span
+                  className={
+                    "text-sm " +
+                    (active
+                      ? "font-medium text-neutral-900"
+                      : completed
+                        ? "text-neutral-500"
+                        : "text-neutral-400")
+                  }
+                >
+                  {step}
+                </span>
               </div>
-              <span className="text-sm text-neutral-700">{item}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

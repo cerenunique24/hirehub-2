@@ -1,59 +1,82 @@
+"use client";
+
+import { Check } from "lucide-react";
+
 type StepperProps = {
-    step: number;
-  };
-  
-  const steps = [
-    "Profil",
-    "Portfolyo",
-    "Tercihler",
-    "Onay",
-  ];
-  
-  export default function Stepper({ step }: StepperProps) {
-    return (
-      <div className="mb-12">
-        <div className="flex items-center justify-between relative">
-  
-          {/* Çizgi */}
-          <div className="absolute left-0 right-0 top-5 h-[2px] bg-gray-200 -z-10" />
-  
+  step: number;
+};
+
+const steps = [
+  "Temel Bilgiler",
+  "Uzmanlık & Tercihler",
+  "Profili Tamamla",
+];
+
+export default function Stepper({ step }: StepperProps) {
+  return (
+    <div className="mb-10 sm:mb-12">
+      <div className="relative">
+        {/* Arka plan çizgisi */}
+        <div className="absolute left-[16.66%] right-[16.66%] top-5 h-px bg-gray-200" />
+
+        {/* İlerleme çizgisi */}
+        <div
+          className="absolute left-[16.66%] top-5 h-px bg-[var(--color-primary-600)] transition-all duration-500"
+          style={{
+            width:
+              step === 1
+                ? "0%"
+                : step === 2
+                  ? "50%"
+                  : "100%",
+          }}
+        />
+
+        <div className="relative flex items-start justify-between">
           {steps.map((title, index) => {
             const current = index + 1;
-            const active = current <= step;
-  
+            const completed = current < step;
+            const active = current === step;
+
             return (
               <div
                 key={title}
-                className="flex flex-col items-center flex-1"
+                className="flex flex-1 flex-col items-center"
               >
+                {/* Numara / Check */}
                 <div
                   className={`
-                    w-10
-                    h-10
-                    rounded-full
-                    flex
-                    items-center
-                    justify-center
-                    font-semibold
-                    transition-all
+                    relative z-10 flex h-10 w-10 items-center
+                    justify-center rounded-full border
+                    text-sm font-semibold transition-all duration-300
                     ${
-                      active
-                        ? "bg-black text-white"
-                        : "bg-white border border-gray-300 text-gray-400"
+                      completed
+                        ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
+                        : active
+                          ? "border-[var(--color-primary-600)] bg-white text-[var(--color-text-primary)] ring-4 ring-gray-100"
+                          : "border-gray-200 bg-white text-gray-400"
                     }
                   `}
                 >
-                  {current}
+                  {completed ? (
+                    <Check
+                      size={17}
+                      strokeWidth={2.8}
+                    />
+                  ) : (
+                    current
+                  )}
                 </div>
-  
+
+                {/* Başlık */}
                 <span
                   className={`
-                    mt-3
-                    text-sm
+                    mt-3 max-w-[120px] text-center text-xs
+                    leading-4 transition-colors duration-300 sm:max-w-none sm:text-sm
                     ${
-                      active
-                        ? "text-black font-medium"
-                        : "text-gray-400"
+                      completed || active
+                        ? "font-semibold text-gray-950"
+                        : "font-medium text-gray-400"
                     }
                   `}
                 >
@@ -64,5 +87,13 @@ type StepperProps = {
           })}
         </div>
       </div>
-    );
-  }
+
+      {/* İlerleme bilgisi */}
+      <div className="mt-5 text-center">
+        <span className="text-xs font-medium text-gray-400">
+          Adım {step} / 3
+        </span>
+      </div>
+    </div>
+  );
+}

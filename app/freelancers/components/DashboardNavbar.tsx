@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { formatRelativeTime } from "@/lib/utils/relativeTime";
 
 type Message = {
   id: string;
@@ -27,6 +28,12 @@ type Notification = {
   created_at: string;
 };
 
+type Profile = {
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+};
+
 export default function DashboardNavbar() {
   const [name, setName] = useState("Freelancer");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -40,79 +47,166 @@ export default function DashboardNavbar() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
 
-  useEffect(() => {
-    fetchUser();
-  }, []);
-
-  const fetchUser = async () => {
-    const supabase = createClient();
-
-    const { data: authData } = await supabase.auth.getUser();
-    const user = authData.user;
-
-    if (!user) return;
-
-    const userName =
-      user.user_metadata?.first_name ||
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      "Freelancer";
-
-    setName(userName);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("avatar_url")
-      .eq("id", user.id)
-      .single();
-
-    if (profile?.avatar_url) {
-      setAvatarUrl(profile.avatar_url);
-    }
-
-    fetchMessages(user.id);
-    fetchNotifications(user.id);
-  };
-
   const fetchMessages = async (userId: string) => {
     setLoadingMessages(true);
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    const { data } = await supabase
-      .from("messages")
-      .select("id, content, is_read, created_at, sender_id")
-      .eq("receiver_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(5);
+      const { data, error } = await supabase
+        .from("messages")
+        .select(
+          "id, content, is_read, created_at, sender_id"
+        )
+        .eq("receiver_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    if (data) {
-      setMessages(data);
+      if (error) {
+        console.error("Mesajlar yüklenirken hata:", error);
+        setMessages([]);
+        return;
+      }
+
+      setMessages(data ?? []);
+    } catch (error) {
+      console.error("Mesajlar yüklenirken beklenmeyen hata:", error);
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
     }
-
-    setLoadingMessages(false);
   };
 
   const fetchNotifications = async (userId: string) => {
     setLoadingNotifications(true);
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    const { data } = await supabase
-      .from("notifications")
-      .select(
-        "id, title, message, link, is_read, created_at"
-      )
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(5);
+      const { data, error } = await supabase
+        .from("notifications")
+        .select(
+          "id, title, message, link, is_read, created_at"
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-    if (data) {
-      setNotifications(data);
+      if (error) {
+        console.error(
+          "Bildirimler yüklenirken hata:",
+          error
+        );
+        setNotifications([]);
+        return;
+      }
+
+      setNotifications(data ?? []);
+    } catch (error) {
+      console.error(
+        "Bildirimler yüklenirken beklenmeyen hata:",
+        error
+      );
+      setNotifications([]);
+    } finally {
+      setLoadingNotifications(false);
     }
-
-    setLoadingNotifications(false);
   };
+
+  const fetchUser = async () => {
+    try {
+      const supabase = createClient();
+
+      const {
+        data: authData,
+        error: authError,
+      } = await supabase.auth.getUser();
+      
+      if (authError) {
+        if (authError.name === "AuthSessionMissingError") {
+          return;
+        }
+      
+        console.error(
+          "Kullanıcı alınırken hata:",
+          authError
+        );
+        return;
+      }
+
+      const user = authData.user;
+
+      if (!user) {
+        return;
+      }
+
+      /*
+       * Profil sorgusunda .single() kullanmıyoruz.
+       *
+       * Böylece profiles tablosunda profil satırı bulunmasa bile
+       * navbar tamamen hata vermez.
+       */
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase
+        .from("profiles")
+        .select("first_name, last_name, avatar_url")
+        .eq("id", user.id)
+        .maybeSingle<Profile>();
+
+      if (profileError) {
+        console.error(
+          "Profil yüklenirken hata:",
+          profileError
+        );
+      }
+
+      const metadata = user.user_metadata as
+        | {
+            first_name?: string;
+            name?: string;
+            full_name?: string;
+          }
+        | undefined;
+
+      const profileName = [
+        profile?.first_name,
+        profile?.last_name,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const fallbackName =
+        profileName ||
+        metadata?.first_name ||
+        metadata?.name ||
+        metadata?.full_name ||
+        "Freelancer";
+
+      setName(fallbackName);
+
+      if (profile?.avatar_url) {
+        setAvatarUrl(profile.avatar_url);
+      } else {
+        setAvatarUrl(null);
+      }
+
+      await Promise.all([
+        fetchMessages(user.id),
+        fetchNotifications(user.id),
+      ]);
+    } catch (error) {
+      console.error(
+        "Profil yüklenirken beklenmeyen hata:",
+        error
+      );
+    }
+  };
+
+  useEffect(() => {
+    void fetchUser();
+  }, []);
 
   const unreadMessages = messages.filter(
     (message) => !message.is_read
@@ -137,62 +231,95 @@ export default function DashboardNavbar() {
   ) => {
     const supabase = createClient();
 
-    await supabase
+    const { error } = await supabase
       .from("notifications")
       .update({ is_read: true })
       .eq("id", notificationId);
 
+    if (error) {
+      console.error(
+        "Bildirim güncellenirken hata:",
+        error
+      );
+      return;
+    }
+
     setNotifications((current) =>
       current.map((notification) =>
         notification.id === notificationId
-          ? { ...notification, is_read: true }
+          ? {
+              ...notification,
+              is_read: true,
+            }
           : notification
       )
     );
   };
 
-  return (
-    <div className="relative mb-8 flex items-center justify-between">
+  const markAllNotificationsAsRead = async () => {
+    const supabase = createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return;
+    }
 
-      {/* Search */}
-      <div className="flex w-[350px] items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3">
+    const { error } = await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", user.id)
+      .eq("is_read", false);
+
+    if (error) return;
+
+    setNotifications((current) => current.map((n) => ({ ...n, is_read: true })));
+  };
+
+  return (
+    <header className="relative flex h-16 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8">
+      {/* Arama */}
+      <div className="flex h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-gray-100 bg-white px-3">
         <Search
-          size={18}
+          size={16}
           className="text-gray-400"
         />
 
         <input
           type="text"
-          placeholder="Search projects..."
+          placeholder="Ara..."
           className="w-full bg-transparent text-sm outline-none"
         />
       </div>
 
-      {/* Right */}
+      {/* Sağ Alan */}
       <div className="flex items-center gap-4">
-
-        {/* Messages */}
+        {/* Mesajlar */}
         <button
           type="button"
           onClick={toggleMessages}
-          className="relative rounded-xl border border-gray-100 bg-white p-3 transition hover:bg-gray-50"
+          className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
+          aria-label="Mesajlar"
         >
-          <MessageCircle size={20} />
+          <MessageCircle size={18} />
 
           {unreadMessages > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-primary-600)] px-1 text-[10px] font-semibold text-white">
               {unreadMessages}
             </span>
           )}
         </button>
 
-        {/* Notifications */}
+        {/* Bildirimler */}
         <button
           type="button"
           onClick={toggleNotifications}
-          className="relative rounded-xl border border-gray-100 bg-white p-3 transition hover:bg-gray-50"
+          className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
+          aria-label="Bildirimler"
         >
-          <Bell size={20} />
+          <Bell size={18} />
 
           {unreadNotifications > 0 && (
             <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
@@ -201,10 +328,12 @@ export default function DashboardNavbar() {
           )}
         </button>
 
-        {/* Profile */}
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-2">
-
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-sm font-semibold text-white">
+        {/* Profil */}
+        <Link
+          href="/freelancers/profile"
+          className="flex h-9 items-center gap-2.5 rounded-[var(--radius-button)] border border-gray-100 bg-white px-2.5 transition hover:bg-gray-50"
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-primary-600)] text-sm font-semibold text-white">
             {avatarUrl ? (
               <img
                 src={avatarUrl}
@@ -222,20 +351,19 @@ export default function DashboardNavbar() {
             </p>
 
             <p className="text-xs text-gray-500">
-              Designer
+              Freelancer
             </p>
           </div>
-        </div>
+        </Link>
       </div>
 
-      {/* Messages Dropdown */}
+      {/* Mesajlar Dropdown */}
       {showMessages && (
-        <div className="absolute right-[170px] top-14 z-50 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
-
+        <div className="absolute right-[170px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
-                Messages
+                Mesajlar
               </h3>
 
               <p className="text-xs text-gray-500">
@@ -245,17 +373,22 @@ export default function DashboardNavbar() {
 
             <button
               type="button"
-              onClick={() => setShowMessages(false)}
+              onClick={() =>
+                setShowMessages(false)
+              }
+              aria-label="Mesajları kapat"
             >
-              <X size={17} className="text-gray-400" />
+              <X
+                size={17}
+                className="text-gray-400"
+              />
             </button>
           </div>
 
           <div className="max-h-80 overflow-y-auto">
-
             {loadingMessages ? (
               <div className="px-5 py-8 text-center text-sm text-gray-500">
-                Loading...
+                Yükleniyor...
               </div>
             ) : messages.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-gray-500">
@@ -266,11 +399,12 @@ export default function DashboardNavbar() {
                 <Link
                   key={message.id}
                   href="/freelancers/messages"
-                  onClick={() => setShowMessages(false)}
+                  onClick={() =>
+                    setShowMessages(false)
+                  }
                   className="block border-b border-gray-50 px-5 py-4 transition hover:bg-gray-50"
                 >
                   <div className="flex items-start gap-3">
-
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold">
                       M
                     </div>
@@ -282,7 +416,7 @@ export default function DashboardNavbar() {
                         </p>
 
                         {!message.is_read && (
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-black" />
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-primary-600)]" />
                         )}
                       </div>
 
@@ -290,32 +424,31 @@ export default function DashboardNavbar() {
                         {message.content}
                       </p>
                     </div>
-
                   </div>
                 </Link>
               ))
             )}
-
           </div>
 
           <Link
             href="/freelancers/messages"
-            onClick={() => setShowMessages(false)}
+            onClick={() =>
+              setShowMessages(false)
+            }
             className="block border-t border-gray-100 px-5 py-3 text-center text-sm font-medium text-gray-900 transition hover:bg-gray-50"
           >
-            Tüm mesajları gör →
+            Tüm mesajları gör
           </Link>
         </div>
       )}
 
-      {/* Notifications Dropdown */}
+      {/* Bildirimler Dropdown */}
       {showNotifications && (
-        <div className="absolute right-[110px] top-14 z-50 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
-
+        <div className="absolute right-[110px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
-                Notifications
+                Bildirimler
               </h3>
 
               <p className="text-xs text-gray-500">
@@ -323,19 +456,35 @@ export default function DashboardNavbar() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowNotifications(false)}
-            >
-              <X size={17} className="text-gray-400" />
-            </button>
+            <div className="flex items-center gap-2">
+              {notifications.some((n) => !n.is_read) && (
+                <button
+                  type="button"
+                  onClick={() => void markAllNotificationsAsRead()}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-900"
+                >
+                  Tümünü okundu işaretle
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setShowNotifications(false)
+                }
+                aria-label="Bildirimleri kapat"
+              >
+                <X
+                  size={17}
+                  className="text-gray-400"
+                />
+              </button>
+            </div>
           </div>
 
           <div className="max-h-80 overflow-y-auto">
-
             {loadingNotifications ? (
               <div className="px-5 py-8 text-center text-sm text-gray-500">
-                Loading...
+                Yükleniyor...
               </div>
             ) : notifications.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-gray-500">
@@ -350,7 +499,9 @@ export default function DashboardNavbar() {
                     "/freelancers/notifications"
                   }
                   onClick={() => {
-                    markNotificationAsRead(notification.id);
+                    void markNotificationAsRead(
+                      notification.id
+                    );
                     setShowNotifications(false);
                   }}
                   className={`block border-b border-gray-50 px-5 py-4 transition hover:bg-gray-50 ${
@@ -360,13 +511,11 @@ export default function DashboardNavbar() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-
                     <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
                       <Bell size={14} />
                     </div>
 
                     <div className="min-w-0 flex-1">
-
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-sm font-medium text-gray-900">
                           {notification.title}
@@ -383,23 +532,27 @@ export default function DashboardNavbar() {
                         </p>
                       )}
 
+                      <p className="mt-2 text-xs text-gray-400">
+                        {formatRelativeTime(notification.created_at)}
+                      </p>
                     </div>
                   </div>
                 </Link>
               ))
             )}
-
           </div>
 
           <Link
             href="/freelancers/notifications"
-            onClick={() => setShowNotifications(false)}
+            onClick={() =>
+              setShowNotifications(false)
+            }
             className="block border-t border-gray-100 px-5 py-3 text-center text-sm font-medium text-gray-900 transition hover:bg-gray-50"
           >
-            Tüm bildirimleri gör →
+            Tüm bildirimleri gör
           </Link>
         </div>
       )}
-    </div>
+    </header>
   );
 }

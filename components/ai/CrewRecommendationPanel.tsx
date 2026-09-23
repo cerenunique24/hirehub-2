@@ -10,7 +10,7 @@ interface CrewRecommendationPanelProps {
 export default function CrewRecommendationPanel({ crew }: CrewRecommendationPanelProps) {
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl bg-neutral-900 p-7 text-white">
+      <section className="rounded-xl bg-neutral-900 p-7 text-white">
         <div className="flex gap-4">
           <Sparkles size={19} className="mt-1 shrink-0" />
           <div>
@@ -23,7 +23,7 @@ export default function CrewRecommendationPanel({ crew }: CrewRecommendationPane
         </div>
       </section>
 
-      <section className="rounded-3xl bg-white p-7 shadow-sm">
+      <section className="rounded-xl bg-white p-7 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <Users size={18} />
           <h3 className="font-semibold">Suggested Crew</h3>

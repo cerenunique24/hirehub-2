@@ -10,10 +10,10 @@ interface TalentMatchingPanelProps {
 export default function TalentMatchingPanel({ matching }: TalentMatchingPanelProps) {
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl bg-white p-7 shadow-sm">
+      <section className="rounded-xl bg-white p-7 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <Users size={18} />
-          <h3 className="font-semibold">Recommended Freelancers</h3>
+          <h3 className="font-semibold">Önerilen freelancerlar</h3>
         </div>
         <div className="space-y-4">
           {matching.recommendedFreelancers.map((freelancer) => (
@@ -24,10 +24,9 @@ export default function TalentMatchingPanel({ matching }: TalentMatchingPanelPro
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="font-medium text-neutral-900">{freelancer.name}</p>
-                  <p className="text-sm text-neutral-500">@{freelancer.username}</p>
                 </div>
                 <span className="rounded-full bg-green-50 px-3 py-1 text-sm font-medium text-green-700">
-                  {freelancer.matchScore}% match
+                  %{freelancer.matchScore} eşleşme
                 </span>
               </div>
               <ul className="mt-3 space-y-1 text-sm text-neutral-600">
@@ -50,10 +49,10 @@ export default function TalentMatchingPanel({ matching }: TalentMatchingPanelPro
         </div>
       </section>
 
-      <section className="rounded-3xl bg-white p-7 shadow-sm">
+      <section className="rounded-xl bg-white p-7 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <UsersRound size={18} />
-          <h3 className="font-semibold">Recommended Coalitions</h3>
+          <h3 className="font-semibold">Önerilen koalisyonlar</h3>
         </div>
         <div className="space-y-4">
           {matching.recommendedCoalitions.map((coalition) => (
@@ -65,11 +64,11 @@ export default function TalentMatchingPanel({ matching }: TalentMatchingPanelPro
                 <div>
                   <p className="font-medium text-neutral-900">{coalition.name}</p>
                   <p className="text-sm text-neutral-500">
-                    {coalition.memberCount} members · {coalition.rating}/5 rating
+                    {coalition.memberCount} aktif üye
                   </p>
                 </div>
                 <span className="rounded-full bg-blue-50 px-3 py-1 text-sm font-medium text-blue-700">
-                  {coalition.matchScore}% match
+                  %{coalition.matchScore} eşleşme
                 </span>
               </div>
               <ul className="mt-3 space-y-1 text-sm text-neutral-600">

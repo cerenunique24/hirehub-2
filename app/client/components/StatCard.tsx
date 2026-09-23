@@ -18,17 +18,17 @@ export default function StatCard({
   const positive = (change ?? 0) >= 0;
 
   return (
-    <div className="group rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-lg">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-5 transition hover:border-[var(--color-border-strong)] hover:shadow-sm">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-neutral-500">{title}</p>
+          <p className="text-sm text-[var(--color-text-secondary)]">{title}</p>
 
-          <h3 className="mt-3 text-3xl font-bold text-neutral-900">
+          <h3 className="mt-3 text-3xl font-semibold text-[var(--color-text-primary)]">
             {value}
           </h3>
 
           {subtitle && (
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
               {subtitle}
             </p>
           )}
@@ -38,8 +38,8 @@ export default function StatCard({
           <div
             className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
               positive
-                ? "bg-green-100 text-green-700"
-                : "bg-red-100 text-red-700"
+                ? "bg-[var(--color-success-50)] text-[var(--color-success-600)]"
+                : "bg-[var(--color-error-50)] text-[var(--color-error-600)]"
             }`}
           >
             {positive ? (
