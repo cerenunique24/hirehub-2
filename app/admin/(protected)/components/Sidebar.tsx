@@ -10,6 +10,7 @@ import {
   FolderKanban,
   FileText,
   LifeBuoy,
+  Briefcase,
   Settings,
   LogOut,
   ShieldAlert,
@@ -29,6 +30,7 @@ const MAIN_MENU: AdminMenuItem[] = [
   { name: "Projeler", href: "/admin/projects", icon: FolderKanban },
   { name: "Teklifler", href: "/admin/proposals", icon: FileText },
   { name: "Destek Talepleri", href: "/admin/support", icon: LifeBuoy },
+  { name: "Kariyer Başvuruları", href: "/admin/careers", icon: Briefcase },
   { name: "Moderasyon", href: "/admin/moderation", icon: ShieldAlert },
 ];
 
