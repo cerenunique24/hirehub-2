@@ -16,12 +16,18 @@ type Ticket = {
   created_at: string;
   updated_at: string;
   user_id: string;
-  profiles?: {
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-    role: string | null;
-  } | null;
+  /**
+   * `profiles(...)` embed — Supabase returns the related rows as an array
+   * (one entry for the ticket's user). Read it with `ticket.profiles?.[0]`.
+   */
+  profiles:
+    | {
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        role: string | null;
+      }[]
+    | null;
 };
 
 type Message = {
@@ -146,8 +152,9 @@ export default function AdminSupportTicketPage() {
     return <div className="py-20 text-center text-sm text-neutral-500">Talep yükleniyor...</div>;
   }
 
+  const requester = ticket.profiles?.[0] ?? null;
   const userName =
-    [ticket.profiles?.first_name, ticket.profiles?.last_name].filter(Boolean).join(" ") ||
+    [requester?.first_name, requester?.last_name].filter(Boolean).join(" ") ||
     "Kullanıcı";
 
   return (
@@ -188,7 +195,7 @@ export default function AdminSupportTicketPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{userName}</p>
-                  <p className="text-xs text-neutral-500">{ticket.profiles?.email}</p>
+                  <p className="text-xs text-neutral-500">{requester?.email}</p>
                 </div>
               </div>
               <p className="mt-5 whitespace-pre-wrap text-sm leading-6 text-neutral-700">
@@ -249,11 +256,11 @@ export default function AdminSupportTicketPage() {
             </div>
             <div>
               <p className="text-xs text-neutral-400">E-posta</p>
-              <p className="mt-1 break-all">{ticket.profiles?.email || "Belirtilmemiş"}</p>
+              <p className="mt-1 break-all">{requester?.email || "Belirtilmemiş"}</p>
             </div>
             <div>
               <p className="text-xs text-neutral-400">Hesap tipi</p>
-              <p className="mt-1 capitalize">{ticket.profiles?.role || "Kullanıcı"}</p>
+              <p className="mt-1 capitalize">{requester?.role || "Kullanıcı"}</p>
             </div>
             <div>
               <p className="text-xs text-neutral-400">Kategori</p>
