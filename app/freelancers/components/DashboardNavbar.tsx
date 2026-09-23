@@ -121,8 +121,12 @@ export default function DashboardNavbar() {
         data: authData,
         error: authError,
       } = await supabase.auth.getUser();
-
+      
       if (authError) {
+        if (authError.name === "AuthSessionMissingError") {
+          return;
+        }
+      
         console.error(
           "Kullanıcı alınırken hata:",
           authError
@@ -256,8 +260,12 @@ export default function DashboardNavbar() {
     const supabase = createClient();
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
-    if (!user) return;
+    
+    if (authError || !user) {
+      return;
+    }
 
     const { error } = await supabase
       .from("notifications")
