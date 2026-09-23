@@ -23,6 +23,8 @@ export type ProjectFinancialLine = {
   engagementValue: number;
   approvedValue: number;
   pendingValue: number;
+  /** Client commission rate frozen on the project (projects.commission_rate). */
+  commissionRate?: number | null;
 };
 
 export type FreelancerEarningsSummary = {
@@ -113,7 +115,7 @@ export async function getClientPaymentsSummary(
 ): Promise<ClientPaymentsSummary> {
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, title, status, budget, budget_max")
+    .select("id, title, status, budget, budget_max, commission_rate")
     .eq("client_id", clientId);
 
   const projectRows = projects ?? [];
@@ -152,6 +154,9 @@ export async function getClientPaymentsSummary(
       engagementValue,
       approvedValue,
       pendingValue,
+      commissionRate: project.commission_rate === null || project.commission_rate === undefined
+        ? null
+        : Number(project.commission_rate),
     };
   });
 

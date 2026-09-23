@@ -5,6 +5,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   Loader2,
+  Pencil,
+  RotateCcw,
   Sparkles,
 } from "lucide-react";
 
@@ -30,6 +32,10 @@ export default function Step3({
   const [error, setError] = useState("");
   const [generating, setGenerating] =
     useState(false);
+  const [manualEntry, setManualEntry] =
+    useState(false);
+  const [manualTitle, setManualTitle] =
+    useState("");
 
   const aboutLength = data.about.length;
 
@@ -74,37 +80,53 @@ export default function Step3({
         }
       );
 
+      // Önce ham metni oku — API her zaman JSON döndürmeyebilir
+      // (ör. beklenmedik bir sunucu hatasında Next.js kendi HTML
+      // hata sayfasını dönebilir). Ham metni elimizde tutarsak
+      // hata ayıklarken "{}" gibi anlamsız bir log yerine gerçek
+      // içeriği görebiliriz.
+      const rawText = await response.text();
+
       let result: {
         title?: string;
         error?: string;
         message?: string;
+        retryable?: boolean;
       } = {};
 
-      try {
-        result = await response.json();
-      } catch {
-        result = {};
+      if (rawText) {
+        try {
+          result = JSON.parse(rawText);
+        } catch {
+          // Next.js'in dev konsol overlay'i, console.error'a ikinci
+          // argüman olarak verilen obje bazen "{}" gibi boş görünebiliyor
+          // (overlay'in kendi serileştirmesi) — bu yüzden burada TEK bir
+          // önceden string'e çevrilmiş mesaj basıyoruz, obje değil.
+          console.error(
+            `Freelancer title API: JSON olmayan yanıt. status=${response.status} statusText=${response.statusText} bodyPreview=${JSON.stringify(rawText.slice(0, 500))}`
+          );
+        }
       }
 
       if (!response.ok) {
         console.error(
-          "Freelancer title API error:",
-          {
-            status: response.status,
-            statusText:
-              response.statusText,
-            result,
-          }
+          `Freelancer title API error: status=${response.status} statusText=${response.statusText} error=${JSON.stringify(result.error)} message=${JSON.stringify(result.message)} bodyPreview=${JSON.stringify(rawText.slice(0, 500))}`
         );
 
         throw new Error(
           result.error ||
             result.message ||
-            `Uzmanlık başlığı oluşturulamadı. (${response.status})`
+            `Uzmanlık başlığı oluşturulamadı. (HTTP ${response.status}${
+              response.statusText ? ` ${response.statusText}` : ""
+            })`
         );
       }
 
       if (!result.title) {
+        console.error(
+          `Freelancer title API: başarılı yanıtta title alanı yok. bodyPreview=${JSON.stringify(rawText.slice(0, 500))}`
+        );
+
         throw new Error(
           "AI geçerli bir uzmanlık başlığı döndürmedi."
         );
@@ -115,6 +137,7 @@ export default function Step3({
       });
 
       setError("");
+      setManualEntry(false);
     } catch (error) {
       console.error(
         "Uzmanlık başlığı oluşturma hatası:",
@@ -129,6 +152,18 @@ export default function Step3({
     } finally {
       setGenerating(false);
     }
+  }
+
+  function saveManualTitle() {
+    if (!manualTitle.trim()) {
+      setError("Bir başlık yaz.");
+      return;
+    }
+
+    onChange({ aiTitle: manualTitle.trim() });
+    setManualEntry(false);
+    setManualTitle("");
+    setError("");
   }
 
   function continueStep() {
@@ -158,7 +193,7 @@ export default function Step3({
           Adım 3 / 3
         </span>
 
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-950 sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
           Seni biraz daha tanıyalım
         </h1>
 
@@ -204,7 +239,7 @@ export default function Step3({
             maxLength={600}
             rows={7}
             placeholder="Örneğin: 5 yıldır UI/UX ve ürün tasarımı alanında çalışıyorum. Web ve mobil ürünlerde kullanıcı deneyimi, arayüz tasarımı ve tasarım sistemleri üzerine çalışıyorum..."
-            className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm leading-7 text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-black"
+            className="w-full resize-none rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm leading-7 text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[var(--color-primary-600)]"
           />
 
           <p className="mt-2 text-xs text-gray-400">
@@ -238,7 +273,7 @@ export default function Step3({
           {data.aiTitle ? (
             <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
               <div className="flex items-start gap-4">
-                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-white">
+                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-600)] text-white">
                   <CheckCircle2 size={19} />
                 </div>
 
@@ -258,18 +293,34 @@ export default function Step3({
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={generateTitle}
-                disabled={
-                  generating || saving
-                }
-                className="mt-5 text-sm font-medium text-gray-500 transition hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {generating
-                  ? "Yeniden oluşturuluyor..."
-                  : "Yeniden oluştur"}
-              </button>
+              <div className="mt-5 flex flex-wrap items-center gap-4">
+                <button
+                  type="button"
+                  onClick={generateTitle}
+                  disabled={
+                    generating || saving
+                  }
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcw size={14} />
+                  {generating
+                    ? "Yeniden oluşturuluyor..."
+                    : "Yeniden oluştur"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualTitle(data.aiTitle);
+                    setManualEntry(true);
+                  }}
+                  disabled={generating || saving}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Pencil size={14} />
+                  Başlığı düzenle
+                </button>
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-gray-200 bg-white p-5">
@@ -296,7 +347,7 @@ export default function Step3({
                     data.about.trim()
                       .length < 80
                   }
-                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-black px-5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-200"
+                  className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:bg-gray-200"
                 >
                   {generating ? (
                     <>
@@ -312,6 +363,61 @@ export default function Step3({
                       Profil başlığımı oluştur
                     </>
                   )}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setManualTitle("");
+                  setManualEntry(true);
+                  setError("");
+                }}
+                disabled={generating || saving}
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Pencil size={14} />
+                veya kendi başlığını yaz
+              </button>
+            </div>
+          )}
+
+          {manualEntry && (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-5">
+              <p className="text-sm font-semibold text-gray-900">
+                Kendi profil başlığını yaz
+              </p>
+              <p className="mt-1 text-xs leading-5 text-gray-500">
+                Örneğin: &quot;UI/UX Tasarımcısı&quot; ya da &quot;Frontend Geliştirici&quot;. Bunu daha sonra profilinden değiştirebilirsin.
+              </p>
+
+              <input
+                value={manualTitle}
+                onChange={(event) =>
+                  setManualTitle(event.target.value)
+                }
+                maxLength={80}
+                placeholder="Örn. UI/UX & Mobil Ürün Tasarımcısı"
+                className="mt-3 w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-[var(--color-primary-600)]"
+              />
+
+              <div className="mt-3 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={saveManualTitle}
+                  className="rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                >
+                  Başlığı kaydet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualEntry(false);
+                    setManualTitle("");
+                  }}
+                  className="text-sm font-medium text-gray-500 hover:text-gray-900"
+                >
+                  Vazgeç
                 </button>
               </div>
             </div>
@@ -341,7 +447,7 @@ export default function Step3({
             disabled={
               saving || generating
             }
-            className="flex h-12 min-w-[190px] items-center justify-center rounded-xl bg-black px-7 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-12 min-w-[190px] items-center justify-center rounded-xl bg-[var(--color-primary-600)] px-7 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving
               ? "Profil oluşturuluyor..."

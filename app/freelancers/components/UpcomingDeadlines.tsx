@@ -18,7 +18,7 @@ export default function UpcomingDeadlines() {
     ];
   
     return (
-      <div className="bg-white rounded-2xl p-6 shadow-sm border">
+      <div className="bg-white rounded-xl p-5 shadow-sm border">
         <div className="flex justify-between items-center mb-5">
           <h3 className="text-lg font-semibold">
             Yaklaşan Teslimler

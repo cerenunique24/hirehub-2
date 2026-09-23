@@ -24,6 +24,10 @@ import {
   type SupportTicket,
   type TicketStatus,
 } from "@/lib/support";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { Input, Textarea } from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
 
 const TICKET_STATUS_CLASS: Record<TicketStatus, string> = {
   open: "bg-blue-50 text-blue-700",
@@ -34,12 +38,12 @@ const TICKET_STATUS_CLASS: Record<TicketStatus, string> = {
 };
 
 const CATEGORY_ICON_BG = [
-  "bg-indigo-50 text-indigo-600",
+  "bg-[var(--color-info-50)] text-[var(--color-info-600)]",
   "bg-emerald-50 text-emerald-600",
   "bg-amber-50 text-amber-600",
   "bg-rose-50 text-rose-600",
   "bg-sky-50 text-sky-600",
-  "bg-violet-50 text-violet-600",
+  "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]",
 ];
 
 export default function HelpAndSupport({
@@ -114,18 +118,42 @@ export default function HelpAndSupport({
   const openTicketCount = tickets.filter((t) => t.status === "open" || t.status === "in_progress" || t.status === "waiting_user").length;
 
   async function handleCreateTicket() {
-    if (!userId) return;
+    setFormError("");
+    setFormSuccess("");
+
     if (!subject.trim() || !description.trim()) {
       setFormError("Konu ve açıklama gerekli.");
       return;
     }
 
+    /*
+     * userId, sayfa yüklenirken async olarak set edilir. Kullanıcı
+     * formu bu tamamlanmadan doldurup gönderirse (ör. yavaş bağlantı)
+     * önceden burada sessizce hiçbir şey olmuyordu — talep
+     * "gönderilmiyormuş" gibi görünüyordu ama hiçbir hata da
+     * gösterilmiyordu. Session'ı burada tazeleyip gerçekten
+     * oturum yoksa açıkça söylüyoruz.
+     */
+    let effectiveUserId = userId;
+
+    if (!effectiveUserId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setFormError("Destek talebi oluşturmak için giriş yapmalısın. Lütfen sayfayı yenileyip tekrar dene.");
+        return;
+      }
+
+      effectiveUserId = user.id;
+      setUserId(user.id);
+    }
+
     setSubmitting(true);
-    setFormError("");
-    setFormSuccess("");
 
     const { error } = await createTicket(supabase, {
-      userId,
+      userId: effectiveUserId,
       subject: subject.trim(),
       category,
       description: description.trim(),
@@ -134,7 +162,8 @@ export default function HelpAndSupport({
     });
 
     if (error) {
-      setFormError("Destek talebi oluşturulamadı.");
+      console.error("Destek talebi oluşturma hatası:", error);
+      setFormError(error.message || "Destek talebi oluşturulamadı.");
       setSubmitting(false);
       return;
     }
@@ -147,7 +176,7 @@ export default function HelpAndSupport({
     setShowForm(false);
     setSubmitting(false);
 
-    const { data: ticketRows } = await fetchOwnTickets(supabase, userId);
+    const { data: ticketRows } = await fetchOwnTickets(supabase, effectiveUserId);
     setTickets((ticketRows ?? []) as SupportTicket[]);
   }
 
@@ -163,9 +192,9 @@ export default function HelpAndSupport({
   return (
     <div className="space-y-6">
       {/* HERO / SEARCH */}
-      <section className="rounded-2xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-8 sm:p-10">
+      <section className="rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-6 sm:p-10">
         <div className="mx-auto max-w-2xl text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <Sparkles size={20} />
           </div>
           <h2 className="mt-4 text-2xl font-semibold text-gray-900">Sana nasıl yardımcı olabiliriz?</h2>
@@ -189,7 +218,7 @@ export default function HelpAndSupport({
                 onClick={() => setActiveCategory(null)}
                 className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
                   activeCategory === null
-                    ? "border-black bg-black text-white"
+                    ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                     : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
                 }`}
               >
@@ -202,7 +231,7 @@ export default function HelpAndSupport({
                   onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
                   className={`rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
                     activeCategory === cat
-                      ? "border-black bg-black text-white"
+                      ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                       : "border-gray-200 bg-white text-gray-600 hover:border-gray-400"
                   }`}
                 >
@@ -216,7 +245,7 @@ export default function HelpAndSupport({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* FAQ */}
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
+        <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-8">
           <div className="mb-5 flex items-center gap-2">
             <MessageCircleQuestion size={18} className="text-gray-500" />
             <h2 className="font-semibold text-gray-900">Sık Sorulan Sorular</h2>
@@ -274,8 +303,8 @@ export default function HelpAndSupport({
 
         {/* SUPPORT SIDEBAR */}
         <aside className="space-y-6">
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-900 text-white">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--color-primary-600)] text-white">
               <LifeBuoy size={18} />
             </div>
             <h2 className="mt-4 font-semibold text-gray-900">Aradığını bulamadın mı?</h2>
@@ -286,14 +315,23 @@ export default function HelpAndSupport({
               <span>{openTicketCount > 0 ? `${openTicketCount} açık talebin var` : "Açık talebin yok"}</span>
             </div>
 
-            <button
+            {formSuccess && (
+              <p className="mt-4 rounded-lg bg-emerald-50 px-3.5 py-2.5 text-xs font-medium text-emerald-700">
+                {formSuccess}
+              </p>
+            )}
+
+            <Button
               type="button"
-              onClick={() => setShowForm((v) => !v)}
-              className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+              onClick={() => {
+                setFormSuccess("");
+                setShowForm(true);
+              }}
+              className="mt-5 w-full"
             >
-              <Plus size={16} />
+              <Plus size={15} />
               Destek Talebi Oluştur
-            </button>
+            </Button>
 
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-3 text-xs text-gray-500">
               <Mail size={14} className="shrink-0" />
@@ -301,7 +339,7 @@ export default function HelpAndSupport({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="font-semibold text-gray-900">Destek Taleplerim</h2>
             <div className="mt-4">
               {tickets.length === 0 ? (
@@ -316,7 +354,7 @@ export default function HelpAndSupport({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate font-medium text-gray-900">{ticket.subject}</p>
-                        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${TICKET_STATUS_CLASS[ticket.status]}`}>
+                        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${TICKET_STATUS_CLASS[ticket.status]}`}>
                           {TICKET_STATUS_LABEL[ticket.status]}
                         </span>
                       </div>
@@ -332,83 +370,70 @@ export default function HelpAndSupport({
         </aside>
       </div>
 
-      {showForm && (
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
-          <h2 className="mb-4 font-semibold text-gray-900">Yeni Destek Talebi</h2>
-          {formError && <p className="mb-3 text-sm text-red-600">{formError}</p>}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Konu"
-              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
-            />
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
-            >
-              <option>Genel</option>
-              <option>Hesap</option>
-              <option>Proje</option>
-              <option>Ödeme</option>
-              <option>Teknik sorun</option>
-            </select>
-            {projectOptions && projectOptions.length > 0 && (
-              <select
-                value={relatedProjectId}
-                onChange={(e) => setRelatedProjectId(e.target.value)}
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
-              >
-                <option value="">İlgili proje (opsiyonel)</option>
-                {projectOptions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
-              </select>
-            )}
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value as "low" | "normal" | "high")}
-              className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
-            >
-              <option value="low">Düşük öncelik</option>
-              <option value="normal">Normal öncelik</option>
-              <option value="high">Yüksek öncelik</option>
-            </select>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Açıklama"
-              rows={4}
-              className="sm:col-span-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
-            />
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowForm(false)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700"
-            >
+      <Modal
+        open={showForm}
+        onClose={() => {
+          if (!submitting) setShowForm(false);
+        }}
+        title="Yeni Destek Talebi"
+        description="Ekibimiz talebini inceleyip en kısa sürede dönüş yapacak."
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={() => setShowForm(false)} disabled={submitting}>
               Vazgeç
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleCreateTicket()}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {submitting && <Loader2 size={16} className="animate-spin" />}
+            </Button>
+            <Button type="button" onClick={() => void handleCreateTicket()} loading={submitting}>
               Gönder
-            </button>
-          </div>
-        </section>
-      )}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {formError && <p className="text-sm text-[var(--color-error-600)]">{formError}</p>}
 
-      {formSuccess && (
-        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{formSuccess}</p>
-      )}
+          <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Konu" />
+
+          <Select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            options={[
+              { label: "Genel", value: "Genel" },
+              { label: "Hesap", value: "Hesap" },
+              { label: "Proje", value: "Proje" },
+              { label: "Ödeme", value: "Ödeme" },
+              { label: "Teknik sorun", value: "Teknik sorun" },
+            ]}
+          />
+
+          {projectOptions && projectOptions.length > 0 && (
+            <Select
+              value={relatedProjectId}
+              onChange={(e) => setRelatedProjectId(e.target.value)}
+              options={[
+                { label: "İlgili proje (opsiyonel)", value: "" },
+                ...projectOptions.map((p) => ({ label: p.title, value: p.id })),
+              ]}
+            />
+          )}
+
+          <Select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as "low" | "normal" | "high")}
+            options={[
+              { label: "Düşük öncelik", value: "low" },
+              { label: "Normal öncelik", value: "normal" },
+              { label: "Yüksek öncelik", value: "high" },
+            ]}
+          />
+
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Açıklama"
+            rows={4}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

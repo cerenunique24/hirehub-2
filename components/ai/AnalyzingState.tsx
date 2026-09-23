@@ -33,7 +33,7 @@ export default function AnalyzingState() {
     <div className="flex min-h-[420px] flex-col items-center justify-center px-6">
       <div className="w-full max-w-xl">
         <div className="mb-8 flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <Sparkles size={28} />
           </div>
         </div>
@@ -50,7 +50,7 @@ export default function AnalyzingState() {
 
         <div className="mb-8 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
           <div
-            className="h-full rounded-full bg-black transition-all duration-300"
+            className="h-full rounded-full bg-[var(--color-primary-600)] transition-all duration-300"
             style={{ width: progress + "%" }}
           ></div>
         </div>

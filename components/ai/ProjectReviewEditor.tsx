@@ -141,13 +141,13 @@ function EditableList({
   onAdd: () => void;
 }) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm">
+    <div className="rounded-xl bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-neutral-900">{label}</h3>
         <button
           type="button"
           onClick={onAdd}
-          className="text-sm font-medium text-neutral-600 hover:text-black"
+          className="text-sm font-medium text-neutral-600 hover:text-[var(--color-text-primary)]"
         >
           + Add
         </button>

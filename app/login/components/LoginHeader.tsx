@@ -1,13 +1,13 @@
 export default function LoginHeader() {
-    return (
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Hoş geldiniz
-        </h1>
-  
-        <p className="text-sm text-muted-foreground">
-          Hesabınıza giriş yaparak devam edin
-        </p>
-      </div>
-    );
-  }
+  return (
+    <div className="space-y-2 text-center">
+      <h1 className="text-[28px] font-semibold leading-9 tracking-[-0.01em] text-[var(--color-text-primary)]">
+        Hoş geldiniz
+      </h1>
+
+      <p className="text-sm text-[var(--color-text-secondary)]">
+        Hesabınıza giriş yaparak devam edin
+      </p>
+    </div>
+  );
+}

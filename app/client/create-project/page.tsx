@@ -21,6 +21,12 @@ import { createClient } from "@/lib/supabase/client";
 import AnalyzingState from "@/components/ai/AnalyzingState";
 import type { ProjectAnalysis } from "@/types/ai";
 import { SKILLS } from "@/lib/constants/skills";
+import { usePremium } from "@/lib/hooks/usePremium";
+import PremiumGate from "@/components/premium/PremiumGate";
+import type {
+  PlusProjectAnalysis,
+  ProProjectAnalysis,
+} from "@/lib/ai/projectAnalysisEnrichment";
 
 const SKILL_OPTIONS: string[] = [...SKILLS];
 
@@ -33,10 +39,18 @@ const CATEGORIES = [
   "Grafik Tasarım",
   "E-Ticaret",
   "Yazılım Geliştirme",
+  "Veri Bilimi & Yapay Zeka",
   "Dijital Pazarlama",
   "İçerik Üretimi",
-  "3D Tasarım",
+  "Metin & Çeviri",
+  "3D Tasarım & Animasyon",
+  "Video & Ses Prodüksiyon",
   "Mimari & İç Mekân",
+  "Mühendislik",
+  "Proje & Ürün Yönetimi",
+  "Finans & Hukuk",
+  "İK & Satış",
+  "Eğitim & Danışmanlık",
   "Diğer",
 ];
 
@@ -52,6 +66,13 @@ const DELIVERY_FORMATS = [
   "Kaynak kod",
   "Video",
   "Sunum",
+  "DWG / DXF",
+  "RVT (Revit)",
+  "SKP (SketchUp)",
+  "3D Model",
+  "Excel / Tablo",
+  "Word Belgesi",
+  "Ses Dosyası",
   "Diğer",
 ];
 
@@ -94,31 +115,31 @@ const DURATION_OPTIONS = [
 const CONTAINER = "mx-auto w-full max-w-[1240px] px-6";
 
 const CARD =
-  "rounded-2xl border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]";
+  "rounded-[var(--radius-card)] border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]";
 
 const EYEBROW =
   "text-xs font-semibold uppercase tracking-[0.14em] text-gray-400";
 
 const HEADING =
-  "mt-2 text-3xl font-semibold tracking-tight text-[#222] sm:text-[34px]";
+  "mt-2 text-[32px] leading-10 font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]";
 
 const SUBTEXT =
   "mt-2 max-w-2xl text-sm leading-6 text-gray-500";
 
 const INPUT =
-  "h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-[#222] outline-none transition placeholder:text-gray-400 hover:border-gray-300 focus:border-[#222] focus:ring-2 focus:ring-gray-100";
+  "h-[38px] w-full rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]";
 
 const LABEL =
-  "mb-2 block text-sm font-medium text-[#222]";
+  "mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]";
 
 const BTN_PRIMARY =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-full bg-[#222] px-5 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-button)] bg-[var(--color-primary-600)] px-4 text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40";
 
 const BTN_SECONDARY =
-  "inline-flex h-11 items-center justify-center gap-2 rounded-full border border-gray-200 bg-white px-5 text-sm font-medium text-[#222] transition hover:border-[#222] disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-4 text-[13px] font-medium text-[var(--color-text-primary)] transition hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)] disabled:cursor-not-allowed disabled:opacity-40";
 
 const BTN_GHOST =
-  "inline-flex h-11 items-center gap-2 rounded-full px-3 text-sm font-medium text-gray-500 transition hover:bg-gray-100 hover:text-[#222] disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex h-[34px] items-center gap-2 rounded-[var(--radius-button)] px-3 text-[13px] font-medium text-gray-500 transition hover:bg-gray-100 hover:text-[#222] disabled:cursor-not-allowed disabled:opacity-40";
 
 const TAG =
   "inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-[#222]";
@@ -159,6 +180,7 @@ type Talent = {
   skills: string[];
   availability?: string;
   reason?: string;
+  isEligibleForRole: boolean;
 };
 
 type RoleMatchGroup = {
@@ -306,6 +328,8 @@ function normalizeMatchingResult(
               typeof candidate.reason === "string"
                 ? candidate.reason
                 : undefined,
+            isEligibleForRole:
+              candidate.isEligibleForRole === true,
           }))
           .filter((talent) => talent.id),
       };
@@ -355,6 +379,19 @@ export default function CreateProjectPage() {
 
   const [analysis, setAnalysis] =
     useState<ProjectAnalysis | null>(null);
+
+  /*
+   * Plus/Pro zenginleştirme — additive alanlar. Free kullanıcıda
+   * ikisi de null gelir, `analysis` (temel akış) hiç etkilenmez.
+   */
+  const [advancedAnalysis, setAdvancedAnalysis] =
+    useState<PlusProjectAnalysis | null>(null);
+  const [proAnalysis, setProAnalysis] =
+    useState<ProProjectAnalysis | null>(null);
+  const [aiUsage, setAiUsage] =
+    useState<{ count: number; monthlyLimit: number; limitReached: boolean } | null>(null);
+
+  const { can: canUseAiFeature } = usePremium();
 
   const [roles, setRoles] =
     useState<Role[]>([]);
@@ -568,6 +605,16 @@ export default function CreateProjectPage() {
 
       setAnalysis(nextAnalysis);
 
+      setAdvancedAnalysis(
+        (analyzeData?.advancedAnalysis as PlusProjectAnalysis | null) ?? null
+      );
+      setProAnalysis(
+        (analyzeData?.proAnalysis as ProProjectAnalysis | null) ?? null
+      );
+      setAiUsage(
+        analyzeData?.aiUsage ?? null
+      );
+
       const roleDetails = Array.isArray(
         nextAnalysis?.roleDetails
       )
@@ -728,9 +775,18 @@ export default function CreateProjectPage() {
       .flatMap(
         (group) => group.freelancers
       )
-      .sort(
-        (a, b) => b.score - a.score
-      )[0] ?? null;
+      .sort((a, b) => {
+        if (
+          a.isEligibleForRole !==
+          b.isEligibleForRole
+        ) {
+          return a.isEligibleForRole
+            ? -1
+            : 1;
+        }
+
+        return b.score - a.score;
+      })[0] ?? null;
 
   function chooseTeam() {
     setError("");
@@ -1031,7 +1087,7 @@ export default function CreateProjectPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F9FAFB]">
+    <main className="min-h-screen bg-[var(--color-canvas)]">
       <PageHeader
         title="Yeni Proje"
         onBack={goBack}
@@ -1079,6 +1135,10 @@ export default function CreateProjectPage() {
               analyzingPhase
             }
             analysis={analysis}
+            advancedAnalysis={advancedAnalysis}
+            proAnalysis={proAnalysis}
+            aiUsage={aiUsage}
+            canUseDeepAnalysis={canUseAiFeature("advanced_matching_client")}
             analysisFailed={analysisFailed}
             analysisRetryable={analysisRetryable}
             analysisError={error}
@@ -1458,6 +1518,10 @@ function AnalysisStep({
   analyzing,
   analyzingPhase,
   analysis,
+  advancedAnalysis,
+  proAnalysis,
+  aiUsage,
+  canUseDeepAnalysis,
   analysisFailed,
   analysisRetryable,
   analysisError,
@@ -1482,6 +1546,10 @@ function AnalysisStep({
   analysis:
     | ProjectAnalysis
     | null;
+  advancedAnalysis: PlusProjectAnalysis | null;
+  proAnalysis: ProProjectAnalysis | null;
+  aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null;
+  canUseDeepAnalysis: boolean;
   analysisFailed: boolean;
   analysisRetryable: boolean;
   analysisError: string;
@@ -1565,7 +1633,7 @@ function AnalysisStep({
           <button
             type="button"
             onClick={onRetryAnalysis}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
           >
             <RotateCcw size={16} />
             Tekrar Dene
@@ -1573,6 +1641,15 @@ function AnalysisStep({
         </div>
       ) : (
         <>
+          {analysis && (
+            <AdvancedAnalysisSection
+              advancedAnalysis={advancedAnalysis}
+              proAnalysis={proAnalysis}
+              aiUsage={aiUsage}
+              canUseDeepAnalysis={canUseDeepAnalysis}
+            />
+          )}
+
           <div className="grid gap-5 lg:grid-cols-2">
             <MatchOptionCard
               eyebrow="AI önerisi"
@@ -1775,10 +1852,18 @@ function AnalysisStep({
                                     </span>
                                   </span>
 
-                                  <span className="shrink-0 text-xs font-semibold text-[#222]">
-                                    %
-                                    {Math.round(
-                                      candidate.score
+                                  <span className="flex shrink-0 flex-col items-end gap-0.5">
+                                    <span className="text-xs font-semibold text-[#222]">
+                                      %
+                                      {Math.round(
+                                        candidate.score
+                                      )}
+                                    </span>
+
+                                    {!candidate.isEligibleForRole && (
+                                      <span className="text-xs font-medium text-gray-400">
+                                        Rolle uyumlu değil
+                                      </span>
                                     )}
                                   </span>
                                 </button>
@@ -1890,9 +1975,9 @@ function AnalysisStep({
             <button
               type="button"
               onClick={onChooseNone}
-              className={`rounded-full border px-4 py-2.5 text-sm font-medium transition ${
+              className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
                 selectionMode === "none"
-                  ? "border-[#222] bg-white text-[#222]"
+                  ? "border-blue-600 bg-blue-50 text-blue-600"
                   : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-[#222]"
               }`}
             >
@@ -1931,6 +2016,149 @@ function AnalysisStep({
   );
 }
 
+function AdvancedAnalysisSection({
+  advancedAnalysis,
+  proAnalysis,
+  aiUsage,
+  canUseDeepAnalysis,
+}: {
+  advancedAnalysis: PlusProjectAnalysis | null;
+  proAnalysis: ProProjectAnalysis | null;
+  aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null;
+  canUseDeepAnalysis: boolean;
+}) {
+  return (
+    <div className="mb-5">
+      <PremiumGate
+        feature="advanced_project_analysis"
+        title="Daha kapsamlı proje analizi"
+        description="Rol/skill boşluklarını, bütçe-süre değerlendirmesini ve daha detaylı rol analizini gör."
+        dismissible
+      >
+        {advancedAnalysis ? (
+          <div className={`${CARD} p-6`}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900">Kapsamlı Analiz</h3>
+              <span className="rounded-full bg-[var(--color-primary-600)] px-2.5 py-0.5 text-xs font-medium text-white">
+                {canUseDeepAnalysis ? "Pro" : "Plus"}
+              </span>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {advancedAnalysis.detailedRoleAnalysis.map((item) => (
+                <p key={item.role} className="text-sm text-gray-600">
+                  <span className="font-medium text-gray-900">{item.role}:</span> {item.insight}
+                </p>
+              ))}
+            </div>
+
+            {advancedAnalysis.skillGapInsights.length > 0 && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Beceri İçgörüleri</p>
+                <ul className="mt-2 space-y-1">
+                  {advancedAnalysis.skillGapInsights.map((insight, index) => (
+                    <li key={index} className="text-sm text-gray-600">
+                      • {insight}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="mt-4 border-t border-gray-100 pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bütçe ve Süre Değerlendirmesi</p>
+              <p className="mt-2 text-sm text-gray-600">{advancedAnalysis.budgetDurationAssessment.insight}</p>
+              {advancedAnalysis.budgetDurationAssessment.flags.map((flag, index) => (
+                <p key={index} className="mt-1 text-sm text-amber-700">
+                  ⚠ {flag}
+                </p>
+              ))}
+            </div>
+
+            {proAnalysis && (
+              <div className="mt-5 border-t border-gray-100 pt-5">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-gray-900">Gelişmiş Pro Analizi</h4>
+                  <span className="rounded-full bg-[var(--color-primary-600)] px-2 py-0.5 text-[10px] font-medium text-white">Pro</span>
+                </div>
+
+                <p className="mt-3 text-sm text-gray-600">{proAnalysis.teamCompositionInsight}</p>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Risk Analizi</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Risk seviyesi:{" "}
+                    <span
+                      className={`font-medium ${
+                        proAnalysis.riskAnalysis.level === "high"
+                          ? "text-red-600"
+                          : proAnalysis.riskAnalysis.level === "medium"
+                            ? "text-amber-600"
+                            : "text-emerald-700"
+                      }`}
+                    >
+                      {proAnalysis.riskAnalysis.level === "high"
+                        ? "Yüksek"
+                        : proAnalysis.riskAnalysis.level === "medium"
+                          ? "Orta"
+                          : "Düşük"}
+                    </span>
+                  </p>
+                  <ul className="mt-1 space-y-1">
+                    {proAnalysis.riskAnalysis.risks.map((risk, index) => (
+                      <li key={index} className="text-sm text-gray-600">
+                        • {risk}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Alternatif Rol Önerileri</p>
+                  <ul className="mt-1 space-y-1">
+                    {proAnalysis.alternativeRoleSuggestions.map((suggestion, index) => (
+                      <li key={index} className="text-sm text-gray-600">
+                        • {suggestion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gelişmiş Bütçe İçgörüsü</p>
+                  <p className="mt-1 text-sm text-gray-600">{proAnalysis.advancedBudgetInsight}</p>
+                </div>
+
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gelişmiş Öneriler</p>
+                  <ul className="mt-1 space-y-1">
+                    {proAnalysis.advancedRecommendations.map((rec, index) => (
+                      <li key={index} className="text-sm text-gray-600">
+                        • {rec}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {aiUsage && (
+              <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-400">
+                Bu ay {aiUsage.count}/{aiUsage.monthlyLimit} ek analiz kullanıldı.
+              </p>
+            )}
+          </div>
+        ) : aiUsage?.limitReached ? (
+          <div className={`${CARD} p-6 text-sm text-gray-500`}>
+            Bu ay için ek analiz hakkın doldu ({aiUsage.count}/{aiUsage.monthlyLimit}). Gelecek ay otomatik olarak
+            yenilenecek{canUseDeepAnalysis ? "" : " — daha yüksek limit için Pro'ya geçebilirsin"}.
+          </div>
+        ) : null}
+      </PremiumGate>
+    </div>
+  );
+}
+
 function MatchOptionCard({
   eyebrow,
   title,
@@ -1966,7 +2194,7 @@ function MatchOptionCard({
           onSelect();
         }
       }}
-      className={`rounded-2xl border bg-white p-6 text-left shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition ${
+      className={`rounded-[var(--radius-card)] border bg-white p-6 text-left shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition ${
         disabled
           ? "cursor-not-allowed opacity-50"
           : "cursor-pointer hover:border-gray-300"
@@ -2013,7 +2241,7 @@ function RadioDot({
     <span
       className={`flex ${size} shrink-0 items-center justify-center rounded-full border transition ${
         checked
-          ? "border-[#222] bg-[#222]"
+          ? "border-[#222] bg-[var(--color-primary-600)]"
           : "border-gray-300 bg-white"
       }`}
     >
@@ -2035,7 +2263,7 @@ function MatchBadge({
         %{Math.round(score)}
       </span>
 
-      <span className="text-[11px] text-gray-500">
+      <span className="text-xs text-gray-500">
         Match
       </span>
     </span>
@@ -2152,7 +2380,7 @@ function BudgetPublishStep({
                 Toplam bütçe
               </p>
 
-              <p className="mt-2 text-3xl font-semibold tracking-tight text-[#222]">
+              <p className="mt-2 text-3xl font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
                 ₺{formatTL(totalBudget)}
               </p>
 
@@ -2721,13 +2949,13 @@ function PageHeader({
         <button
           type="button"
           onClick={onBack}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-[#222]"
+          className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] text-gray-400 transition hover:bg-gray-100 hover:text-[#222]"
           aria-label="Geri"
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
 
-        <h1 className="text-sm font-semibold tracking-tight text-[#222]">
+        <h1 className="text-sm font-semibold text-[var(--color-text-primary)]">
           {title}
         </h1>
       </div>
@@ -2771,7 +2999,7 @@ function StepIndicator({
     <div
       className={`${CONTAINER} pt-6`}
     >
-      <div className="hidden items-center rounded-2xl border border-gray-200 bg-white px-6 py-4 sm:flex">
+      <div className="hidden items-center rounded-[var(--radius-card)] border border-gray-200 bg-white px-6 py-4 sm:flex">
         {steps.map(
           (item, index) => {
             const done =
@@ -2789,7 +3017,7 @@ function StepIndicator({
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                       done || current
-                        ? "bg-[#222] text-white"
+                        ? "bg-[var(--color-primary-600)] text-white"
                         : "bg-gray-100 text-gray-400"
                     }`}
                   >
@@ -2806,7 +3034,7 @@ function StepIndicator({
                   </div>
 
                   <p
-                    className={`text-sm font-semibold ${
+                    className={`text-[13px] font-medium ${
                       done || current
                         ? "text-[#222]"
                         : "text-gray-400"
@@ -2823,7 +3051,7 @@ function StepIndicator({
                     className={`mx-4 h-px min-w-8 flex-1 ${
                       index <
                       currentIndex
-                        ? "bg-[#222]"
+                        ? "bg-[var(--color-primary-600)]"
                         : "bg-gray-200"
                     }`}
                   />
@@ -2834,15 +3062,15 @@ function StepIndicator({
         )}
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 sm:hidden">
+      <div className="flex items-center justify-between rounded-[var(--radius-card)] border border-gray-200 bg-white px-4 py-3 sm:hidden">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
             Adım{" "}
             {currentIndex + 1} /{" "}
             {steps.length}
           </p>
 
-          <p className="mt-0.5 text-sm font-semibold text-[#222]">
+          <p className="mt-0.5 text-[13px] font-medium text-[#222]">
             {
               steps[currentIndex]
                 ?.label
@@ -2858,7 +3086,7 @@ function StepIndicator({
                 className={`h-1.5 rounded-full transition-all ${
                   index ===
                   currentIndex
-                    ? "w-6 bg-[#222]"
+                    ? "w-6 bg-[var(--color-primary-600)]"
                     : index <
                         currentIndex
                       ? "w-3 bg-gray-400"
@@ -2975,6 +3203,7 @@ function MultiSelect({
   onChange,
   placeholder = "Ekle",
   searchPlaceholder = "Ara...",
+  allowCustom = true,
 }: {
   label?: string;
   values: string[];
@@ -2984,6 +3213,7 @@ function MultiSelect({
   ) => void;
   placeholder?: string;
   searchPlaceholder?: string;
+  allowCustom?: boolean;
 }) {
   const [open, setOpen] =
     useState(false);
@@ -3143,9 +3373,30 @@ function MultiSelect({
             <div className="max-h-60 overflow-y-auto p-1.5">
               {filteredOptions.length ===
               0 ? (
-                <div className="px-3 py-6 text-center text-xs text-gray-400">
-                  Sonuç bulunamadı.
-                </div>
+                allowCustom &&
+                search.trim() &&
+                !values.some(
+                  (value) =>
+                    value.toLowerCase() ===
+                    search.trim().toLowerCase()
+                ) ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      add(search.trim())
+                    }
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                  >
+                    <span className="text-gray-400">Ekle:</span>
+                    <span className="font-medium text-[#222]">
+                      {search.trim()}
+                    </span>
+                  </button>
+                ) : (
+                  <div className="px-3 py-6 text-center text-xs text-gray-400">
+                    Sonuç bulunamadı.
+                  </div>
+                )
               ) : (
                 filteredOptions.map(
                   (option) => (
@@ -3214,7 +3465,7 @@ function FileThumbnail({
 
   return (
     <div className="group relative">
-      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gray-100 text-[10px] text-gray-500">
+      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gray-100 text-xs text-gray-500">
         {isImage ? (
           <FilePreview
             file={file}

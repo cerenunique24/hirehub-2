@@ -2,19 +2,42 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  Building2,
-  Check,
-  Eye,
-  EyeOff,
-  User,
-  X,
-} from "lucide-react";
+import { ArrowRight, Building2, Check, User, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import {
+  RegisterSplitLayout,
+  RegisterFormHeader,
+  RegisterField,
+  PasswordInput,
+  PasswordChecklist,
+  ConsentGroup,
+} from "@/components/auth/RegisterSplitLayout";
 
 type AccountType = "individual" | "company";
 type LegalDocument = "kvkk" | "terms" | null;
+
+const ACCOUNT_TYPES = [
+  {
+    value: "individual",
+    label: "Bireysel",
+    icon: User,
+    description: "Kendi adına proje oluştur ve freelancerlarla çalış.",
+    points: ["Kişisel projeler", "Bireysel profil", "Freelancerlarla doğrudan çalışma"],
+    confirmation: "Kendi adına proje oluşturabilir ve freelancerlarla bireysel olarak çalışabilirsin.",
+    formTitle: "Kişisel bilgilerini ekle",
+  },
+  {
+    value: "company",
+    label: "Kurumsal",
+    icon: Building2,
+    description: "Şirketin adına proje oluştur ve ekiplerle çalış.",
+    points: ["Şirket adına projeler", "Şirket adıyla profil", "Çok rollü projelerde ekip kurma"],
+    confirmation: "Şirketin adına proje oluşturabilir ve kurumsal bilgilerini ekleyebilirsin.",
+    formTitle: "Şirket bilgilerini ekle",
+  },
+] as const;
 
 export default function ClientRegisterPage() {
   const router = useRouter();
@@ -23,7 +46,7 @@ export default function ClientRegisterPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [accountType, setAccountType] =
-    useState<AccountType>("individual");
+    useState<AccountType | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -65,6 +88,7 @@ export default function ClientRegisterPage() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const formValid =
+    accountType !== null &&
     firstName.trim().length >= 2 &&
     lastName.trim().length >= 2 &&
     emailValid &&
@@ -80,7 +104,7 @@ export default function ClientRegisterPage() {
   ) {
     event.preventDefault();
 
-    if (!formValid || loading) return;
+    if (!formValid || loading || !accountType) return;
 
     setLoading(true);
     setErrorMessage("");
@@ -157,446 +181,253 @@ export default function ClientRegisterPage() {
     router.push("/register/client/verify");
   }
 
+  const isCompany = accountType === "company";
+  const selectedType = ACCOUNT_TYPES.find((type) => type.value === accountType) ?? null;
+
   return (
-    <main className="min-h-screen bg-[#f7f7f5]">
-      <div className="min-h-screen grid lg:grid-cols-[0.9fr_1.1fr]">
-        {/* SOL PANEL */}
-        <section className="hidden lg:flex bg-black text-white p-12 xl:p-16 flex-col justify-between">
-          <div>
-            <div className="text-2xl font-semibold tracking-tight">
-              CollaCrew
+    <>
+      <RegisterSplitLayout
+        image="https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=1400&auto=format&fit=crop"
+        eyebrow="Müşteri hesabı"
+        title="Projen için doğru ekibi bul."
+        description="Projelerini yayınla, yetenekleri keşfet ve ihtiyaçlarına uygun freelancerlarla çalış."
+      >
+        <RegisterFormHeader
+          step={1}
+          totalSteps={3}
+          stepLabel="Hesap oluştur"
+          title="Müşteri hesabını oluştur"
+          description="Önce temel bilgilerini alalım. Profilini sonraki adımda birlikte tamamlayacağız."
+        />
+
+        <form onSubmit={handleSubmit} className="space-y-[var(--space-5)]">
+          {/* MÜŞTERİ TÜRÜ */}
+          <fieldset>
+            <legend className="text-[15px] font-semibold leading-6 text-[var(--color-text-primary)]">
+              Nasıl çalışacaksın?
+            </legend>
+            <p className="cc-body-sm mt-0.5 text-[var(--color-text-secondary)]">Proje ve hesap türünü seç.</p>
+
+            <div role="radiogroup" aria-label="Hesap türü" className="mt-3 grid gap-2 sm:grid-cols-2">
+              {ACCOUNT_TYPES.map((option) => {
+                const selected = accountType === option.value;
+                const Icon = option.icon;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setAccountType(option.value)}
+                    className={`relative flex flex-col rounded-[var(--radius-card)] border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary-50)] ${
+                      selected
+                        ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)]/60 ring-1 ring-[var(--color-primary-600)]"
+                        : "border-[var(--color-border-subtle)] bg-white hover:border-[var(--color-border-strong)]"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] transition-colors ${
+                          selected
+                            ? "bg-[var(--color-primary-600)] text-white"
+                            : "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]"
+                        }`}
+                      >
+                        <Icon size={16} />
+                      </span>
+
+                      <span
+                        aria-hidden
+                        className={`flex h-5 w-5 items-center justify-center rounded-[var(--radius-pill)] border transition-colors ${
+                          selected
+                            ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
+                            : "border-[var(--color-border-strong)] bg-white text-transparent"
+                        }`}
+                      >
+                        <Check size={12} strokeWidth={2.5} />
+                      </span>
+                    </div>
+
+                    <span className="mt-3 text-sm font-semibold leading-5 text-[var(--color-text-primary)]">
+                      {option.label}
+                    </span>
+                    <span className="mt-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">
+                      {option.description}
+                    </span>
+
+                    <ul className="mt-3 space-y-1.5 border-t border-[var(--color-border-subtle)] pt-3">
+                      {option.points.map((point) => (
+                        <li key={point} className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+                          <Check
+                            size={12}
+                            className={selected ? "text-[var(--color-primary-600)]" : "text-[var(--color-text-muted)]"}
+                          />
+                          {point}
+                        </li>
+                      ))}
+                    </ul>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="mt-24 max-w-md">
-              <p className="text-sm text-white/50 mb-5">
-                Müşteri hesabı
-              </p>
+            <p aria-live="polite" className="mt-2 min-h-[18px] text-xs text-[var(--color-text-secondary)]">
+              {selectedType?.confirmation ?? ""}
+            </p>
+          </fieldset>
 
-              <h1 className="text-5xl xl:text-6xl font-semibold tracking-tight leading-[1.02]">
-                Projen için
-                <br />
-                doğru ekibi bul.
-              </h1>
-
-              <p className="mt-7 text-white/60 text-base leading-7 max-w-sm">
-                Projelerini yayınla, yetenekleri keşfet ve
-                ihtiyaçlarına uygun freelancerlarla çalış.
-              </p>
-            </div>
-          </div>
-
-          <div className="text-sm text-white/40">
-            © {new Date().getFullYear()} CollaCrew
-          </div>
-        </section>
-
-        {/* SAĞ PANEL */}
-        <section className="flex items-center justify-center px-5 py-10 sm:px-8">
-          <div className="w-full max-w-xl">
-            <div className="mb-8">
-              <div className="flex items-center gap-2 text-xs font-medium text-black/40 mb-5">
-                <span className="text-black">01</span>
-                <span>/</span>
-                <span>03</span>
-                <span className="ml-2">
-                  Hesap oluştur
-                </span>
-              </div>
-
-              <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-                Müşteri hesabını oluştur
+          {/* SEÇİME GÖRE ALANLAR */}
+          {selectedType && (
+            <section key={selectedType.value} className="cc-appear space-y-3" aria-label={selectedType.formTitle}>
+              <h2 className="text-[15px] font-semibold leading-6 text-[var(--color-text-primary)]">
+                {selectedType.formTitle}
               </h2>
 
-              <p className="mt-3 text-black/50 leading-6">
-                Önce temel bilgilerini alalım. Profilini
-                sonraki adımda birlikte tamamlayacağız.
-              </p>
-            </div>
-
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-6"
-            >
-              {/* AD SOYAD */}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Ad
-                  </label>
-
-                  <input
-                    value={firstName}
-                    onChange={(e) =>
-                      setFirstName(e.target.value)
-                    }
-                    placeholder="Adınız"
-                    autoComplete="given-name"
-                    className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 outline-none focus:border-black transition"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Soyad
-                  </label>
-
-                  <input
-                    value={lastName}
-                    onChange={(e) =>
-                      setLastName(e.target.value)
-                    }
-                    placeholder="Soyadınız"
-                    autoComplete="family-name"
-                    className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 outline-none focus:border-black transition"
-                  />
-                </div>
-              </div>
-
-              {/* HESAP TÜRÜ */}
-              <div>
-                <label className="block text-sm font-medium mb-3">
-                  Hesap türün
-                </label>
-
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAccountType("individual")
-                    }
-                    className={`text-left rounded-2xl border p-5 transition ${
-                      accountType === "individual"
-                        ? "border-black bg-white ring-1 ring-black"
-                        : "border-black/10 bg-white hover:border-black/30"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="w-11 h-11 rounded-xl bg-black/[0.04] flex items-center justify-center">
-                        <User size={21} />
-                      </div>
-
-                      {accountType === "individual" && (
-                        <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center">
-                          <Check size={14} />
-                        </div>
-                      )}
-                    </div>
-
-                    <h3 className="mt-5 font-semibold">
-                      Bireysel
-                    </h3>
-
-                    <ul className="mt-3 space-y-2 text-sm text-black/50">
-                      <li>• Kendi adına proje oluştur</li>
-                      <li>• Freelancerlarla doğrudan çalış</li>
-                      <li>• Kişisel projelerini yönet</li>
-                    </ul>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setAccountType("company")
-                    }
-                    className={`text-left rounded-2xl border p-5 transition ${
-                      accountType === "company"
-                        ? "border-black bg-white ring-1 ring-black"
-                        : "border-black/10 bg-white hover:border-black/30"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="w-11 h-11 rounded-xl bg-black/[0.04] flex items-center justify-center">
-                        <Building2 size={21} />
-                      </div>
-
-                      {accountType === "company" && (
-                        <div className="w-6 h-6 rounded-full bg-black text-white flex items-center justify-center">
-                          <Check size={14} />
-                        </div>
-                      )}
-                    </div>
-
-                    <h3 className="mt-5 font-semibold">
-                      Şirket
-                    </h3>
-
-                    <ul className="mt-3 space-y-2 text-sm text-black/50">
-                      <li>• Şirket adına proje oluştur</li>
-                      <li>• Ekip olarak projeleri yönet</li>
-                      <li>• Kurumsal iş süreçlerini yönet</li>
-                    </ul>
-                  </button>
-                </div>
-              </div>
-
-              {/* ŞİRKET ADI */}
-              {accountType === "company" && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Şirket adı
-                  </label>
-
-                  <input
+              {isCompany && (
+                <RegisterField label="Şirket adı" htmlFor="companyName">
+                  <Input
+                    id="companyName"
                     value={companyName}
-                    onChange={(e) =>
-                      setCompanyName(e.target.value)
-                    }
+                    onChange={(e) => setCompanyName(e.target.value)}
                     placeholder="Şirketinizin adı"
                     autoComplete="organization"
-                    className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 outline-none focus:border-black transition"
                   />
-                </div>
+                </RegisterField>
               )}
 
-              {/* E-POSTA */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  E-posta
-                </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <RegisterField label={isCompany ? "Yetkili adı" : "Ad"} htmlFor="firstName">
+                  <Input
+                    id="firstName"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Adınız"
+                    autoComplete="given-name"
+                  />
+                </RegisterField>
 
-                <input
+                <RegisterField label={isCompany ? "Yetkili soyadı" : "Soyad"} htmlFor="lastName">
+                  <Input
+                    id="lastName"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Soyadınız"
+                    autoComplete="family-name"
+                  />
+                </RegisterField>
+              </div>
+
+              <RegisterField label={isCompany ? "İş e-postası" : "E-posta"} htmlFor="email">
+                <Input
+                  id="email"
                   type="email"
                   value={email}
-                  onChange={(e) =>
-                    setEmail(e.target.value)
-                  }
-                  placeholder="ornek@email.com"
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={isCompany ? "ad@sirket.com" : "ornek@email.com"}
                   autoComplete="email"
-                  className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 outline-none focus:border-black transition"
                 />
-              </div>
+              </RegisterField>
 
-              {/* ŞİFRE */}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Şifre
-                  </label>
+              <RegisterField label="Şifre" htmlFor="password">
+                <PasswordInput
+                  id="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="En az 8 karakter"
+                  autoComplete="new-password"
+                  visible={showPassword}
+                  onToggle={() => setShowPassword((value) => !value)}
+                />
 
-                  <div className="relative">
-                    <input
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
-                      value={password}
-                      onChange={(e) =>
-                        setPassword(e.target.value)
-                      }
-                      placeholder="••••••••"
-                      autoComplete="new-password"
-                      className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 pr-12 outline-none focus:border-black transition"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPassword(
-                          (value) => !value
-                        )
-                      }
-                      aria-label={
-                        showPassword
-                          ? "Şifreyi gizle"
-                          : "Şifreyi göster"
-                      }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black"
-                    >
-                      {showPassword ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Şifre tekrar
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      type={
-                        showPasswordConfirm
-                          ? "text"
-                          : "password"
-                      }
-                      value={passwordConfirm}
-                      onChange={(e) =>
-                        setPasswordConfirm(
-                          e.target.value
-                        )
-                      }
-                      placeholder="••••••••"
-                      autoComplete="new-password"
-                      className="w-full h-12 rounded-xl border border-black/10 bg-white px-4 pr-12 outline-none focus:border-black transition"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPasswordConfirm(
-                          (value) => !value
-                        )
-                      }
-                      aria-label={
-                        showPasswordConfirm
-                          ? "Şifreyi gizle"
-                          : "Şifreyi göster"
-                      }
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black"
-                    >
-                      {showPasswordConfirm ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
-                    </button>
-                  </div>
-
-                  {passwordConfirm.length > 0 && (
-                    <p
-                      className={`mt-2 text-xs ${
-                        passwordsMatch
-                          ? "text-green-600"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {passwordsMatch
-                        ? "Şifreler eşleşiyor."
-                        : "Şifreler eşleşmiyor."}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* ŞİFRE KURALLARI */}
-              {password.length > 0 &&
-                !passwordValid && (
-                  <div className="rounded-xl bg-white border border-black/5 p-4">
-                    <p className="text-xs font-medium mb-3">
-                      Şifre gereksinimleri
-                    </p>
-
-                    <div className="grid sm:grid-cols-2 gap-2 text-xs">
-                      <PasswordRule
-                        valid={passwordRules.length}
-                        text="En az 8 karakter"
-                      />
-
-                      <PasswordRule
-                        valid={passwordRules.uppercase}
-                        text="En az 1 büyük harf"
-                      />
-
-                      <PasswordRule
-                        valid={passwordRules.lowercase}
-                        text="En az 1 küçük harf"
-                      />
-
-                      <PasswordRule
-                        valid={passwordRules.number}
-                        text="En az 1 rakam"
-                      />
-                    </div>
-                  </div>
+                {password.length > 0 && !passwordValid && (
+                  <PasswordChecklist
+                    rules={[
+                      { label: "En az 8 karakter", valid: passwordRules.length },
+                      { label: "En az 1 büyük harf", valid: passwordRules.uppercase },
+                      { label: "En az 1 küçük harf", valid: passwordRules.lowercase },
+                      { label: "En az 1 rakam", valid: passwordRules.number },
+                    ]}
+                  />
                 )}
 
-              {passwordValid && (
-                <p className="text-xs text-green-600">
-                  Güçlü bir şifre oluşturdun.
-                </p>
-              )}
+                {passwordValid && (
+                  <p className="mt-1.5 text-xs text-[var(--color-success-600)]">Güçlü bir şifre oluşturdun.</p>
+                )}
+              </RegisterField>
 
-              {/* ONAYLAR */}
-              <div className="space-y-3 rounded-2xl border border-black/5 bg-white p-4">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={kvkkAccepted}
-                    onChange={(e) =>
-                      setKvkkAccepted(e.target.checked)
-                    }
-                    className="mt-1 w-4 h-4 accent-black"
-                  />
-
-                  <span className="text-sm text-black/60 leading-5">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveDocument("kvkk")
-                      }
-                      className="font-medium text-black underline underline-offset-2 hover:text-black/60"
-                    >
-                      KVKK Aydınlatma Metni
-                    </button>{" "}
-                    &apos;ni okudum ve anladım.
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={termsAccepted}
-                    onChange={(e) =>
-                      setTermsAccepted(e.target.checked)
-                    }
-                    className="mt-1 w-4 h-4 accent-black"
-                  />
-
-                  <span className="text-sm text-black/60 leading-5">
-                    CollaCrew{" "}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setActiveDocument("terms")
-                      }
-                      className="font-medium text-black underline underline-offset-2 hover:text-black/60"
-                    >
-                      Kullanım Koşulları
-                    </button>
-                    &apos;nı kabul ediyorum.
-                  </span>
-                </label>
-              </div>
-
-              {/* HATA */}
-              {errorMessage && (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-                  {errorMessage}
-                </div>
-              )}
-
-              {/* KAYIT */}
-              <button
-                type="submit"
-                disabled={!formValid || loading}
-                className="w-full h-13 rounded-xl bg-black text-white font-medium flex items-center justify-center gap-2 transition disabled:opacity-30 disabled:cursor-not-allowed hover:bg-black/90"
+              <RegisterField
+                label="Şifre tekrar"
+                htmlFor="passwordConfirm"
+                hint={
+                  passwordConfirm.length > 0
+                    ? passwordsMatch
+                      ? "Şifreler eşleşiyor."
+                      : "Şifreler eşleşmiyor."
+                    : undefined
+                }
+                hintTone={passwordsMatch ? "success" : "error"}
               >
-                {loading
-                  ? "Hesap oluşturuluyor..."
-                  : "Hesap Oluştur"}
+                <PasswordInput
+                  id="passwordConfirm"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  placeholder="Şifreni tekrar gir"
+                  autoComplete="new-password"
+                  hasError={passwordConfirm.length > 0 && !passwordsMatch}
+                  visible={showPasswordConfirm}
+                  onToggle={() => setShowPasswordConfirm((value) => !value)}
+                />
+              </RegisterField>
+            </section>
+          )}
 
-                {!loading && <ArrowRight size={18} />}
-              </button>
+          {/* ONAYLAR */}
+          {selectedType && (
+            <div className="cc-appear">
+              <ConsentGroup
+                kvkk={kvkkAccepted}
+                terms={termsAccepted}
+                onKvkkChange={setKvkkAccepted}
+                onTermsChange={setTermsAccepted}
+                onOpenDocument={setActiveDocument}
+              />
+            </div>
+          )}
 
-              <p className="text-center text-sm text-black/40">
-                Zaten hesabın var mı?{" "}
-                <button
-                  type="button"
-                  onClick={() => router.push("/login")}
-                  className="text-black font-medium hover:underline"
-                >
-                  Giriş yap
-                </button>
+          {/* HATA */}
+          {errorMessage && (
+            <div className="cc-body-sm rounded-[var(--radius-input)] border border-red-200 bg-[var(--color-error-50)] px-3 py-2.5 text-[var(--color-error-600)]">
+              {errorMessage}
+            </div>
+          )}
+
+          {/* KAYIT */}
+          <div className="space-y-3">
+            {selectedType ? (
+              <Button type="submit" size="lg" disabled={!formValid || loading} loading={loading} className="w-full">
+                {loading ? "Hesap oluşturuluyor..." : "Hesap Oluştur"}
+                {!loading && <ArrowRight size={16} />}
+              </Button>
+            ) : (
+              <p className="cc-body-sm rounded-[var(--radius-input)] border border-dashed border-[var(--color-border-strong)] px-3 py-2.5 text-center text-[var(--color-text-muted)]">
+                Devam etmek için hesap türünü seç.
               </p>
-            </form>
+            )}
+
+            <p className="cc-body-sm text-center text-[var(--color-text-secondary)]">
+              Zaten hesabın var mı?{" "}
+              <button
+                type="button"
+                onClick={() => router.push("/login")}
+                className="font-medium text-[var(--color-primary-600)] hover:underline"
+              >
+                Giriş yap
+              </button>
+            </p>
           </div>
-        </section>
-      </div>
+        </form>
+      </RegisterSplitLayout>
 
       {/* HUKUKİ METİN MODALI */}
       {activeDocument && (
@@ -610,13 +441,13 @@ export default function ClientRegisterPage() {
             {/* MODAL HEADER */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-6 py-5">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                   CollaCrew
                 </p>
 
                 <h2
                   id="legal-document-title"
-                  className="mt-1 text-xl font-semibold tracking-tight text-gray-950"
+                  className="mt-1 text-xl font-semibold text-gray-950"
                 >
                   {activeDocument === "kvkk"
                     ? "KVKK Aydınlatma Metni"
@@ -630,7 +461,7 @@ export default function ClientRegisterPage() {
                   setActiveDocument(null)
                 }
                 aria-label="Metni kapat"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-black"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-[var(--color-text-primary)]"
               >
                 <X size={18} />
               </button>
@@ -890,7 +721,7 @@ export default function ClientRegisterPage() {
 
             {/* MODAL FOOTER */}
             <div className="flex shrink-0 items-center justify-between gap-4 border-t border-gray-100 bg-gray-50 px-6 py-4">
-              <span className="text-[11px] text-gray-400">
+              <span className="text-xs text-gray-400">
                 Metin sürümü: v1
               </span>
 
@@ -899,7 +730,7 @@ export default function ClientRegisterPage() {
                 onClick={() =>
                   setActiveDocument(null)
                 }
-                className="rounded-xl bg-black px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-gray-800"
+                className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Okudum, kapat
               </button>
@@ -907,32 +738,7 @@ export default function ClientRegisterPage() {
           </div>
         </div>
       )}
-    </main>
+    </>
   );
 }
 
-function PasswordRule({
-  valid,
-  text,
-}: {
-  valid: boolean;
-  text: string;
-}) {
-  return (
-    <div
-      className={`flex items-center gap-2 ${
-        valid ? "text-green-600" : "text-black/40"
-      }`}
-    >
-      <div
-        className={`w-4 h-4 rounded-full flex items-center justify-center ${
-          valid ? "bg-green-100" : "bg-black/5"
-        }`}
-      >
-        {valid && <Check size={11} />}
-      </div>
-
-      {text}
-    </div>
-  );
-}

@@ -9,6 +9,8 @@ import {
   useState,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
+import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
+import { normalizeStringArray, stringArrayToTextColumn } from "@/lib/utils/normalizeStringArray";
 import {
   Plus,
   Trash2,
@@ -33,6 +35,7 @@ type Profile = {
   city: string | null;
   hourly_rate: number | null;
   availability: string | null;
+  availability_status: string | null;
   experience: string | null;
   expertise: string[] | null;
   work_types: string[] | null;
@@ -201,6 +204,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [activeProjectCount, setActiveProjectCount] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -328,13 +332,17 @@ export default function ProfilePage() {
           return;
         }
 
-        const profileResult = await supabase
-          .from("profiles")
-          .select(
-            "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, experience, expertise, work_types, languages, phone"
-          )
-          .eq("id", user.id)
-          .single();
+        // `phone` is a private column no longer selectable via a plain
+        // table query (see
+        // supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
+        // Reading one's OWN full row goes through this RPC instead.
+        const myProfileRpc = await supabase.rpc("get_my_full_profile");
+        const profileResult = {
+          data: Array.isArray(myProfileRpc.data)
+            ? myProfileRpc.data[0] ?? null
+            : null,
+          error: myProfileRpc.error,
+        };
 
         if (profileResult.error) {
           console.error(
@@ -344,6 +352,20 @@ export default function ProfilePage() {
             )
           );
         }
+
+        const activeMembershipResult = await supabase
+          .from("project_team_members")
+          .select("project_id, projects!inner(status)", {
+            count: "exact",
+            head: true,
+          })
+          .eq("freelancer_id", user.id)
+          .eq("status", "active")
+          .eq("projects.status", "in_progress");
+
+        setActiveProjectCount(
+          activeMembershipResult.count ?? 0
+        );
 
         const portfolioResult = await supabase
           .from("portfolio_items")
@@ -407,8 +429,18 @@ export default function ProfilePage() {
           );
         }
 
-        const profileData =
+        const rawProfileData =
           profileResult.data as Profile | null;
+
+        const profileData: Profile | null = rawProfileData
+          ? {
+              ...rawProfileData,
+              skills: normalizeStringArray(rawProfileData.skills),
+              expertise: normalizeStringArray(rawProfileData.expertise),
+              work_types: normalizeStringArray(rawProfileData.work_types),
+              languages: normalizeStringArray(rawProfileData.languages),
+            }
+          : null;
 
         setProfile(profileData);
 
@@ -436,13 +468,13 @@ export default function ProfilePage() {
             experience:
               profileData.experience || "",
             skills:
-              profileData.skills || [],
+              normalizeStringArray(profileData.skills),
             expertise:
-              profileData.expertise || [],
+              normalizeStringArray(profileData.expertise),
             work_types:
-              profileData.work_types || [],
+              normalizeStringArray(profileData.work_types),
             languages:
-              profileData.languages || [],
+              normalizeStringArray(profileData.languages),
           });
         }
       } catch (error) {
@@ -875,8 +907,13 @@ export default function ProfilePage() {
           "id",
           profile.id
         )
+        // `phone` bilerek çıkarıldı: private bir kolon, RETURNING üzerinden
+        // de olsa SELECT ayrıcalığı gerektirir (bkz.
+        // supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
+        // Aşağıda mevcut profil state'iyle merge edildiği için bellekteki
+        // phone değeri kaybolmaz.
         .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, experience, expertise, work_types, languages, phone"
+          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, experience, expertise, work_types, languages"
         )
         .single();
 
@@ -901,9 +938,14 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile(
-        data as Profile
-      );
+      setProfile((current) => ({
+        ...current,
+        ...(data as Profile),
+        skills: normalizeStringArray((data as Profile).skills),
+        expertise: normalizeStringArray((data as Profile).expertise),
+        work_types: normalizeStringArray((data as Profile).work_types),
+        languages: normalizeStringArray((data as Profile).languages),
+      }));
 
       if (
         oldAvatarUrl &&
@@ -1045,13 +1087,13 @@ export default function ProfilePage() {
         profile.experience ||
         "",
       skills:
-        profile.skills || [],
+        normalizeStringArray(profile.skills),
       expertise:
-        profile.expertise || [],
+        normalizeStringArray(profile.expertise),
       work_types:
-        profile.work_types || [],
+        normalizeStringArray(profile.work_types),
       languages:
-        profile.languages || [],
+        normalizeStringArray(profile.languages),
     });
 
     setProfileSkillSearch("");
@@ -1135,8 +1177,17 @@ export default function ProfilePage() {
             null,
           skills:
             profileForm.skills,
+          /*
+           * ÖNEMLİ: profiles.expertise gerçek Supabase kolonunda
+           * skills/work_types/languages gibi bir Postgres array DEĞİL,
+           * tek bir `text` alanıdır. Buraya doğrudan bir JS array
+           * göndermek (`profileForm.expertise`) önceden veri
+           * bozulmasına yol açıyordu (karakterlere bölünmüş, JSON'a
+           * çevrilmiş bir string olarak kaydediliyordu). Bu yüzden
+           * her zaman virgülle ayrılmış düz metne çevrilir.
+           */
           expertise:
-            profileForm.expertise,
+            stringArrayToTextColumn(profileForm.expertise),
           work_types:
             profileForm.work_types,
           languages:
@@ -1146,8 +1197,13 @@ export default function ProfilePage() {
           "id",
           profile.id
         )
+        // `phone` bilerek çıkarıldı: private bir kolon, RETURNING üzerinden
+        // de olsa SELECT ayrıcalığı gerektirir (bkz.
+        // supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
+        // Zaten yukarıda `phone`'u kendimiz yazdığımız için değerini
+        // biliyoruz; state'e onu doğrudan set ediyoruz.
         .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, experience, expertise, work_types, languages, phone"
+          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, experience, expertise, work_types, languages"
         )
         .single();
 
@@ -1166,9 +1222,15 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile(
-        data as Profile
-      );
+      setProfile((current) => ({
+        ...current,
+        ...(data as Profile),
+        phone: profileForm.phone.trim() || null,
+        skills: normalizeStringArray((data as Profile).skills),
+        expertise: normalizeStringArray((data as Profile).expertise),
+        work_types: normalizeStringArray((data as Profile).work_types),
+        languages: normalizeStringArray((data as Profile).languages),
+      }));
 
       setShowProfileForm(false);
 
@@ -1829,7 +1891,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <main className="w-full p-8">
+      <main className="w-full p-6">
         <p className="text-sm text-gray-500">
           Profil yükleniyor...
         </p>
@@ -1839,8 +1901,8 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <main className="w-full p-8">
-        <div className="rounded-2xl border border-gray-200 bg-white p-8">
+      <main className="w-full p-6">
+        <div className="rounded-xl border border-gray-200 bg-white p-6">
           <p className="text-sm text-gray-500">
             Profil bilgileri bulunamadı.
           </p>
@@ -1872,10 +1934,10 @@ export default function ProfilePage() {
       );
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       {/* PROFİL HEADER */}
 
-      <section className="mb-6 flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-8">
+      <section className="mb-6 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-5">
           <div className="relative">
             {profile.avatar_url ? (
@@ -1887,7 +1949,7 @@ export default function ProfilePage() {
                 className="h-24 w-24 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-black text-2xl font-semibold text-white">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-2xl font-semibold text-white">
                 {initials}
               </div>
             )}
@@ -1897,7 +1959,7 @@ export default function ProfilePage() {
               onClick={
                 openAvatarPicker
               }
-              className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-black text-white shadow-md transition hover:bg-gray-800"
+              className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[var(--color-primary-600)] text-white shadow-md transition hover:bg-[var(--color-primary-700)]"
               title="Profil fotoğrafını değiştir"
             >
               <Camera size={16} />
@@ -1939,16 +2001,32 @@ export default function ProfilePage() {
           onClick={
             openProfileForm
           }
-          className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-black hover:text-black"
+          className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[var(--color-primary-600)] hover:text-[var(--color-text-primary)]"
         >
           <Pencil size={16} />
           Profili Düzenle
         </button>
       </section>
 
+      {/* MÜSAİTLİK */}
+
+      <section className="mb-6">
+        <AvailabilityCard
+          status={profile.availability_status}
+          activeProjectCount={activeProjectCount}
+          onStatusChange={(next) =>
+            setProfile((current) =>
+              current
+                ? { ...current, availability_status: next }
+                : current
+            )
+          }
+        />
+      </section>
+
       {/* HAKKIMDA */}
 
-      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="mb-3 font-semibold">
           Hakkımda
         </h2>
@@ -1961,7 +2039,7 @@ export default function ProfilePage() {
 
       {/* UZMANLIKLAR */}
 
-      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="mb-4 font-semibold">
           Uzmanlıklar
         </h2>
@@ -1972,7 +2050,7 @@ export default function ProfilePage() {
               (skill) => (
                 <span
                   key={skill}
-                  className="rounded-full bg-gray-100 px-4 py-2 text-sm"
+                  className="rounded-lg bg-gray-100 px-4 py-2 text-sm"
                 >
                   {skill}
                 </span>
@@ -1989,7 +2067,7 @@ export default function ProfilePage() {
 
       {/* PORTFOLYO */}
 
-      <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="font-semibold">
@@ -2009,7 +2087,7 @@ export default function ProfilePage() {
                 true
               )
             }
-            className="flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm text-white transition hover:bg-gray-800"
+            className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
           >
             <Plus size={16} />
             Proje Ekle
@@ -2018,7 +2096,7 @@ export default function ProfilePage() {
 
         {portfolio.length ===
         0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center">
             <ImageIcon
               size={28}
               className="mx-auto mb-3 text-gray-300"
@@ -2131,7 +2209,7 @@ export default function ProfilePage() {
 
       {/* DENEYİMLER */}
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="font-semibold">
@@ -2152,7 +2230,7 @@ export default function ProfilePage() {
                 true
               )
             }
-            className="flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm text-white transition hover:bg-gray-800"
+            className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
           >
             <Plus size={16} />
             Deneyim Ekle
@@ -2161,7 +2239,7 @@ export default function ProfilePage() {
 
         {experiences.length ===
         0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 p-8 text-center">
+          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center">
             <p className="text-sm text-gray-500">
               Henüz deneyim
               eklenmedi.
@@ -2258,7 +2336,7 @@ export default function ProfilePage() {
                     false
                   )
                 }
-                className="text-gray-400 transition hover:text-black"
+                className="text-gray-400 transition hover:text-[var(--color-text-primary)]"
               >
                 <X size={20} />
               </button>
@@ -2277,7 +2355,7 @@ export default function ProfilePage() {
                     className="h-20 w-20 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-black text-xl font-semibold text-white">
+                  <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xl font-semibold text-white">
                     {initials}
                   </div>
                 )}
@@ -2287,7 +2365,7 @@ export default function ProfilePage() {
                   onClick={
                     openAvatarPicker
                   }
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-black text-white shadow"
+                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[var(--color-primary-600)] text-white shadow"
                   title="Fotoğrafı değiştir"
                 >
                   <Camera size={14} />
@@ -2313,7 +2391,7 @@ export default function ProfilePage() {
                   onClick={
                     openAvatarPicker
                   }
-                  className="mt-2 text-sm font-medium text-black underline underline-offset-4"
+                  className="mt-2 text-sm font-medium text-[var(--color-text-primary)] underline underline-offset-4"
                 >
                   Fotoğrafı
                   değiştir
@@ -2347,7 +2425,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="Adınız"
                   />
                 </div>
@@ -2373,7 +2451,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="Soyadınız"
                   />
                 </div>
@@ -2399,7 +2477,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="Örn. UI/UX Designer"
                   />
                 </div>
@@ -2425,7 +2503,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="İstanbul"
                   />
                 </div>
@@ -2451,7 +2529,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="Telefon numarası"
                   />
                 </div>
@@ -2480,7 +2558,7 @@ export default function ProfilePage() {
                               .value,
                         })
                       }
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-12 text-sm outline-none focus:border-black"
+                      className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-12 text-sm outline-none focus:border-[var(--color-primary-600)]"
                       placeholder="1500"
                     />
 
@@ -2511,7 +2589,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                   >
                     <option value="">
                       Deneyim seçin
@@ -2553,7 +2631,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                   >
                     <option value="">
                       Müsaitlik seçin
@@ -2595,7 +2673,7 @@ export default function ProfilePage() {
                       })
                     }
                     rows={4}
-                    className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm leading-6 outline-none focus:border-black"
+                    className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm leading-6 outline-none focus:border-[var(--color-primary-600)]"
                     placeholder="Kendinizden ve yaptığınız işlerden bahsedin."
                   />
                 </div>
@@ -2627,7 +2705,7 @@ export default function ProfilePage() {
                                     skill
                                   )
                                 }
-                                className="text-gray-400 transition hover:text-black"
+                                className="text-gray-400 transition hover:text-[var(--color-text-primary)]"
                                 title="Yeteneği kaldır"
                               >
                                 <X
@@ -2736,7 +2814,7 @@ export default function ProfilePage() {
                             !current
                         )
                       }
-                      className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-gray-400 focus:border-black"
+                      className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 text-left text-sm outline-none transition hover:border-gray-400 focus:border-[var(--color-primary-600)]"
                     >
                       <span
                         className={
@@ -2792,7 +2870,7 @@ export default function ProfilePage() {
                             }
                             autoFocus
                             placeholder="Uzmanlık alanı ara..."
-                            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-black"
+                            className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none transition focus:border-[var(--color-primary-600)]"
                           />
                         </div>
 
@@ -2876,7 +2954,7 @@ export default function ProfilePage() {
                                   expertise
                                 )
                               }
-                              className="flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition hover:bg-black hover:text-white"
+                              className="flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition hover:bg-[var(--color-primary-700)] hover:text-white"
                               title="Uzmanlığı kaldır"
                             >
                               <X
@@ -2919,9 +2997,9 @@ export default function ProfilePage() {
                                 option
                               )
                             }
-                            className={`rounded-full border px-4 py-2 text-sm transition ${
+                            className={`rounded-lg border px-4 py-2 text-sm transition ${
                               selected
-                                ? "border-black bg-black text-white"
+                                ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                                 : "border-gray-200 text-gray-700 hover:border-gray-400"
                             }`}
                           >
@@ -2962,9 +3040,9 @@ export default function ProfilePage() {
                                 option
                               )
                             }
-                            className={`rounded-full border px-4 py-2 text-sm transition ${
+                            className={`rounded-lg border px-4 py-2 text-sm transition ${
                               selected
-                                ? "border-black bg-black text-white"
+                                ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                                 : "border-gray-200 text-gray-700 hover:border-gray-400"
                             }`}
                           >
@@ -3003,7 +3081,7 @@ export default function ProfilePage() {
                 onClick={
                   saveProfile
                 }
-                className="flex items-center gap-2 rounded-xl bg-black px-5 py-2.5 text-sm text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Save size={16} />
 
@@ -3020,8 +3098,8 @@ export default function ProfilePage() {
 
       {showAvatarCrop &&
         avatarPreview && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-6">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-5">
+            <div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-2xl">
               <div className="mb-5 flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-semibold">
@@ -3041,7 +3119,7 @@ export default function ProfilePage() {
                   onClick={
                     closeAvatarCrop
                   }
-                  className="text-gray-400 hover:text-black"
+                  className="text-gray-400 hover:text-[var(--color-text-primary)]"
                 >
                   <X size={20} />
                 </button>
@@ -3155,7 +3233,7 @@ export default function ProfilePage() {
                   onClick={
                     saveAvatar
                   }
-                  className="flex items-center gap-2 rounded-xl bg-black px-5 py-2.5 text-sm text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Save size={16} />
 
@@ -3171,8 +3249,8 @@ export default function ProfilePage() {
       {/* PORTFOLYO FORM */}
 
       {showPortfolioForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-5">
+          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -3192,7 +3270,7 @@ export default function ProfilePage() {
                 onClick={
                   closePortfolioForm
                 }
-                className="text-gray-400 hover:text-black"
+                className="text-gray-400 hover:text-[var(--color-text-primary)]"
               >
                 <X size={20} />
               </button>
@@ -3272,7 +3350,7 @@ export default function ProfilePage() {
                     })
                   }
                   placeholder="Örn. Mobil Bankacılık Uygulaması"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                 />
               </div>
 
@@ -3295,7 +3373,7 @@ export default function ProfilePage() {
                           .value,
                     })
                   }
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-black"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                 >
                   <option value="">
                     Kategori seçin
@@ -3343,7 +3421,7 @@ export default function ProfilePage() {
                   }
                   placeholder="Projeyi ve yaptığınız çalışmayı kısaca anlatın."
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                  className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                 />
               </div>
 
@@ -3375,7 +3453,7 @@ export default function ProfilePage() {
                                   skill
                                 )
                               }
-                              className="text-gray-400 hover:text-black"
+                              className="text-gray-400 hover:text-[var(--color-text-primary)]"
                             >
                               <X
                                 size={
@@ -3490,7 +3568,7 @@ export default function ProfilePage() {
                 onClick={
                   addPortfolio
                 }
-                className="rounded-xl bg-black px-5 py-2.5 text-sm text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving
                   ? "Kaydediliyor..."
@@ -3504,8 +3582,8 @@ export default function ProfilePage() {
       {/* EXPERIENCE FORM */}
 
       {showExperienceForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-5">
+          <div className="w-full max-w-xl rounded-xl bg-white p-5 shadow-xl">
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold">
@@ -3526,7 +3604,7 @@ export default function ProfilePage() {
                     false
                   )
                 }
-                className="text-gray-400 hover:text-black"
+                className="text-gray-400 hover:text-[var(--color-text-primary)]"
               >
                 <X size={20} />
               </button>
@@ -3548,7 +3626,7 @@ export default function ProfilePage() {
                   })
                 }
                 placeholder="Şirket / müşteri adı"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
               />
 
               <input
@@ -3566,7 +3644,7 @@ export default function ProfilePage() {
                   })
                 }
                 placeholder="Pozisyon"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
               />
 
               <div className="grid grid-cols-2 gap-3">
@@ -3590,7 +3668,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                   />
                 </div>
 
@@ -3614,7 +3692,7 @@ export default function ProfilePage() {
                             .value,
                       })
                     }
-                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                    className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
                   />
                 </div>
               </div>
@@ -3635,7 +3713,7 @@ export default function ProfilePage() {
                 }
                 placeholder="Deneyiminizi kısaca anlatın."
                 rows={4}
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-black"
+                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[var(--color-primary-600)]"
               />
             </div>
 
@@ -3662,7 +3740,7 @@ export default function ProfilePage() {
                 onClick={
                   addExperience
                 }
-                className="rounded-xl bg-black px-5 py-2.5 text-sm text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {saving
                   ? "Kaydediliyor..."

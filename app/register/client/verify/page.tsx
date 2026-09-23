@@ -90,11 +90,11 @@ export default function ClientVerifyPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f7f7f5]">
+    <main className="min-h-screen bg-[var(--color-canvas)]">
       <div className="min-h-screen grid lg:grid-cols-[0.9fr_1.1fr]">
-        <section className="hidden lg:flex bg-black text-white p-12 xl:p-16 flex-col justify-between">
+        <section className="hidden lg:flex bg-[var(--color-primary-600)] text-white p-12 xl:p-16 flex-col justify-between">
           <div>
-            <div className="text-2xl font-semibold tracking-tight">
+            <div className="text-2xl font-semibold">
               CollaCrew
             </div>
 
@@ -103,7 +103,7 @@ export default function ClientVerifyPage() {
                 Müşteri hesabı
               </p>
 
-              <h1 className="text-5xl xl:text-6xl font-semibold tracking-tight leading-[1.02]">
+              <h1 className="text-5xl xl:text-6xl font-semibold tracking-[-0.02em] leading-[1.02]">
                 Bir adım daha.
               </h1>
 
@@ -122,29 +122,29 @@ export default function ClientVerifyPage() {
         <section className="flex items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-md">
             <div className="mb-8">
-              <div className="flex items-center gap-2 text-xs font-medium text-black/40 mb-5">
+              <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-text-muted)] mb-5">
                 <span>01</span>
                 <span>/</span>
-                <span className="text-black">03</span>
+                <span className="text-[var(--color-text-primary)]">03</span>
                 <span className="ml-2">
                   E-posta doğrulama
                 </span>
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-black/5 p-8 sm:p-10 shadow-sm">
-              <div className="w-14 h-14 rounded-2xl bg-black/[0.04] flex items-center justify-center">
+            <div className="bg-white rounded-xl border border-[var(--color-primary-600)]/5 p-6 sm:p-10 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--color-surface-2)] flex items-center justify-center">
                 <Mail size={25} />
               </div>
 
-              <h2 className="mt-7 text-3xl font-semibold tracking-tight">
+              <h2 className="mt-7 text-3xl font-semibold tracking-[-0.01em]">
                 E-postanı doğrula
               </h2>
 
-              <p className="mt-3 text-black/50 leading-6">
+              <p className="mt-3 text-[var(--color-text-secondary)] leading-6">
                 {email ? (
                   <>
-                    <span className="text-black font-medium">
+                    <span className="text-[var(--color-text-primary)] font-medium">
                       {email}
                     </span>{" "}
                     adresine bir doğrulama bağlantısı
@@ -155,7 +155,7 @@ export default function ClientVerifyPage() {
                 )}
               </p>
 
-              <div className="mt-8 rounded-2xl bg-black/[0.03] p-4">
+              <div className="mt-8 rounded-2xl bg-[var(--color-surface-2)] p-4">
                 <div className="flex gap-3">
                   <CheckCircle2
                     size={20}
@@ -167,7 +167,7 @@ export default function ClientVerifyPage() {
                       Gelen kutunu kontrol et
                     </p>
 
-                    <p className="mt-1 text-xs text-black/45 leading-5">
+                    <p className="mt-1 text-xs text-[var(--color-text-muted)] leading-5">
                       E-postadaki doğrulama bağlantısına
                       tıklayarak hesabını aktifleştirebilirsin.
                     </p>
@@ -176,7 +176,7 @@ export default function ClientVerifyPage() {
               </div>
 
               {loading ? (
-                <div className="mt-8 flex items-center justify-center gap-2 text-sm text-black/50">
+                <div className="mt-8 flex items-center justify-center gap-2 text-sm text-[var(--color-text-secondary)]">
                   <Loader2
                     size={17}
                     className="animate-spin"
@@ -187,7 +187,7 @@ export default function ClientVerifyPage() {
                 <button
                   type="button"
                   onClick={checkVerification}
-                  className="mt-8 w-full h-12 rounded-xl bg-black text-white font-medium flex items-center justify-center gap-2 hover:bg-black/90 transition"
+                  className="mt-8 w-full h-12 rounded-xl bg-[var(--color-primary-600)] text-white font-medium flex items-center justify-center gap-2 hover:bg-[var(--color-primary-700)] transition"
                 >
                   Doğrulamayı kontrol et
                 </button>
@@ -201,7 +201,7 @@ export default function ClientVerifyPage() {
                   resending ||
                   cooldown > 0
                 }
-                className="mt-4 w-full h-12 rounded-xl border border-black/10 bg-white font-medium flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-black/[0.02] transition"
+                className="mt-4 w-full h-12 rounded-xl border border-[var(--color-primary-600)]/10 bg-white font-medium flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-canvas)] transition"
               >
                 {resending ? (
                   <>
@@ -236,7 +236,7 @@ export default function ClientVerifyPage() {
                 </p>
               )}
 
-              <p className="mt-7 text-xs text-black/35 text-center leading-5">
+              <p className="mt-7 text-xs text-[var(--color-text-muted)] text-center leading-5">
                 E-postayı göremiyorsan spam veya gereksiz
                 klasörünü kontrol et.
               </p>

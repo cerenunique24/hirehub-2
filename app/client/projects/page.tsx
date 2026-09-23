@@ -89,14 +89,14 @@ export default function ClientProjectsPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900">Projeler</h1>
+            <h1 className="text-3xl font-semibold text-neutral-900">Projeler</h1>
             <p className="mt-1 text-sm text-neutral-500">Taslak, yayındaki ve devam eden projelerinizi yönetin.</p>
           </div>
-          <Link href="/client/projects/new" className="rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white">
+          <Link href="/client/projects/new" className="rounded-lg bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white">
             Yeni Proje Oluştur
           </Link>
         </header>
@@ -116,25 +116,25 @@ export default function ClientProjectsPage() {
           </div>
         )}
 
-        <div className="mb-6 flex w-fit gap-2 rounded-xl bg-neutral-100 p-1.5">
+        <div className="mb-6 flex w-fit gap-1 rounded-lg bg-neutral-100 p-1">
           <button
             type="button"
             onClick={() => setTab("active")}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${tab === "active" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "active" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
             Aktif Projeler ({activeProjects.length})
           </button>
           <button
             type="button"
             onClick={() => setTab("open")}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${tab === "open" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "open" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
             Yayındaki Projeler ({openProjects.length})
           </button>
           <button
             type="button"
             onClick={() => setTab("all")}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${tab === "all" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "all" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
             Tüm Projeler ({projects.length})
           </button>
@@ -148,48 +148,61 @@ export default function ClientProjectsPage() {
         ) : error ? (
           <p className="rounded-xl bg-red-50 p-4 text-sm text-red-600">{error}</p>
         ) : visibleProjects.length === 0 ? (
-          <div className="rounded-3xl border border-neutral-200 bg-white p-10 text-center shadow-sm">
+          <div className="rounded-xl border border-neutral-200 bg-white p-10 text-center shadow-sm">
             <FolderPlus className="mx-auto text-neutral-400" />
             <h2 className="mt-4 text-xl font-semibold">{emptyCopy[tab].title}</h2>
             <p className="mt-2 text-sm text-neutral-500">{emptyCopy[tab].body}</p>
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="flex flex-col gap-3">
             {visibleProjects.map((project) => {
               const isActive = project.status === "in_progress";
               return (
                 <Link
                   key={project.id}
                   href={`/client/projects/${project.id}`}
-                  className={`rounded-2xl border p-6 shadow-sm transition hover:shadow-md ${
+                  className={`flex flex-col gap-3 rounded-xl border p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4 ${
                     isActive ? "border-emerald-200 bg-emerald-50/40" : "border-neutral-200 bg-white"
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-xl font-semibold text-neutral-900">{project.title}</h2>
-                      <p className="mt-2 line-clamp-2 text-neutral-500">{project.description}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3 sm:justify-start">
+                      <h2 className="truncate text-[15px] font-medium text-neutral-900">{project.title}</h2>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:hidden ${
+                          isActive ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"
+                        }`}
+                      >
+                        {statusLabel(project.status)}
+                      </span>
                     </div>
+                    <p className="mt-1 line-clamp-2 text-[13px] leading-5 text-neutral-500">{project.description}</p>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {(project.skills ?? []).slice(0, 3).map((skill) => (
+                        <span key={skill} className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs text-neutral-600">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-2">
                     <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
+                      className={`hidden shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium sm:inline-flex ${
                         isActive ? "bg-emerald-100 text-emerald-700" : "bg-neutral-100 text-neutral-600"
                       }`}
                     >
                       {statusLabel(project.status)}
                     </span>
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-500">
-                      <span>{formatCurrency(Number(project.budget_max ?? project.budget ?? 0))}</span>
-                      {(project.skills ?? []).slice(0, 3).map((skill) => (
-                        <span key={skill} className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+
+                    <span className="text-sm font-medium text-neutral-900">
+                      {formatCurrency(Number(project.budget_max ?? project.budget ?? 0))}
+                    </span>
+
                     {isActive && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white">
-                        Workroom'a git
+                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white">
+                        Workroom&apos;a git
                         <ArrowRight size={13} />
                       </span>
                     )}

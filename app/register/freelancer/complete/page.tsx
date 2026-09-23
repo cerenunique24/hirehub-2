@@ -11,7 +11,7 @@ export default function FreelancerCompletePage() {
   const router = useRouter();
 
   return (
-    <main className="min-h-screen bg-[#F7F8FA] px-4 py-8 sm:px-6 sm:py-10">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-4 py-8 sm:px-6 sm:py-10">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] w-full max-w-xl items-center justify-center">
         <div className="w-full rounded-[32px] bg-white p-7 text-center shadow-[0_20px_70px_rgba(0,0,0,0.07)] sm:p-12">
 
@@ -30,7 +30,7 @@ export default function FreelancerCompletePage() {
             Profilin hazır
           </div>
 
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight text-gray-950 sm:text-4xl">
+          <h1 className="mt-5 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
             Hoş geldin!
           </h1>
 
@@ -47,7 +47,7 @@ export default function FreelancerCompletePage() {
                 <Check
                   size={17}
                   className="text-green-600"
-                  strokeWidth={2.5}
+                  strokeWidth={1.7}
                 />
               </div>
 
@@ -67,7 +67,7 @@ export default function FreelancerCompletePage() {
                 <Check
                   size={17}
                   className="text-green-600"
-                  strokeWidth={2.5}
+                  strokeWidth={1.7}
                 />
               </div>
 
@@ -87,7 +87,7 @@ export default function FreelancerCompletePage() {
                 <Check
                   size={17}
                   className="text-green-600"
-                  strokeWidth={2.5}
+                  strokeWidth={1.7}
                 />
               </div>
 
@@ -108,7 +108,7 @@ export default function FreelancerCompletePage() {
             onClick={() =>
               router.push("/freelancers/dashboard")
             }
-            className="mx-auto mt-8 flex h-12 w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-black px-6 text-sm font-semibold text-white transition hover:bg-gray-800"
+            className="mx-auto mt-8 flex h-12 w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
           >
             Freelancer Paneline Git
             <ArrowRight size={17} />

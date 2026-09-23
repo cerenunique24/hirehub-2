@@ -1,17 +1,22 @@
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
 import PageContainer from "@/components/layout/PageContainer";
+import { requireSession } from "@/lib/auth/session";
 
 
-export default function ClientLayout({
+export default async function ClientLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Sunucu tarafı oturum kontrolü — oturum yoksa /login'e yönlendirir.
+  // Bu, sadece Sidebar'ın client-side yönlendirmesine güvenmek yerine,
+  // korumalı içeriğin oturumsuz kullanıcıya hiç render edilmemesini sağlar.
+  await requireSession();
 
   return (
 
-    <div className="flex min-h-screen bg-[#f8f8f8]">
+    <div className="flex min-h-screen bg-[var(--color-canvas)]">
 
 
       <Sidebar />

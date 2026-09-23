@@ -228,7 +228,7 @@ export default function NotificationsDropdown() {
         </div>
 
         {unreadCount > 0 && (
-          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-black px-2 text-[10px] font-semibold text-white">
+          <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--color-primary-600)] px-2 text-[10px] font-semibold text-white">
             {unreadCount > 99
               ? "99+"
               : unreadCount}
@@ -300,7 +300,7 @@ export default function NotificationsDropdown() {
                     </p>
                   )}
 
-                  <p className="mt-2 text-[10px] text-gray-400">
+                  <p className="mt-2 text-xs text-gray-400">
                     {formatTime(
                       notification.created_at
                     )}

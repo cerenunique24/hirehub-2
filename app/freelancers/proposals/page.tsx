@@ -8,7 +8,10 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { checkAndUpdateProjectReadiness } from "@/lib/projects/teamReadiness";
+import {
+  checkAndUpdateProjectReadiness,
+  describeAcceptPlacementError,
+} from "@/lib/projects/teamReadiness";
 import { notifyUsers } from "@/lib/notifications";
 
 type Proposal = {
@@ -293,22 +296,22 @@ export default function OffersPage() {
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from("project_team_invitations")
-        .update({
-          status,
-          responded_at: new Date().toISOString(),
-        })
-        .eq("id", invitation.id)
-        .eq("status", "pending");
-
-      if (updateError) {
-        console.error("Invitation update error:", updateError);
-        setInvitationsError("Teklif güncellenemedi.");
-        return;
-      }
-
       if (status === "rejected") {
+        const { error: updateError } = await supabase
+          .from("project_team_invitations")
+          .update({
+            status: "rejected",
+            responded_at: new Date().toISOString(),
+          })
+          .eq("id", invitation.id)
+          .eq("status", "pending");
+
+        if (updateError) {
+          console.error("Invitation update error:", updateError);
+          setInvitationsError("Teklif güncellenemedi.");
+          return;
+        }
+
         await notifyUsers(supabase, [
           {
             userId: invitation.client_id,
@@ -321,28 +324,19 @@ export default function OffersPage() {
       }
 
       if (status === "accepted") {
-        const { error: memberError } = await supabase
-          .from("project_team_members")
-          .insert({
-            project_id: invitation.project_id,
-            freelancer_id: userId,
-            role: invitation.role,
-            invitation_id: invitation.id,
-            joined_via: "invitation",
-            status: "active",
-          });
+        // Rol kapasitesi (memberCount) ve tekrar üyelik kontrolü, hem bu
+        // akış hem de client'ın teklif kabul akışı tarafından kullanılan
+        // TEK, atomik ve race-condition'a dayanıklı DB fonksiyonunda
+        // (accept_project_placement) yapılıyor. Buradaki client kodu bu
+        // sonucu sadece UI'a yansıtır; yetkilendirme sınırı burası değildir.
+        const { error: acceptError } = await supabase.rpc(
+          "accept_project_placement",
+          { p_source: "invitation", p_source_id: invitation.id }
+        );
 
-        if (memberError) {
-          console.error("Team member insert error:", memberError);
-
-          await supabase
-            .from("project_team_invitations")
-            .update({ status: "pending", responded_at: null })
-            .eq("id", invitation.id);
-
-          setInvitationsError(
-            "Ekibe katılırken bir hata oluştu, teklif tekrar bekleyen durumuna alındı."
-          );
+        if (acceptError) {
+          console.error("Invitation acceptance error:", acceptError);
+          setInvitationsError(describeAcceptPlacementError(acceptError.message));
           return;
         }
 
@@ -435,7 +429,7 @@ export default function OffersPage() {
     activeTab === "sent" ? setProposalFilter : setInvitationFilter;
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Teklifler</h1>
 
@@ -450,9 +444,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setActiveTab("sent")}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "sent"
-              ? "border-black text-gray-900"
+              ? "border-[var(--color-primary-600)] text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-800"
           }`}
         >
@@ -466,9 +460,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setActiveTab("received")}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "received"
-              ? "border-black text-gray-900"
+              ? "border-[var(--color-primary-600)] text-gray-900"
               : "border-transparent text-gray-500 hover:text-gray-800"
           }`}
         >
@@ -485,9 +479,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setFilterValue("all")}
-          className={`rounded-full px-5 py-2 text-sm transition ${
+          className={`rounded-lg px-4 py-1.5 text-sm transition ${
             filterValue === "all"
-              ? "bg-black text-white"
+              ? "bg-[var(--color-primary-600)] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -497,9 +491,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setFilterValue("pending")}
-          className={`rounded-full px-5 py-2 text-sm transition ${
+          className={`rounded-lg px-4 py-1.5 text-sm transition ${
             filterValue === "pending"
-              ? "bg-black text-white"
+              ? "bg-[var(--color-primary-600)] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -509,9 +503,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setFilterValue("accepted")}
-          className={`rounded-full px-5 py-2 text-sm transition ${
+          className={`rounded-lg px-4 py-1.5 text-sm transition ${
             filterValue === "accepted"
-              ? "bg-black text-white"
+              ? "bg-[var(--color-primary-600)] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -521,9 +515,9 @@ export default function OffersPage() {
         <button
           type="button"
           onClick={() => setFilterValue("rejected")}
-          className={`rounded-full px-5 py-2 text-sm transition ${
+          className={`rounded-lg px-4 py-1.5 text-sm transition ${
             filterValue === "rejected"
-              ? "bg-black text-white"
+              ? "bg-[var(--color-primary-600)] text-white"
               : "bg-gray-100 text-gray-700 hover:bg-gray-200"
           }`}
         >
@@ -549,7 +543,7 @@ export default function OffersPage() {
               <button
                 type="button"
                 onClick={() => void loadProposals()}
-                className="mt-5 rounded-xl bg-black px-5 py-2.5 text-sm text-white transition hover:bg-gray-800"
+                className="mt-5 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Tekrar Dene
               </button>
@@ -575,7 +569,7 @@ export default function OffersPage() {
                 {proposalFilter === "all" && (
                   <Link
                     href="/freelancers/discover"
-                    className="mt-5 inline-flex rounded-xl bg-black px-5 py-2.5 text-sm text-white transition hover:bg-gray-800"
+                    className="mt-5 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
                   >
                     Projeleri Keşfet
                   </Link>
@@ -593,7 +587,7 @@ export default function OffersPage() {
                   return (
                     <div
                       key={proposal.id}
-                      className="flex w-full items-center justify-between gap-6 rounded-2xl border border-gray-200 bg-white p-6 transition hover:shadow-sm"
+                      className="flex w-full items-center justify-between gap-6 rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -648,7 +642,7 @@ export default function OffersPage() {
                         {project?.client_id && (
                           <Link
                             href={`/freelancers/messages?user=${project.client_id}&proposal=${proposal.id}`}
-                            className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                            className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                           >
                             Mesajlar
                           </Link>
@@ -689,7 +683,7 @@ export default function OffersPage() {
               <button
                 type="button"
                 onClick={() => void loadInvitations()}
-                className="mt-5 rounded-xl bg-black px-5 py-2.5 text-sm text-white transition hover:bg-gray-800"
+                className="mt-5 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Tekrar Dene
               </button>
@@ -720,7 +714,7 @@ export default function OffersPage() {
                 {filteredInvitations.map((invitation) => (
                   <div
                     key={invitation.id}
-                    className="w-full rounded-2xl border border-gray-200 bg-white p-6 transition hover:shadow-sm"
+                    className="w-full rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-4">
                       <div className="min-w-0 flex-1">
@@ -802,7 +796,7 @@ export default function OffersPage() {
                                   "accepted"
                                 )
                               }
-                              className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+                              className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
                             >
                               {respondingId === invitation.id
                                 ? "İşleniyor..."

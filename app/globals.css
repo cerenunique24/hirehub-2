@@ -1,91 +1,622 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #111111;
+  /* =========================================================
+     COLLA CREW — COLOR SYSTEM
+     ========================================================= */
 
-  --surface: #f7f7f7;
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #e9edef;
 
-  --primary: #000000;
-  --primary-hover: #111111;
+  /* Text */
+  --color-text-primary: #0f1f47;
+  --color-text-secondary: #53627f;
+  --color-text-muted: #8994aa;
 
-  --success: #16a34a;
-  --warning: #f59e0b;
-  --danger: #ef4444;
+  /* Borders */
+  --color-border-subtle: #dfe4ea;
+  --color-border-strong: #c8d0dc;
+
+  /* Primary — electric blue */
+  --color-primary-600: #1037f2;
+  --color-primary-700: #0e2f98;
+  --color-primary-50: #eef2ff;
+
+  /* AI — brand blue instead of purple */
+  --color-ai-600: #1037f2;
+  --color-ai-50: #eef2ff;
+
+  /* Semantic */
+  --color-success-600: #16a34a;
+  --color-success-50: #f0fdf4;
+  --color-warning-600: #d97706;
+  --color-warning-50: #fffbeb;
+  --color-error-600: #dc2626;
+  --color-error-50: #fef2f2;
+  --color-info-600: #2563eb;
+  --color-info-50: #eff6ff;
+
+  /* =========================================================
+     LEGACY ALIASES
+     Keep temporarily so existing pages do not break.
+     ========================================================= */
+  --background: var(--color-canvas);
+  --foreground: var(--color-text-primary);
+  --surface: var(--color-surface-2);
+  --primary: var(--color-primary-600);
+  --primary-hover: var(--color-primary-700);
+  --success: var(--color-success-600);
+  --warning: var(--color-warning-600);
+  --danger: var(--color-error-600);
+
+ /* =========================================================
+   COLLA CREW — TYPOGRAPHY SYSTEM
+   Geist / Ramp × Vercel inspired
+   ========================================================= */
+
+/* Display */
+--font-size-display: 2rem;           /* 32px */
+--line-height-display: 2.5rem;       /* 40px */
+--weight-display: 600;
+--tracking-display: -0.02em;
+
+/* Page title */
+--font-size-page-title: 1.5rem;      /* 24px */
+--line-height-page-title: 1.875rem;  /* 30px */
+--weight-page-title: 600;
+--tracking-page-title: -0.015em;
+
+/* H1 */
+--font-size-h1: 1.3125rem;            /* 21px */
+--line-height-h1: 1.75rem;            /* 28px */
+--weight-h1: 600;
+--tracking-h1: -0.01em;
+
+/* H2 */
+--font-size-h2: 1.0625rem;            /* 17px */
+--line-height-h2: 1.5rem;             /* 24px */
+--weight-h2: 600;
+--tracking-h2: normal;
+
+/* H3 */
+--font-size-h3: 0.875rem;             /* 14px */
+--line-height-h3: 1.25rem;            /* 20px */
+--weight-h3: 500;
+--tracking-h3: normal;
+
+/* Body Large */
+--font-size-body-lg: 0.9375rem;       /* 15px */
+--line-height-body-lg: 1.5rem;        /* 24px */
+--weight-body-lg: 400;
+
+/* Body */
+--font-size-body: 0.875rem;           /* 14px */
+--line-height-body: 1.375rem;         /* 22px */
+--weight-body: 400;
+
+/* Body Small */
+--font-size-body-sm: 0.8125rem;       /* 13px */
+--line-height-body-sm: 1.25rem;       /* 20px */
+--weight-body-sm: 400;
+
+/* Label */
+--font-size-label: 0.8125rem;         /* 13px */
+--line-height-label: 1.125rem;        /* 18px */
+--weight-label: 500;
+
+/* Caption — floor for UI text; nothing smaller than 12px */
+--font-size-caption: 0.75rem;         /* 12px */
+--line-height-caption: 1.125rem;      /* 18px */
+--weight-caption: 400;
+
+/* Button */
+--font-size-button: 0.8125rem;        /* 13px */
+--line-height-button: 1.125rem;       /* 18px */
+--weight-button: 500;
+
+/* Tab */
+--font-size-tab: 0.8125rem;           /* 13px */
+--line-height-tab: 1.125rem;          /* 18px */
+--weight-tab: 500;
+
+/* Filter */
+--font-size-filter: 0.8125rem;        /* 13px */
+--line-height-filter: 1.25rem;        /* 20px */
+--weight-filter: 500;
+
+/* =========================================================
+   SPACING SYSTEM
+   ========================================================= */
+
+   --space-1: 0.25rem;    /* 4px */
+   --space-2: 0.5rem;     /* 8px */
+   --space-3: 0.75rem;    /* 12px */
+   --space-4: 1rem;       /* 16px */
+   --space-5: 1.25rem;    /* 20px */
+   --space-6: 1.5rem;     /* 24px */
+   --space-8: 2rem;       /* 32px */
+   --space-10: 2.5rem;    /* 40px */
+   --space-12: 3rem;      /* 48px */
+   --space-16: 4rem;      /* 64px */
+   --space-20: 5rem;      /* 80px */
+   --space-24: 6rem;      /* 96px */
+   
+   /* Text rhythm */
+   --space-text-xs: 0.25rem;    /* 4px */
+   --space-text-sm: 0.5rem;     /* 8px */
+   --space-text-md: 0.75rem;    /* 12px */
+   --space-text-lg: 1rem;       /* 16px */
+   
+   /* Section rhythm */
+   --space-section-sm: 1.5rem;  /* 24px */
+   --space-section-md: 2rem;    /* 32px */
+   --space-section-lg: 3rem;    /* 48px */
+   --space-section-xl: 4rem;    /* 64px */
+
+  /* =========================================================
+     RHYTHM
+     ========================================================= */
+  --rhythm-label-gap: 0.375rem;               /* 6px  label → input */
+  --rhythm-title-gap: var(--space-2);         /* 8px  title → description */
+  --rhythm-card-secondary-gap: var(--space-2); /* 8px  card title → secondary info */
+  --rhythm-description-gap: var(--space-3);   /* 12px secondary info → description */
+  --rhythm-meta-gap: var(--space-4);          /* 16px description → metadata, metadata → CTA */
+  --rhythm-meta-group-gap: var(--space-3);    /* 12px between metadata groups */
+  --rhythm-section-title-gap: var(--space-5); /* 20px section title → content */
+  --rhythm-cluster-gap: var(--space-2);
+  --rhythm-row-gap: var(--space-3);
+  --rhythm-group-gap: var(--space-4);
+  --rhythm-card-gap: var(--space-5);
+  --rhythm-header-gap: var(--space-8);
+  --rhythm-section-gap: var(--space-10);
+  --rhythm-page-gap: var(--space-12);
+
+  /* =========================================================
+     LAYOUT
+     ========================================================= */
+  --page-padding-x: 1.5rem;
+  --page-padding-x-mobile: 1rem;
+  --page-content-max-width: 80rem;
+  --section-gap: 2rem;
+  --content-gap: 1rem;
+  --grid-gap: 1rem;
+  --grid-gap-large: 1.5rem;
+
+  /* =========================================================
+     COMPONENT DIMENSIONS
+     Slightly more compact
+     ========================================================= */
+  --control-height-sm: 2rem;         /* 32px */
+  --control-height-md: 2.25rem;      /* 36px */
+  --control-height-lg: 2.5rem;       /* 40px */
+
+  --button-height-sm: 2rem;          /* 32px */
+  --button-height-md: 2.25rem;       /* 36px */
+  --button-height-lg: 2.5rem;        /* 40px */
+
+  --button-padding-sm: 0.625rem;     /* 10px */
+  --button-padding-md: 0.75rem;      /* 12px */
+  --button-padding-lg: 0.875rem;     /* 14px */
+  --button-gap: 0.375rem;            /* 6px icon ↔ text */
+
+  --input-height: 2.25rem;           /* 36px */
+  --input-padding-x: 0.75rem;        /* 12px */
+
+ /* =========================================================
+   RADIUS SYSTEM
+   Sharp / compact product UI
+   ========================================================= */
+
+--radius-xs: 4px;
+--radius-sm: 6px;
+--radius-md: 8px;
+--radius-lg: 12px;
+
+/* Semantic */
+--radius-button: 6px;
+--radius-input: 8px;
+--radius-card: 10px;
+--radius-modal: 12px;
+--radius-select: 6px;
+--radius-menu: 8px;
+--radius-filter: 6px;
+--radius-tab: 6px;
+--radius-nav: 6px;
+
+/* Only for real badges / status indicators — never for buttons. */
+--radius-pill: 9999px;
+
+  /* =========================================================
+     BORDERS
+     ========================================================= */
+  --border-width: 1px;
+
+  /* =========================================================
+     SHADOWS
+     ========================================================= */
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px rgb(15 23 42 / 0.06);
+  --shadow-lg: 0 12px 32px rgb(15 23 42 / 0.08);
+
+  /* =========================================================
+     MOTION
+     ========================================================= */
+  --transition-fast: 120ms ease;
+  --transition-normal: 180ms ease;
+  --transition-slow: 240ms ease;
 }
 
+/* =========================================================
+  TAILWIND THEME
+  ========================================================= */
 @theme inline {
+  /* Every font-sans / default font resolves to Geist. */
+  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-background: var(--background);
+  /* 12px stays the floor, with an 18px line-height so it never reads cramped. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
 
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--color-canvas);
+  --color-surface-1: var(--color-surface-1);
+  --color-surface-2: var(--color-surface-2);
 
-  --color-primary: var(--primary);
+  --color-background: var(--color-canvas);
+  --color-foreground: var(--color-text-primary);
 
-  --color-primary-hover: var(--primary-hover);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
 
-  --color-surface: var(--surface);
+  --color-border-subtle: var(--color-border-subtle);
+  --color-border-strong: var(--color-border-strong);
 
+  --color-primary: var(--color-primary-600);
+  --color-primary-hover: var(--color-primary-700);
+  --color-primary-600: var(--color-primary-600);
+  --color-primary-700: var(--color-primary-700);
+  --color-primary-50: var(--color-primary-50);
+
+  --color-ai: var(--color-ai-600);
+  --color-ai-soft: var(--color-ai-50);
+  --color-ai-600: var(--color-ai-600);
+  --color-ai-50: var(--color-ai-50);
+
+  --color-success-600: var(--color-success-600);
+  --color-success-50: var(--color-success-50);
+
+  --color-warning-600: var(--color-warning-600);
+  --color-warning-50: var(--color-warning-50);
+
+  --color-error-600: var(--color-error-600);
+  --color-error-50: var(--color-error-50);
+
+  --color-info-600: var(--color-info-600);
+  --color-info-50: var(--color-info-50);
+}
+
+/* Resets live in the base layer so utility classes (mt-*, text-*, etc.)
+   always win. Unlayered resets silently override Tailwind utilities. */
+@layer base {
+/* =========================================================
+  GLOBAL RESET
+  ========================================================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-canvas);
+  color: var(--color-text-primary);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
-/*
- * Authenticated role panels share one layout rhythm.  Existing pages retain
- * their local structures, while their former outer p-6/p-8 wrappers are
- * neutralised here to avoid a role-specific second layer of page padding.
- */
+/* =========================================================
+  BASE TYPOGRAPHY
+  ========================================================= */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: var(--color-text-primary);
+  letter-spacing: normal;
+}
+
+p {
+  margin: 0;
+}
+
+/* Form controls never fall back to the browser default font. */
+button,
+input,
+textarea,
+select,
+option,
+optgroup {
+  font-family: inherit;
+  font-feature-settings: inherit;
+  letter-spacing: inherit;
+}
+
+}
+
+@layer components {
+/* =========================================================
+  SEMANTIC TYPOGRAPHY UTILITIES
+  ========================================================= */
+  .cc-display {
+    font-size: var(--font-size-display);
+    line-height: var(--line-height-display);
+    font-weight: var(--weight-display);
+    letter-spacing: var(--tracking-display);
+  }
+  
+  .cc-page-title {
+    font-size: var(--font-size-page-title);
+    line-height: var(--line-height-page-title);
+    font-weight: var(--weight-page-title);
+    letter-spacing: var(--tracking-page-title);
+  }
+  
+  .cc-h1 {
+    font-size: var(--font-size-h1);
+    line-height: var(--line-height-h1);
+    font-weight: var(--weight-h1);
+    letter-spacing: var(--tracking-h1);
+  }
+  
+  .cc-h2 {
+    font-size: var(--font-size-h2);
+    line-height: var(--line-height-h2);
+    font-weight: var(--weight-h2);
+    letter-spacing: var(--tracking-h2);
+  }
+  
+  .cc-h3 {
+    font-size: var(--font-size-h3);
+    line-height: var(--line-height-h3);
+    font-weight: var(--weight-h3);
+    letter-spacing: var(--tracking-h3);
+  }
+  
+  .cc-body-lg {
+    font-size: var(--font-size-body-lg);
+    line-height: var(--line-height-body-lg);
+    font-weight: var(--weight-body-lg);
+  }
+  
+  .cc-body {
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
+    font-weight: var(--weight-body);
+  }
+  
+  .cc-body-sm {
+    font-size: var(--font-size-body-sm);
+    line-height: var(--line-height-body-sm);
+    font-weight: var(--weight-body-sm);
+  }
+  
+  .cc-label {
+    font-size: var(--font-size-label);
+    line-height: var(--line-height-label);
+    font-weight: var(--weight-label);
+  }
+  
+  .cc-caption {
+    font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption);
+    font-weight: var(--weight-caption);
+  }
+  
+  .cc-button-text {
+    font-size: var(--font-size-button);
+    line-height: var(--line-height-button);
+    font-weight: var(--weight-button);
+  }
+  
+  .cc-tab-text {
+    font-size: var(--font-size-tab);
+    line-height: var(--line-height-tab);
+    font-weight: var(--weight-tab);
+  }
+  
+  .cc-filter-text {
+    font-size: var(--font-size-filter);
+    line-height: var(--line-height-filter);
+    font-weight: var(--weight-filter);
+  }
+
+/* =========================================================
+  APPLICATION PAGE LAYOUT
+  ========================================================= */
 .panel-page-shell {
   width: 100%;
-  max-width: 80rem;
+  max-width: var(--page-content-max-width);
   margin-inline: auto;
-  padding: 1.5rem;
-}
-
-.panel-page-shell > :is([class~="p-6"], [class~="p-8"]) {
-  padding: 0;
-}
-
-.form-control {
-  width: 100%;
-  min-height: 2.75rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 0.75rem;
-  background: #fff;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  color: #171717;
-  outline: none;
-}
-
-.form-control:focus {
-  border-color: #171717;
-  box-shadow: 0 0 0 4px rgb(0 0 0 / 5%);
-}
-
-.project-input {
-  min-height: 3.25rem;
-  border-color: #d4d4d4;
-  border-radius: 0.875rem;
-  padding-inline: 1rem;
-  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
-}
-
-.project-input:hover {
-  border-color: #a3a3a3;
-}
-
-textarea.project-input {
-  min-height: 13rem;
-  padding-top: 0.875rem;
+  padding-inline: var(--page-padding-x);
+  padding-block: var(--space-8);
 }
 
 @media (min-width: 1024px) {
   .panel-page-shell {
-    padding: 2rem;
+    padding-inline: var(--space-8);
   }
+}
+
+/* =========================================================
+  STANDARD FORM CONTROL
+  ========================================================= */
+.form-control {
+  width: 100%;
+  min-height: var(--input-height);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.form-control:hover {
+  border-color: var(--color-border-strong);
+}
+
+.form-control:focus {
+  border-color: var(--color-primary-600);
+  box-shadow: 0 0 0 3px var(--color-primary-50);
+}
+
+.form-control:disabled {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+/* =========================================================
+  PROJECT INPUT
+  ========================================================= */
+.project-input {
+  min-height: var(--control-height-lg);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  padding-inline: var(--space-3);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.project-input:hover {
+  border-color: var(--color-border-strong);
+}
+
+.project-input:focus {
+  border-color: var(--color-primary-600);
+  box-shadow: 0 0 0 3px var(--color-primary-50);
+}
+
+textarea.project-input {
+  min-height: 13rem;
+  padding-block: var(--space-3);
+}
+
+}
+
+/* =========================================================
+  RESPONSIVE PAGE LAYOUT
+  ========================================================= */
+@media (max-width: 767px) {
+}
+/* =========================================================
+  LANDING MOTION
+  Calm, one-shot motion. Elements are revealed by the client
+  <Reveal>/<InView> helpers setting data-visible="true".
+  ========================================================= */
+@layer components {
+  .cc-enter {
+    animation: cc-enter 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+
+  .cc-reveal {
+    opacity: 0;
+    transition:
+      opacity 600ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+
+  .cc-reveal[data-variant="up"] { transform: translateY(16px); }
+  .cc-reveal[data-variant="scale"] { transform: scale(0.97); }
+  .cc-reveal[data-variant="right"] { transform: translateX(32px); }
+  .cc-reveal[data-variant="panel"] { transform: translateY(28px) scale(0.985); }
+
+  .cc-reveal[data-visible="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Subtle dotted grid used behind the hero — static, no motion. */
+  .cc-grid-bg {
+    background-image:
+      linear-gradient(to right, var(--color-border-subtle) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-border-subtle) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+  }
+}
+
+@keyframes cc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .cc-reveal[data-variant="right"] { transform: translateY(12px); }
+  .cc-reveal[data-variant="panel"] { transform: translateY(16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-enter { animation: none; }
+
+  .cc-reveal,
+  .cc-reveal[data-variant] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Short reveal for form sections that open after a choice (register). */
+@layer components {
+  .cc-appear {
+    animation: cc-appear 220ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+
+@keyframes cc-appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-appear { animation: none; }
 }

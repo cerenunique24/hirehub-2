@@ -1,17 +1,75 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { createServerClient } from "@supabase/ssr";
 
-const PROTECTED_PREFIXES = ["/client", "/freelancers"];
-
-/**
- * Kök sebep düzeltmesi: uygulamada hiç middleware yoktu, bu yüzden
- * `/client/**` ve `/freelancers/**` sayfaları oturum olmadan da
- * render ediliyordu (sayfa içindeki component kendi içinde bir hata
- * mesajı gösteriyordu ama gerçek bir yönlendirme hiç olmuyordu).
- * Bu middleware her istekte Supabase session'ını yeniler ve
- * korumalı alanlara girişte gerçek bir server-side redirect yapar.
+/*
+ * Bu proje Next.js 16 kullanıyor; `middleware.ts` artık deprecated ve
+ * yerini `proxy.ts` aldı (bkz. node_modules/next/dist/docs/.../proxy.md).
+ * Davranış aynı: her istekten önce, sayfa render edilmeden çalışır.
+ *
+ * Amaç: `/client/*` ve `/freelancers/*` altındaki korumalı alanlara
+ * oturumsuz erişimi, sayfa hiç render edilmeden burada engellemek.
+ * Önceden bu kontrol sadece her sidebar bileşeninin kendi
+ * `useEffect` içinde yaptığı client-side `router.replace("/login")`
+ * çağrısına bırakılmıştı — freelancer sidebar'ı bunu yapıyordu, client
+ * sidebar'ı yapmıyordu (bkz. HIREHUB_AUDIT_CONTEXT.md §7/§27/§28) ve
+ * ikisi de sayfa içeriği bir an için render edildikten SONRA devreye
+ * giriyordu. Bu, bir güvenlik sınırı değildi.
+ *
+ * Bu dosya o sınırı değiştirmez — hâlâ her API route kendi
+ * `auth.getUser()` kontrolünü yapmaya devam eder ve RLS aktif kalır.
+ * Bu sadece EK bir katman: sayfa isteklerini erken, tutarlı şekilde
+ * yönlendirir. (Next.js'in kendi proxy dokümantasyonu da bunu tavsiye
+ * ediyor: "Always verify authentication and authorization inside each
+ * Server Function rather than relying on Proxy alone.")
  */
+
+// app/freelancers/ altındaki, gerçekten oturum gerektiren statik
+// segmentler. `/freelancers/[username]` (herkese açık profil) bu
+// listede YOK — kasıtlı olarak korumadan hariç tutuluyor.
+const FREELANCER_PROTECTED_SEGMENTS = new Set([
+  "ai",
+  "coalitions",
+  "dashboard",
+  "discover",
+  "earnings",
+  "freelancers",
+  "help",
+  "invitations",
+  "messages",
+  "notifications",
+  "performance",
+  "profile",
+  "projects",
+  "proposals",
+  "settings",
+]);
+
+function isProtectedPath(pathname: string): boolean {
+  if (pathname === "/client" || pathname.startsWith("/client/")) {
+    return true;
+  }
+
+  // `/admin/login` kasıtlı olarak hariç: admin'e özgü, ayrı giriş
+  // ekranı oturumsuz erişilebilir olmalı (bkz. app/admin/login).
+  if (pathname === "/admin" || (pathname.startsWith("/admin/") && pathname !== "/admin/login")) {
+    return true;
+  }
+
+  if (pathname.startsWith("/freelancers/")) {
+    const firstSegment = pathname.split("/")[2] ?? "";
+    return FREELANCER_PROTECTED_SEGMENTS.has(firstSegment);
+  }
+
+  return false;
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (!isProtectedPath(pathname)) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -23,23 +81,27 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
         },
       },
     }
   );
 
+  // `getSession()` yerine `getUser()` kullanılıyor: `getUser()` JWT'yi
+  // Supabase Auth sunucusuna karşı yeniden doğrular, `getSession()` ise
+  // sadece cookie'deki (sahte olabilecek) veriyi okur.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isProtected = PROTECTED_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
-
-  if (isProtected && !user) {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", request.nextUrl.pathname);
+  if (!user) {
+    const loginUrl = new URL(pathname.startsWith("/admin") ? "/admin/login" : "/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -47,5 +109,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/client/:path*", "/freelancers/:path*"],
+  matcher: ["/client/:path*", "/freelancers/:path*", "/admin/:path*"],
 };

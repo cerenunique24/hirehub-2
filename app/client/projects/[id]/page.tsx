@@ -17,6 +17,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import ProjectFiles from "@/components/projects/ProjectFiles";
 import ProjectWorkroom from "@/components/projects/ProjectWorkroom";
+import ProjectAnalyticsPanel from "@/components/premium/client/ProjectAnalyticsPanel";
+import AiShortlistPanel from "@/components/premium/client/AiShortlistPanel";
 import { notifyUsers } from "@/lib/notifications";
 
 type Project = {
@@ -73,7 +75,7 @@ function getStatusClass(status: string | null) {
     case "in_progress":
       return "border-blue-200 bg-blue-50 text-blue-700";
     case "completed":
-      return "border-purple-200 bg-purple-50 text-purple-700";
+      return "border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]";
     case "cancelled":
       return "border-red-200 bg-red-50 text-red-700";
     default:
@@ -303,9 +305,9 @@ function ClientProjectDetailContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
         <div className="mx-auto max-w-5xl">
-          <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
             <p className="text-sm text-gray-500">
               Proje yükleniyor...
             </p>
@@ -317,7 +319,7 @@ function ClientProjectDetailContent() {
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
         <div className="mx-auto max-w-5xl">
           <Link
             href="/client/projects"
@@ -327,7 +329,7 @@ function ClientProjectDetailContent() {
             Projelere dön
           </Link>
 
-          <div className="rounded-2xl border border-red-100 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border border-red-100 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-gray-900">
               Proje görüntülenemedi
             </h1>
@@ -347,7 +349,7 @@ function ClientProjectDetailContent() {
   const canStart = project.status === "ready_to_start";
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+    <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Link
@@ -369,7 +371,7 @@ function ClientProjectDetailContent() {
                     )}`
                   : ""
               }`}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
             >
               <ArrowLeft size={16} />
               Mesaja dön
@@ -379,7 +381,7 @@ function ClientProjectDetailContent() {
 
         <div className="space-y-5">
           {/* HEADER */}
-          <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -399,7 +401,7 @@ function ClientProjectDetailContent() {
                   )}
                 </div>
 
-                <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+                <h1 className="text-3xl font-semibold tracking-[-0.01em] text-gray-900">
                   {project.title}
                 </h1>
 
@@ -506,7 +508,7 @@ function ClientProjectDetailContent() {
 
           {/* ACTIVE PROJECT TEAM */}
           {(teamMembers.length > 0 || isStarted) && (
-            <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
@@ -569,7 +571,7 @@ function ClientProjectDetailContent() {
                                 )}`
                               : ""
                           }`}
-                          className="inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                         >
                           <MessageCircle size={16} />
                           Mesaj Gönder
@@ -579,7 +581,7 @@ function ClientProjectDetailContent() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
                   <p className="text-sm text-gray-500">
                     Bu projeye ait kabul edilmiş freelancer bulunamadı.
                   </p>
@@ -589,7 +591,7 @@ function ClientProjectDetailContent() {
           )}
 
           {/* PROJECT INFO */}
-          <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
             <div className="flex items-center gap-3">
               <CheckCircle2 size={20} className="text-gray-700" />
 
@@ -611,7 +613,7 @@ function ClientProjectDetailContent() {
 
           {/* SKILLS */}
           {project.skills && project.skills.length > 0 && (
-            <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
               <h2 className="text-lg font-semibold text-gray-900">
                 Gerekli yetenekler
               </h2>
@@ -635,6 +637,10 @@ function ClientProjectDetailContent() {
             canManage
           />
 
+          {/* PREMIUM: PROJECT ANALYTICS + AI SHORTLIST */}
+          <ProjectAnalyticsPanel />
+          <AiShortlistPanel projectId={project.id} />
+
           {/* ACTIONS */}
           <div className="flex flex-wrap gap-3">
             {canStart && (
@@ -642,7 +648,7 @@ function ClientProjectDetailContent() {
                 type="button"
                 onClick={() => void handleStartProject()}
                 disabled={starting}
-                className="inline-flex items-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlayCircle size={16} />
                 {starting ? "Başlatılıyor..." : "Projeyi Başlat"}
@@ -653,7 +659,7 @@ function ClientProjectDetailContent() {
               <>
                 <Link
                   href={`/client/projects/${project.id}/edit`}
-                  className="rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
+                  className="rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                 >
                   Projeyi düzenle
                 </Link>

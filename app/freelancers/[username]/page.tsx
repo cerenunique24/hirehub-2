@@ -85,7 +85,7 @@ export default function FreelancerProfilePage() {
 
   if (!freelancer) {
     return (
-      <div className="min-h-screen bg-gray-50 p-8">
+      <div className="min-h-screen bg-gray-50 p-6">
         <div className="mx-auto max-w-4xl">
           <Link href="/freelancers/freelancers" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
             <ArrowLeft size={16} />
@@ -108,15 +108,15 @@ export default function FreelancerProfilePage() {
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto max-w-4xl">
         <Link href="/freelancers/freelancers" className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
           <ArrowLeft size={16} />
           Freelancerlara dön
         </Link>
 
-        <section className="mt-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex items-center gap-6 border-b border-gray-100 p-8">
+        <section className="mt-6 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-6 border-b border-gray-100 p-6">
             {freelancer.avatar_url ? (
               <img src={freelancer.avatar_url} alt={name} className="h-24 w-24 rounded-full object-cover" />
             ) : (
@@ -139,7 +139,7 @@ export default function FreelancerProfilePage() {
             </div>
           </div>
 
-          <div className="p-8">
+          <div className="p-6">
             {freelancer.bio && (
               <div className="mb-8">
                 <h2 className="font-semibold text-gray-900">Hakkında</h2>

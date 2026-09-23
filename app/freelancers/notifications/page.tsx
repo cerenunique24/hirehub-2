@@ -266,6 +266,10 @@ export default function NotificationsPage() {
       case "mesaj":
         return "Mesaj";
 
+      case "support_reply":
+      case "support_status_update":
+        return "Destek";
+
       default:
         return type;
     }
@@ -404,7 +408,7 @@ export default function NotificationsPage() {
         return "bg-green-100 text-green-700";
 
       case "Ekip":
-        return "bg-purple-100 text-purple-700";
+        return "bg-[var(--color-info-50)] text-[var(--color-info-600)]";
 
       case "Proje":
         return "bg-blue-100 text-blue-700";
@@ -412,13 +416,16 @@ export default function NotificationsPage() {
       case "Mesaj":
         return "bg-orange-100 text-orange-700";
 
+      case "Destek":
+        return "bg-purple-100 text-purple-700";
+
       default:
         return "bg-gray-100 text-gray-700";
     }
   };
 
   return (
-    <main className="w-full p-6 md:p-8">
+    <main className="w-full p-5 md:p-8">
       <div className="mx-auto w-full max-w-[80rem]">
         {/* Başlık */}
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -478,14 +485,14 @@ export default function NotificationsPage() {
             onClick={() => setActiveFilter("all")}
             className={`
               shrink-0
-              rounded-full
+              rounded-lg
               px-5
               py-2
               text-sm
               transition
               ${
                 activeFilter === "all"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }
             `}
@@ -498,14 +505,14 @@ export default function NotificationsPage() {
             onClick={() => setActiveFilter("unread")}
             className={`
               shrink-0
-              rounded-full
+              rounded-lg
               px-5
               py-2
               text-sm
               transition
               ${
                 activeFilter === "unread"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }
             `}
@@ -518,14 +525,14 @@ export default function NotificationsPage() {
             onClick={() => setActiveFilter("project")}
             className={`
               shrink-0
-              rounded-full
+              rounded-lg
               px-5
               py-2
               text-sm
               transition
               ${
                 activeFilter === "project"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }
             `}
@@ -538,14 +545,14 @@ export default function NotificationsPage() {
             onClick={() => setActiveFilter("system")}
             className={`
               shrink-0
-              rounded-full
+              rounded-lg
               px-5
               py-2
               text-sm
               transition
               ${
                 activeFilter === "system"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }
             `}
@@ -618,7 +625,7 @@ export default function NotificationsPage() {
                       ${
                         notification.is_read
                           ? "border-gray-200"
-                          : "border-black/20"
+                          : "border-[var(--color-primary-600)]/20"
                       }
                     `}
                   >
@@ -647,7 +654,7 @@ export default function NotificationsPage() {
                               h-2
                               w-2
                               rounded-full
-                              bg-black
+                              bg-[var(--color-primary-600)]
                             "
                             aria-label="Okunmamış"
                           />

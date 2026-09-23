@@ -327,7 +327,7 @@ export default function ProjectFiles({
   }
 
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+    <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">

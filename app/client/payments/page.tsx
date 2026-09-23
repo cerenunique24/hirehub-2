@@ -6,6 +6,12 @@ import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { getClientPaymentsSummary, type ClientPaymentsSummary } from "@/lib/financials";
+import {
+  calculateClientPricing,
+  formatRatePercent,
+  getClientCommissionRate,
+  getProjectCommissionRate,
+} from "@/lib/pricing";
 
 function statusLabel(status: string | null) {
   if (status === "open") return "Yayında";
@@ -22,6 +28,7 @@ export default function ClientPaymentsPage() {
   const [summary, setSummary] = useState<ClientPaymentsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [commissionRate, setCommissionRate] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -35,8 +42,12 @@ export default function ClientPaymentsPage() {
         return;
       }
 
-      const data = await getClientPaymentsSummary(supabase, user.id);
+      const [data, rate] = await Promise.all([
+        getClientPaymentsSummary(supabase, user.id),
+        getClientCommissionRate(supabase),
+      ]);
       setSummary(data);
+      setCommissionRate(rate);
       setLoading(false);
     }
 
@@ -55,10 +66,10 @@ export default function ClientPaymentsPage() {
   }
 
   return (
-    <div className="p-8">
-      <div className="mx-auto max-w-5xl">
+    <div className="p-6">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-neutral-900">Ödemeler</h1>
+          <h1 className="text-3xl font-semibold text-neutral-900">Ödemeler</h1>
           <p className="mt-2 text-sm text-neutral-500">
             Projelerinin gerçek bütçe ve hakediş özetini buradan takip et.
           </p>
@@ -76,17 +87,25 @@ export default function ClientPaymentsPage() {
           <p>
             Ödeme altyapısı henüz aktif değil. Aşağıdaki tutarlar bir ödeme işlemini değil, mevcut proje ve
             aşama verilerinden hesaplanan bütçe/hakediş özetini gösterir.
+            {commissionRate !== null && (
+              <>
+                {" "}
+                Yeni oluşturacağın projelerde platform hizmet bedeli planına göre{" "}
+                <strong className="font-semibold">{formatRatePercent(commissionRate)}</strong>. Mevcut projeler,
+                oluşturuldukları andaki oranı korur.
+              </>
+            )}
           </p>
         </div>
 
         {!error && summary && (
           <>
             <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-neutral-200 bg-white p-6">
+              <div className="rounded-xl border border-neutral-200 bg-white p-5">
                 <p className="text-sm text-neutral-500">Toplam Proje Bütçesi</p>
-                <h2 className="mt-2 text-2xl font-semibold text-black">{formatCurrency(summary.totalBudget)}</h2>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">{formatCurrency(summary.totalBudget)}</h2>
               </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
                 <div className="flex items-center gap-2 text-emerald-700">
                   <Wallet size={16} />
                   <p className="text-sm font-medium">Aktif Proje Bütçesi</p>
@@ -95,7 +114,7 @@ export default function ClientPaymentsPage() {
                   {formatCurrency(summary.activeBudget)}
                 </h2>
               </div>
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-6">
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
                 <div className="flex items-center gap-2 text-blue-700">
                   <CheckCircle2 size={16} />
                   <p className="text-sm font-medium">Tamamlanan İşler</p>
@@ -104,7 +123,7 @@ export default function ClientPaymentsPage() {
                   {formatCurrency(summary.completedBudget)}
                 </h2>
               </div>
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
                 <p className="text-sm font-medium text-amber-700">Bekleyen Hakediş</p>
                 <h2 className="mt-2 text-2xl font-semibold text-amber-800">
                   {formatCurrency(summary.pendingObligation)}
@@ -120,7 +139,7 @@ export default function ClientPaymentsPage() {
                 <p className="text-sm text-neutral-500">Henüz bir projen yok.</p>
                 <Link
                   href="/client/projects/new"
-                  className="mt-6 inline-flex rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white"
+                  className="mt-6 inline-flex rounded-lg bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white"
                 >
                   Yeni Proje Oluştur
                 </Link>
@@ -131,7 +150,7 @@ export default function ClientPaymentsPage() {
                   <Link
                     key={project.projectId}
                     href={`/client/projects/${project.projectId}`}
-                    className="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-6 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <div className="flex items-center gap-3">
@@ -157,6 +176,26 @@ export default function ClientPaymentsPage() {
                           <span className="block text-xs text-neutral-400">Bekleyen</span>
                           <span className="font-medium text-amber-700">{formatCurrency(project.pendingValue)}</span>
                         </div>
+                        {project.engagementValue > 0 && (() => {
+                          const pricing = calculateClientPricing(
+                            project.engagementValue,
+                            getProjectCommissionRate({ commission_rate: project.commissionRate })
+                          );
+                          return (
+                            <>
+                              <div>
+                                <span className="block text-xs text-neutral-400">
+                                  Hizmet bedeli ({formatRatePercent(pricing.rate)})
+                                </span>
+                                <span className="font-medium text-neutral-900">{formatCurrency(pricing.platformFee)}</span>
+                              </div>
+                              <div>
+                                <span className="block text-xs text-neutral-400">Toplam maliyet</span>
+                                <span className="font-medium text-neutral-900">{formatCurrency(pricing.clientTotal)}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </div>
                     </div>
                   </Link>

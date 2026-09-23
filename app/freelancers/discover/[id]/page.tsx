@@ -8,6 +8,7 @@ import {
   Briefcase,
   CheckCircle2,
   Clock3,
+  MessageCircle,
   Send,
   Sparkles,
   Wallet,
@@ -18,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import ProjectFiles from "@/components/projects/ProjectFiles";
 import { notifyUsers } from "@/lib/notifications";
+import PremiumGate from "@/components/premium/PremiumGate";
 
 type Project = {
   id: string;
@@ -50,11 +52,17 @@ type MatchedRole = {
   score: number;
   reason: string;
 
-  // API yalnızca eşleşen rol için bu alanları döndürür.
-  // budget_breakdown'ın tamamı frontend'e gelmez.
+  // matchScore ile isEligibleForRole ayrı kavramlardır: yüksek skor
+  // tek başına teklif gönderme izni vermez.
+  isEligibleForRole: boolean;
+
+  // API yalnızca isEligibleForRole === true olan rol için bu alanları
+  // döndürür. budget_breakdown'ın tamamı frontend'e gelmez.
   budgetPerPerson?: number | null;
   budget?: number | null;
   memberCount?: number | null;
+  duration?: string | null;
+  matchingSkills?: string[];
 };
 
 function formatCurrency(value: number) {
@@ -228,6 +236,15 @@ function parseAiMatches(data: unknown): MatchedRole[] {
       const memberCount =
         Number(memberCountRaw);
 
+      const isEligibleForRole =
+        role.isEligibleForRole === true;
+
+      const duration =
+        typeof role.duration === "string" &&
+        role.duration.trim()
+          ? role.duration.trim()
+          : null;
+
       return {
         roleId,
         role: roleName,
@@ -235,6 +252,7 @@ function parseAiMatches(data: unknown): MatchedRole[] {
           ? score
           : 0,
         reason,
+        isEligibleForRole,
         budgetPerPerson:
           Number.isFinite(budgetPerPerson) &&
           budgetPerPerson > 0
@@ -250,6 +268,12 @@ function parseAiMatches(data: unknown): MatchedRole[] {
           memberCount > 0
             ? memberCount
             : null,
+        duration,
+        matchingSkills: Array.isArray(role.matchingSkills)
+          ? role.matchingSkills.filter(
+              (skill): skill is string => typeof skill === "string" && skill.trim().length > 0
+            )
+          : undefined,
       };
     })
     .filter(
@@ -612,11 +636,19 @@ function FreelancerProjectDetailContent({
                 uniqueRoles
               );
 
-              if (
-                uniqueRoles.length > 0
-              ) {
+              /*
+               * Varsayılan seçim yalnızca gerçekten eligible
+               * bir rol olabilir — eligible olmayan bir rol
+               * otomatik seçilip teklif formunu açmamalı.
+               */
+              const defaultRole =
+                uniqueRoles.find(
+                  (role) => role.isEligibleForRole
+                ) ?? null;
+
+              if (defaultRole) {
                 setSelectedRoleId(
-                  uniqueRoles[0].roleId
+                  defaultRole.roleId
                 );
 
                 /*
@@ -678,6 +710,10 @@ function FreelancerProjectDetailContent({
   function handleRoleSelect(
     role: MatchedRole
   ) {
+    if (!role.isEligibleForRole) {
+      return;
+    }
+
     setSelectedRoleId(
       role.roleId
     );
@@ -729,6 +765,13 @@ function FreelancerProjectDetailContent({
     if (!selectedRole) {
       setSubmitMessage(
         "Seçilen rol bulunamadı."
+      );
+      return;
+    }
+
+    if (!selectedRole.isEligibleForRole) {
+      setSubmitMessage(
+        "Bu rol profilinizle yeterince uyumlu değil."
       );
       return;
     }
@@ -796,76 +839,58 @@ function FreelancerProjectDetailContent({
       }
 
       /*
-       * proposals.role kullanılıyor.
-       *
-       * project_role_id kullanılmıyor.
-       *
-       * bid_amount freelancerın kendi teklifidir.
-       * Client bütçesiyle frontend tarafında
-       * sınırlandırılmaz.
+       * Proposal server-side oluşturulur: role eligibility
+       * client'ın gönderdiği değerlere değil, server'ın kendi
+       * hesapladığı sonuca göre YENİDEN doğrulanır.
        */
-      const { error } =
-        await supabase
-          .from("proposals")
-          .insert({
-            project_id:
-              project.id,
-
-            freelancer_id:
-              user.id,
-
-            role:
-              isSingleProject
-                ? "Tek Freelancer"
-                : selectedRole.role,
-
-            bid_amount:
-              numericBid,
-
-            delivery_days:
-              numericDeliveryDays,
-
-            cover_letter:
-              coverLetter.trim(),
-
-            status:
-              "pending",
-          });
-
-      if (error) {
-        console.error(
-          "Teklif gönderme hatası:",
+      const response =
+        await fetch(
+          "/api/proposals",
           {
-            message:
-              error.message,
-            details:
-              error.details,
-            hint:
-              error.hint,
-            code:
-              error.code,
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              projectId:
+                project.id,
+              roleId:
+                selectedRole.roleId,
+              role:
+                selectedRole.role,
+              bidAmount:
+                numericBid,
+              deliveryDays:
+                numericDeliveryDays,
+              coverLetter:
+                coverLetter.trim(),
+            }),
           }
         );
 
-        if (
-          error.code ===
-          "23505"
-        ) {
+      const responseData =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        console.error(
+          "Teklif gönderme hatası:",
+          responseData
+        );
+
+        if (response.status === 409) {
           setAlreadySubmitted(
             true
           );
-
-          setSubmitMessage(
-            "Bu projeye daha önce teklif gönderdiniz."
-          );
-        } else {
-          setSubmitMessage(
-            error.message ||
-              error.details ||
-              error.hint ||
-              "Teklif gönderilirken bir hata oluştu."
-          );
         }
+
+        setSubmitMessage(
+          (responseData as { error?: string })
+            .error ||
+            "Teklif gönderilirken bir hata oluştu."
+        );
 
         return;
       }
@@ -950,13 +975,13 @@ function FreelancerProjectDetailContent({
         <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
           <Link
             href="/freelancers/discover"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-black"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft className="h-4 w-4" />
             Projeleri Keşfet
           </Link>
 
-          <div className="mt-12 rounded-2xl border border-gray-200 p-8">
+          <div className="mt-12 rounded-xl border border-gray-200 p-6">
             <h1 className="text-xl font-semibold text-gray-900">
               Proje bulunamadı
             </h1>
@@ -999,7 +1024,7 @@ function FreelancerProjectDetailContent({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/freelancers/discover"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-black"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft className="h-4 w-4" />
             Projeleri Keşfet
@@ -1016,7 +1041,7 @@ function FreelancerProjectDetailContent({
                     )}`
                   : ""
               }`}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
             >
               <ArrowLeft className="h-4 w-4" />
               Mesaja dön
@@ -1056,7 +1081,7 @@ function FreelancerProjectDetailContent({
               )}
             </div>
 
-            <h1 className="mt-5 text-3xl font-semibold tracking-tight text-gray-950 md:text-4xl">
+            <h1 className="mt-5 text-3xl font-semibold tracking-[-0.01em] text-gray-950 md:text-4xl">
               {project.title}
             </h1>
 
@@ -1157,7 +1182,7 @@ function FreelancerProjectDetailContent({
 
           <aside className="lg:sticky lg:top-8 lg:self-start">
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-              <div className="border-b border-gray-200 p-6">
+              <div className="border-b border-gray-200 p-5">
                 <h2 className="text-lg font-semibold text-gray-950">
                   {alreadySubmitted
                     ? "Teklif Durumu"
@@ -1177,7 +1202,7 @@ function FreelancerProjectDetailContent({
                 onSubmit={
                   handleSubmitProposal
                 }
-                className="p-6"
+                className="p-5"
               >
                 <div>
                   <div className="flex items-center gap-2">
@@ -1233,6 +1258,9 @@ function FreelancerProjectDetailContent({
                               role
                             );
 
+                          const eligible =
+                            role.isEligibleForRole;
+
                           return (
                             <button
                               key={
@@ -1246,42 +1274,64 @@ function FreelancerProjectDetailContent({
                               }
                               disabled={
                                 alreadySubmitted ||
-                                submitting
+                                submitting ||
+                                !eligible
                               }
                               className={
                                 "w-full rounded-xl border p-4 text-left transition " +
-                                (selected
-                                  ? "border-black bg-gray-50"
-                                  : "border-gray-200 bg-white hover:border-gray-400") +
-                                " disabled:cursor-not-allowed disabled:opacity-70"
+                                (!eligible
+                                  ? "border-gray-100 bg-gray-50"
+                                  : selected
+                                    ? "border-[var(--color-primary-600)] bg-gray-50"
+                                    : "border-gray-200 bg-white hover:border-gray-400") +
+                                " disabled:cursor-not-allowed" +
+                                (eligible
+                                  ? " disabled:opacity-70"
+                                  : "")
                               }
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-2">
-                                    {selected && (
-                                      <CheckCircle2 className="h-4 w-4 shrink-0 text-black" />
-                                    )}
+                                    {selected &&
+                                      eligible && (
+                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--color-text-primary)]" />
+                                      )}
 
-                                    <span className="text-sm font-semibold text-gray-900">
+                                    <span
+                                      className={
+                                        "text-sm font-semibold " +
+                                        (eligible
+                                          ? "text-gray-900"
+                                          : "text-gray-400")
+                                      }
+                                    >
                                       {
                                         role.role
                                       }
                                     </span>
                                   </div>
 
-                                  <p className="mt-2 text-xs leading-5 text-gray-500">
-                                    {
-                                      role.reason
-                                    }
-                                  </p>
+                                  {eligible ? (
+                                    <p className="mt-2 text-xs leading-5 text-gray-500">
+                                      {
+                                        role.reason
+                                      }
+                                    </p>
+                                  ) : (
+                                    <p className="mt-2 text-xs font-medium leading-5 text-gray-400">
+                                      Bu rol profilinizle uyumlu değil
+                                    </p>
+                                  )}
 
                                   {/*
-                                   * Bütçe varsa sadece API'nin
-                                   * bu eşleşen rol için gönderdiği
-                                   * güvenli değer gösterilir.
+                                   * Bütçe / süre yalnızca eligible
+                                   * rol için, sadece API'nin bu rol
+                                   * için gönderdiği güvenli değerle
+                                   * gösterilir.
                                    */}
                                   {!isSingleProject &&
+                                    eligible &&
                                     roleBudget >
                                       0 && (
                                       <div className="mt-3 border-t border-gray-200 pt-3">
@@ -1299,6 +1349,19 @@ function FreelancerProjectDetailContent({
                                           </span>
                                         </div>
 
+                                        {role.duration && (
+                                          <div className="mt-1 flex items-center gap-2">
+                                            <Clock3 className="h-3.5 w-3.5 text-gray-500" />
+
+                                            <span className="text-xs text-gray-500">
+                                              Süre:{" "}
+                                              <span className="font-semibold text-gray-900">
+                                                {role.duration}
+                                              </span>
+                                            </span>
+                                          </div>
+                                        )}
+
                                         {memberCount >
                                           1 && (
                                           <p className="mt-1 text-xs text-gray-400">
@@ -1313,7 +1376,14 @@ function FreelancerProjectDetailContent({
                                     )}
                                 </div>
 
-                                <span className="shrink-0 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white">
+                                <span
+                                  className={
+                                    "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold " +
+                                    (eligible
+                                      ? "bg-[var(--color-primary-600)] text-white"
+                                      : "bg-gray-200 text-gray-500")
+                                  }
+                                >
                                   %
                                   {Math.round(
                                     role.score
@@ -1393,6 +1463,40 @@ function FreelancerProjectDetailContent({
                     </div>
                   )}
 
+                {/*
+                 * PREMIUM: "Bu proje neden eşleşiyor?"
+                 * ------------------------------------------------
+                 * Normal matching FREE kullanıcı için zaten tam
+                 * çalışıyor (score, reason, proposal gönderme hepsi
+                 * serbest). Bu panel sadece ekstra bir içgörü katmanı
+                 * — matchingSkills API'nin zaten hesapladığı gerçek
+                 * veridir, uydurma değildir.
+                 */}
+                {selectedMatchedRole?.isEligibleForRole && (
+                  <MatchExplainer role={selectedMatchedRole} />
+                )}
+
+                {/*
+                 * PRO: "Client'a Mesaj Gönder"
+                 * ------------------------------------------------
+                 * Free/Plus freelancer role uyumsuzken bu projeye
+                 * teklif gönderemez ve mesaj da gönderemez. Pro
+                 * freelancer İSE role uyumu olmasa bile mesaj
+                 * gönderebilir (proposal göndermesi şart değil) —
+                 * bu yüzden bu panel selectedMatchedRole'un
+                 * eligibility'sine BAĞLI DEĞİLDİR, sadece geçerli bir
+                 * projenin yüklenmiş ve henüz teklif gönderilmemiş
+                 * olmasına bağlıdır. PremiumGate içeride gerçek
+                 * yetkiyi (plan === pro) ayrıca kontrol eder; nihai
+                 * yetkilendirme /api/messages/pre-proposal'da
+                 * server-side yapılır.
+                 */}
+                {!alreadySubmitted && project && (
+                  <PreProposalMessage
+                    projectId={project.id}
+                  />
+                )}
+
                 <div className="mt-6">
                   <label
                     htmlFor="bidAmount"
@@ -1427,7 +1531,7 @@ function FreelancerProjectDetailContent({
                         submitting ||
                         alreadySubmitted
                       }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-16 text-sm outline-none transition focus:border-black disabled:bg-gray-50"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-16 text-sm outline-none transition focus:border-[var(--color-primary-600)] disabled:bg-gray-50"
                     />
 
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
@@ -1468,7 +1572,7 @@ function FreelancerProjectDetailContent({
                         submitting ||
                         alreadySubmitted
                       }
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-16 text-sm outline-none transition focus:border-black disabled:bg-gray-50"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-16 text-sm outline-none transition focus:border-[var(--color-primary-600)] disabled:bg-gray-50"
                     />
 
                     <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
@@ -1507,8 +1611,17 @@ function FreelancerProjectDetailContent({
                       submitting ||
                       alreadySubmitted
                     }
-                    className="mt-2 w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-black disabled:bg-gray-50"
+                    className="mt-2 w-full resize-none rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-[var(--color-primary-600)] disabled:bg-gray-50"
                   />
+
+                  {!alreadySubmitted && matchedRoles.length > 0 && (
+                    <AiProposalAssistant
+                      projectId={project?.id ?? null}
+                      roleId={selectedRoleId || null}
+                      hasDraft={coverLetter.trim().length > 0}
+                      onApply={setCoverLetter}
+                    />
+                  )}
                 </div>
 
                 {submitMessage && (
@@ -1532,9 +1645,10 @@ function FreelancerProjectDetailContent({
                     matchedRoles.length ===
                       0 ||
                     !selectedRoleId ||
+                    !selectedMatchedRole?.isEligibleForRole ||
                     alreadySubmitted
                   }
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-black px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
                   {submitting ? (
                     <>
@@ -1559,6 +1673,226 @@ function FreelancerProjectDetailContent({
         </div>
       </div>
     </main>
+  );
+}
+
+function MatchExplainer({ role }: { role: MatchedRole }) {
+  return (
+    <div className="mt-6">
+      <PremiumGate
+        feature="matching_explanation"
+        title="Bu proje neden eşleşiyor?"
+        description="Profilinle bu rol arasındaki somut kriterleri (beceri ve portfolyo örtüşümü) gör."
+        dismissible
+      >
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-gray-700" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Bu proje neden eşleşiyor?
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm leading-6 text-gray-600">{role.reason}</p>
+
+          {role.matchingSkills && role.matchingSkills.length > 0 && (
+            <ul className="mt-3 space-y-1.5">
+              {role.matchingSkills.map((skill) => (
+                <li key={skill} className="flex items-center gap-2 text-sm text-gray-700">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                  {skill}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="mt-3 border-t border-gray-100 pt-3 text-xs leading-5 text-gray-400">
+            Başvurmadan önce: proje açıklamasını ve teslim sürelerini dikkatle incele — eşleşme oranı yüksek olsa da
+            kapsamı sana uygun olup olmadığına sen karar verirsin.
+          </p>
+        </div>
+      </PremiumGate>
+    </div>
+  );
+}
+
+/**
+ * AI Proposal Assistant (Plus+). Oluştur → Düzenle → Teklif Ver:
+ * the server drafts a cover letter from the real project/role/profile data
+ * (lib/ai/improve-proposal.ts); the freelancer reviews it, applies it to the
+ * cover-letter field, edits it there and submits through the normal form.
+ */
+function AiProposalAssistant({
+  projectId,
+  roleId,
+  hasDraft,
+  onApply,
+}: {
+  projectId: string | null;
+  roleId: string | null;
+  hasDraft: boolean;
+  onApply: (nextCoverLetter: string) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{
+    draft: string;
+    source: "ai" | "profile_template";
+    facts: { role: string; matchingSkills: string[]; experience: string | null; portfolioTitles: string[] };
+  } | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleGenerate() {
+    if (!projectId || !roleId) return;
+
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/ai/improve-proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, roleId }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(data?.error || "Taslak hazırlanamadı.");
+        return;
+      }
+
+      setResult(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <PremiumGate
+        feature="proposal_ai"
+        title="AI Proposal Assistant"
+        description="Projeye, seçtiğin role ve kendi profiline dayanarak teklif taslağı hazırla; düzenleyip gönder."
+        dismissible
+      >
+        <button
+          type="button"
+          onClick={() => void handleGenerate()}
+          disabled={!projectId || !roleId || loading}
+          className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white px-2.5 text-[13px] font-medium text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          {loading ? "Taslak hazırlanıyor..." : "AI ile teklifini hazırla"}
+        </button>
+
+        {!roleId && <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">Önce teklif vereceğin rolü seç.</p>}
+        {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+
+        {result && (
+          <div className="mt-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/40 p-3">
+            <p className="text-xs text-[var(--color-text-muted)]">
+              {result.source === "ai" ? "AI taslağı" : "Profil verinden hazırlanan taslak"} · {result.facts.role}
+              {result.facts.matchingSkills.length > 0 && <> · Kullanılan beceriler: {result.facts.matchingSkills.slice(0, 4).join(", ")}</>}
+            </p>
+
+            <p className="mt-2 whitespace-pre-line text-[13px] leading-5 text-[var(--color-text-primary)]">{result.draft}</p>
+
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              Taslak yalnızca profilindeki bilgileri kullanır. Göndermeden önce gözden geçir ve düzenle.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (hasDraft && !window.confirm("Mevcut teklif mesajının yerine bu taslak yazılsın mı?")) return;
+                onApply(result.draft);
+              }}
+              className="mt-2 inline-flex h-8 items-center rounded-[var(--radius-button)] bg-[var(--color-primary-600)] px-2.5 text-[13px] font-medium text-white transition-colors hover:bg-[var(--color-primary-700)]"
+            >
+              Taslağı kullan ve düzenle
+            </button>
+          </div>
+        )}
+      </PremiumGate>
+    </div>
+  );
+}
+
+function PreProposalMessage({ projectId }: { projectId: string }) {
+  const [content, setContent] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSend() {
+    if (!content.trim() || sending) return;
+
+    setSending(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/messages/pre-proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, content: content.trim() }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setError(data?.error || "Mesaj gönderilemedi.");
+        return;
+      }
+
+      setSent(true);
+      setContent("");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <PremiumGate
+        feature="pre_proposal_messaging"
+        title="Teklif göndermeden önce client'a mesaj gönder"
+        description="Sorularını sorup projeyi netleştirdikten sonra teklif verebilmen için Pro'ya özel bir avantaj."
+        dismissible
+      >
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4 text-gray-700" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Client&apos;a teklif öncesi mesaj gönder
+            </span>
+          </div>
+
+          {sent ? (
+            <p className="mt-2 text-sm text-emerald-700">Mesajın gönderildi.</p>
+          ) : (
+            <>
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                rows={3}
+                placeholder="Projeyle ilgili sormak istediğin bir şey var mı?"
+                className="mt-2 w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[var(--color-primary-600)]"
+              />
+              {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!content.trim() || sending}
+                className="mt-2 rounded-lg bg-[var(--color-primary-600)] px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {sending ? "Gönderiliyor..." : "Mesaj Gönder"}
+              </button>
+            </>
+          )}
+        </div>
+      </PremiumGate>
+    </div>
   );
 }
 

@@ -5,8 +5,8 @@ export default function ProposalStatus(){
   <div className="
   bg-white
   border
-  rounded-2xl
-  p-6
+  rounded-xl
+  p-5
   ">
   
   

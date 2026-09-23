@@ -5,8 +5,8 @@ export default function ProfileScore(){
     <div className="
     bg-white
     border
-    rounded-2xl
-    p-6
+    rounded-xl
+    p-5
     ">
     
     
@@ -48,7 +48,7 @@ export default function ProfileScore(){
     
     <div className="
     h-2
-    bg-black
+    bg-[var(--color-primary-600)]
     rounded-full
     w-[85%]
     "/>

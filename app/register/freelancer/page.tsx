@@ -1,16 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ArrowRight,
-  Check,
-  Eye,
-  EyeOff,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { ArrowRight, ShieldCheck, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import {
+  RegisterSplitLayout,
+  RegisterFormHeader,
+  RegisterField,
+  PasswordInput,
+  PasswordChecklist,
+  ConsentGroup,
+} from "@/components/auth/RegisterSplitLayout";
 
 type LegalDocument = "kvkk" | "terms" | null;
 
@@ -160,434 +164,155 @@ export default function FreelancerRegisterPage() {
   }
 
   return (
-    <main className="h-screen w-full overflow-hidden bg-white">
-      <div className="grid h-screen w-full lg:grid-cols-[42%_58%]">
-        {/* SOL PANEL */}
-        <section className="hidden h-screen bg-black text-white lg:flex lg:flex-col lg:justify-between">
-          <div className="px-12 pt-12 xl:px-16 xl:pt-14">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white text-lg font-bold text-black">
-              C
+    <>
+      <RegisterSplitLayout
+        image="https://images.unsplash.com/photo-1487611459768-bd414656ea10?q=80&w=1400&auto=format&fit=crop"
+        eyebrow="Freelancer kaydı"
+        title="Yeteneğini doğru projeyle buluştur."
+        description="CollaCrew'da uzmanlığını göster, doğru projeleri keşfet ve müşterilerle birlikte çalış."
+        highlights={[
+          "Profilini oluştur",
+          "Sana uygun projeleri keşfet",
+          "Müşterilerle çalış",
+        ]}
+      >
+        <RegisterFormHeader
+          step={1}
+          totalSteps={3}
+          stepLabel="Hesap oluştur"
+          title="Freelancer hesabını oluştur"
+          description="Hesabını oluşturduktan sonra e-posta adresini doğrulayacak ve profesyonel profilini tamamlayacaksın."
+        />
+
+        <form onSubmit={handleSubmit} className="space-y-[var(--space-5)]">
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <RegisterField label="Ad" htmlFor="firstName">
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  value={form.firstName}
+                  onChange={handleChange}
+                  placeholder="Adın"
+                  autoComplete="given-name"
+                />
+              </RegisterField>
+
+              <RegisterField label="Soyad" htmlFor="lastName">
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  value={form.lastName}
+                  onChange={handleChange}
+                  placeholder="Soyadın"
+                  autoComplete="family-name"
+                />
+              </RegisterField>
             </div>
 
-            <div className="mt-20 xl:mt-24">
-              <p className="text-xs font-semibold tracking-[0.2em] text-white/40">
-                FREELANCER KAYDI
-              </p>
+            <RegisterField
+              label="E-posta"
+              htmlFor="email"
+              hint={!emailValid ? "Geçerli bir e-posta adresi gir." : undefined}
+              hintTone="error"
+            >
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                placeholder="ornek@email.com"
+                autoComplete="email"
+                hasError={!emailValid}
+              />
+            </RegisterField>
 
-              <h2 className="mt-6 text-5xl font-semibold leading-[1.04] tracking-tight xl:text-6xl">
-                Yeteneğini
-                <br />
-                doğru projeyle
-                <br />
-                buluştur.
-              </h2>
+            <RegisterField label="Şifre" htmlFor="password">
+              <PasswordInput
+                id="password"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+                placeholder="En az 8 karakter"
+                autoComplete="new-password"
+                visible={showPassword}
+                onToggle={() => setShowPassword((prev) => !prev)}
+              />
 
-              <p className="mt-7 max-w-md text-base leading-7 text-white/55">
-                CollaCrew&apos;da uzmanlığını göster,
-                doğru projeleri keşfet ve müşterilerle
-                birlikte çalış.
-              </p>
-            </div>
+              {form.password.length > 0 && !passwordValid && (
+                <PasswordChecklist rules={passwordRules} />
+              )}
+
+              {passwordValid && form.password.length > 0 && (
+                <p className="mt-1.5 text-xs text-[var(--color-success-600)]">Güçlü bir şifre oluşturdun.</p>
+              )}
+            </RegisterField>
+
+            <RegisterField
+              label="Şifre tekrar"
+              htmlFor="confirmPassword"
+              hint={
+                form.confirmPassword.length > 0
+                  ? passwordsMatch
+                    ? "Şifreler eşleşiyor."
+                    : "Şifreler eşleşmiyor."
+                  : undefined
+              }
+              hintTone={passwordsMatch ? "success" : "error"}
+            >
+              <PasswordInput
+                id="confirmPassword"
+                name="confirmPassword"
+                value={form.confirmPassword}
+                onChange={handleChange}
+                placeholder="Şifreni tekrar gir"
+                autoComplete="new-password"
+                hasError={form.confirmPassword.length > 0 && !passwordsMatch}
+                visible={showConfirmPassword}
+                onToggle={() => setShowConfirmPassword((prev) => !prev)}
+              />
+            </RegisterField>
           </div>
 
-          <div className="px-12 pb-12 xl:px-16 xl:pb-14">
-            <div className="space-y-4">
-              {[
-                "Profilini oluştur",
-                "Sana uygun projeleri keşfet",
-                "Müşterilerle çalış",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-center gap-3"
-                >
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-black">
-                    <Check
-                      size={14}
-                      strokeWidth={2.5}
-                    />
-                  </div>
+          {/* ONAYLAR */}
+          <ConsentGroup
+            kvkk={acceptKvkk}
+            terms={acceptTerms}
+            onKvkkChange={setAcceptKvkk}
+            onTermsChange={setAcceptTerms}
+            onOpenDocument={setActiveDocument}
+          />
 
-                  <span className="text-sm text-white/65">
-                    {item}
-                  </span>
-                </div>
-              ))}
+          {/* GÜVENLİK */}
+          <p className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0" />
+            Hesabını oluşturduktan sonra e-posta adresini doğrulaman gerekecek.
+          </p>
+
+          {/* HATA */}
+          {error && (
+            <div className="cc-body-sm rounded-[var(--radius-input)] border border-red-200 bg-[var(--color-error-50)] px-3 py-2.5 text-[var(--color-error-600)]">
+              {error}
             </div>
+          )}
+
+          {/* DEVAM */}
+          <div className="space-y-3">
+            <Button type="submit" size="lg" disabled={!formValid || loading} loading={loading} className="w-full">
+              {loading ? "Hesap oluşturuluyor..." : "Devam Et"}
+              {!loading && <ArrowRight size={16} />}
+            </Button>
+
+            <p className="cc-body-sm text-center text-[var(--color-text-secondary)]">
+              Zaten hesabın var mı?{" "}
+              <Link href="/login" className="font-medium text-[var(--color-primary-600)] hover:underline">
+                Giriş yap
+              </Link>
+            </p>
           </div>
-        </section>
-
-        {/* SAĞ PANEL */}
-        <section className="h-screen overflow-y-auto">
-          <div className="flex min-h-full w-full items-start justify-center px-6 py-8 sm:px-10 sm:py-10 xl:px-16 xl:py-12">
-            <div className="w-full max-w-3xl">
-              {/* MOBİL LOGO */}
-              <div className="mb-8 flex items-center justify-between lg:hidden">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black text-sm font-bold text-white">
-                  C
-                </div>
-
-                <span className="text-xs font-medium text-gray-400">
-                  Freelancer kaydı
-                </span>
-              </div>
-
-              {/* HEADER */}
-              <div className="mb-8">
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
-                    Adım 1 / 3
-                  </span>
-
-                  <span className="text-xs text-gray-400">
-                    Hesap oluştur
-                  </span>
-                </div>
-
-                <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                  <div className="h-full w-1/3 rounded-full bg-black" />
-                </div>
-
-                <h1 className="mt-7 text-3xl font-semibold tracking-tight text-gray-950 sm:text-[34px]">
-                  Freelancer hesabını oluştur
-                </h1>
-
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-500">
-                  Hesabını oluşturduktan sonra e-posta
-                  adresini doğrulayacak ve profesyonel
-                  profilini tamamlayacaksın.
-                </p>
-              </div>
-
-              {/* FORM */}
-              <form
-                onSubmit={handleSubmit}
-                className="space-y-5"
-              >
-                {/* AD SOYAD */}
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-800">
-                      Ad
-                    </label>
-
-                    <input
-                      name="firstName"
-                      value={form.firstName}
-                      onChange={handleChange}
-                      placeholder="Adın"
-                      autoComplete="given-name"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-black focus:ring-2 focus:ring-black/5"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-800">
-                      Soyad
-                    </label>
-
-                    <input
-                      name="lastName"
-                      value={form.lastName}
-                      onChange={handleChange}
-                      placeholder="Soyadın"
-                      autoComplete="family-name"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-black focus:ring-2 focus:ring-black/5"
-                    />
-                  </div>
-                </div>
-
-                {/* E-POSTA */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-800">
-                    E-posta
-                  </label>
-
-                  <input
-                    name="email"
-                    type="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    placeholder="ornek@email.com"
-                    autoComplete="email"
-                    className={`h-12 w-full rounded-xl border bg-white px-4 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 focus:ring-black/5 ${
-                      !emailValid
-                        ? "border-red-300 focus:border-red-500"
-                        : "border-gray-200 focus:border-black"
-                    }`}
-                  />
-
-                  {!emailValid && (
-                    <p className="mt-2 text-xs text-red-500">
-                      Geçerli bir e-posta adresi gir.
-                    </p>
-                  )}
-                </div>
-
-                {/* ŞİFRE */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-800">
-                    Şifre
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      name="password"
-                      type={
-                        showPassword
-                          ? "text"
-                          : "password"
-                      }
-                      value={form.password}
-                      onChange={handleChange}
-                      placeholder="Şifreni oluştur"
-                      autoComplete="new-password"
-                      className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 pr-12 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:border-black focus:ring-2 focus:ring-black/5"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowPassword(
-                          (prev) => !prev
-                        )
-                      }
-                      aria-label={
-                        showPassword
-                          ? "Şifreyi gizle"
-                          : "Şifreyi göster"
-                      }
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-black"
-                    >
-                      {showPassword ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
-                    </button>
-                  </div>
-
-                  {form.password.length > 0 &&
-                    !passwordValid && (
-                      <div className="mt-3 rounded-xl bg-gray-50 p-4">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {passwordRules.map(
-                            (rule) => (
-                              <div
-                                key={rule.label}
-                                className="flex items-center gap-2"
-                              >
-                                <div
-                                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                                    rule.valid
-                                      ? "bg-green-500 text-white"
-                                      : "bg-gray-200 text-gray-400"
-                                  }`}
-                                >
-                                  <Check size={11} />
-                                </div>
-
-                                <span
-                                  className={`text-xs ${
-                                    rule.valid
-                                      ? "text-gray-900"
-                                      : "text-gray-500"
-                                  }`}
-                                >
-                                  {rule.label}
-                                </span>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                  {passwordValid &&
-                    form.password.length > 0 && (
-                      <div className="mt-2 flex items-center gap-2 text-xs font-medium text-green-600">
-                        <Check size={14} />
-                        Güçlü bir şifre oluşturdun.
-                      </div>
-                    )}
-                </div>
-
-                {/* ŞİFRE TEKRAR */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-800">
-                    Şifre Tekrar
-                  </label>
-
-                  <div className="relative">
-                    <input
-                      name="confirmPassword"
-                      type={
-                        showConfirmPassword
-                          ? "text"
-                          : "password"
-                      }
-                      value={form.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Şifreni tekrar gir"
-                      autoComplete="new-password"
-                      className={`h-12 w-full rounded-xl border bg-white px-4 pr-12 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 focus:ring-2 focus:ring-black/5 ${
-                        form.confirmPassword.length > 0
-                          ? passwordsMatch
-                            ? "border-green-400 focus:border-green-500"
-                            : "border-red-300 focus:border-red-500"
-                          : "border-gray-200 focus:border-black"
-                      }`}
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPassword(
-                          (prev) => !prev
-                        )
-                      }
-                      aria-label={
-                        showConfirmPassword
-                          ? "Şifreyi gizle"
-                          : "Şifreyi göster"
-                      }
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-black"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff size={18} />
-                      ) : (
-                        <Eye size={18} />
-                      )}
-                    </button>
-                  </div>
-
-                  {form.confirmPassword.length > 0 && (
-                    <div
-                      className={`mt-2 flex items-center gap-2 text-xs font-medium ${
-                        passwordsMatch
-                          ? "text-green-600"
-                          : "text-red-500"
-                      }`}
-                    >
-                      <Check size={14} />
-
-                      {passwordsMatch
-                        ? "Şifreler eşleşiyor."
-                        : "Şifreler eşleşmiyor."}
-                    </div>
-                  )}
-                </div>
-
-                {/* ONAYLAR */}
-                <div className="space-y-3 rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                  {/* KVKK */}
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={acceptKvkk}
-                      onChange={(e) =>
-                        setAcceptKvkk(
-                          e.target.checked
-                        )
-                      }
-                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-black"
-                    />
-
-                    <span className="text-xs leading-5 text-gray-600">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveDocument("kvkk")
-                        }
-                        className="font-medium text-gray-900 underline underline-offset-2 transition hover:text-gray-500"
-                      >
-                        KVKK Aydınlatma Metni
-                      </button>{" "}
-                      &apos;ni okudum ve anladım.
-                    </span>
-                  </label>
-
-                  {/* KULLANIM KOŞULLARI */}
-                  <label className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
-                      checked={acceptTerms}
-                      onChange={(e) =>
-                        setAcceptTerms(
-                          e.target.checked
-                        )
-                      }
-                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-black"
-                    />
-
-                    <span className="text-xs leading-5 text-gray-600">
-                      CollaCrew{" "}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setActiveDocument("terms")
-                        }
-                        className="font-medium text-gray-900 underline underline-offset-2 transition hover:text-gray-500"
-                      >
-                        Kullanım Koşulları
-                      </button>
-                      &apos;nı kabul ediyorum.
-                    </span>
-                  </label>
-                </div>
-
-                {/* GÜVENLİK */}
-                <div className="flex items-start gap-3 rounded-xl border border-gray-100 p-4">
-                  <ShieldCheck
-                    size={18}
-                    className="mt-0.5 shrink-0 text-gray-500"
-                  />
-
-                  <p className="text-xs leading-5 text-gray-500">
-                    Hesabını oluşturduktan sonra
-                    e-posta adresini doğrulaman gerekecek.
-                    Böylece hesabının sana ait olduğunu
-                    doğrulayabiliriz.
-                  </p>
-                </div>
-
-                {/* HATA */}
-                {error && (
-                  <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm leading-5 text-red-600">
-                    {error}
-                  </div>
-                )}
-
-                {/* DEVAM */}
-                <button
-                  type="submit"
-                  disabled={!formValid || loading}
-                  className={`flex h-12 w-full items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold transition ${
-                    formValid && !loading
-                      ? "bg-black text-white hover:bg-gray-800"
-                      : "cursor-not-allowed bg-gray-100 text-gray-400"
-                  }`}
-                >
-                  {loading
-                    ? "Hesap oluşturuluyor..."
-                    : "Devam Et"}
-
-                  {!loading && formValid && (
-                    <ArrowRight size={17} />
-                  )}
-                </button>
-
-                {!formValid && !loading && (
-                  <p className="text-center text-xs text-gray-400">
-                    Devam etmek için tüm bilgileri
-                    tamamla ve gerekli onayları ver.
-                  </p>
-                )}
-              </form>
-            </div>
-          </div>
-        </section>
-      </div>
+        </form>
+      </RegisterSplitLayout>
 
       {/* HUKUKİ METİN MODALI */}
       {activeDocument && (
@@ -601,13 +326,13 @@ export default function FreelancerRegisterPage() {
             {/* MODAL HEADER */}
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-6 py-5">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">
                   CollaCrew
                 </p>
 
                 <h2
                   id="legal-document-title"
-                  className="mt-1 text-xl font-semibold tracking-tight text-gray-950"
+                  className="mt-1 text-xl font-semibold text-gray-950"
                 >
                   {activeDocument === "kvkk"
                     ? "KVKK Aydınlatma Metni"
@@ -621,7 +346,7 @@ export default function FreelancerRegisterPage() {
                   setActiveDocument(null)
                 }
                 aria-label="Metni kapat"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-black"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-[var(--color-text-primary)]"
               >
                 <X size={18} />
               </button>
@@ -881,7 +606,7 @@ export default function FreelancerRegisterPage() {
 
             {/* MODAL FOOTER */}
             <div className="flex shrink-0 items-center justify-between gap-4 border-t border-gray-100 bg-gray-50 px-6 py-4">
-              <span className="text-[11px] text-gray-400">
+              <span className="text-xs text-gray-400">
                 Metin sürümü: v1
               </span>
 
@@ -890,7 +615,7 @@ export default function FreelancerRegisterPage() {
                 onClick={() =>
                   setActiveDocument(null)
                 }
-                className="rounded-xl bg-black px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-gray-800"
+                className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-xs font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Okudum, kapat
               </button>
@@ -898,6 +623,6 @@ export default function FreelancerRegisterPage() {
           </div>
         </div>
       )}
-    </main>
+    </>
   );
 }

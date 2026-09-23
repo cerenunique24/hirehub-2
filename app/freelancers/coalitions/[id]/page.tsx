@@ -344,7 +344,7 @@ export default function CoalitionDetailPage({
 
   if (loading) {
     return (
-      <main className="w-full p-8">
+      <main className="w-full p-6">
         <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
           <Loader2
             size={24}
@@ -365,7 +365,7 @@ export default function CoalitionDetailPage({
 
   if (errorMessage || !coalition) {
     return (
-      <main className="w-full p-8">
+      <main className="w-full p-6">
         <Link
           href="/freelancers/coalitions"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
@@ -374,7 +374,7 @@ export default function CoalitionDetailPage({
           Koalisyonlarım
         </Link>
 
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-8">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
           <h1 className="text-lg font-semibold text-red-800">
             Koalisyon yüklenemedi
           </h1>
@@ -392,7 +392,7 @@ export default function CoalitionDetailPage({
   // --------------------------------------------------
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       {/* Back */}
 
       <div className="mb-8">
@@ -407,7 +407,7 @@ export default function CoalitionDetailPage({
 
       {/* Coalition Header */}
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -460,7 +460,7 @@ export default function CoalitionDetailPage({
             <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
               <Link
                 href={`/freelancers/freelancers?coalitionId=${coalition.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 <UserPlus size={17} />
                 Ekip Üyesi Öner
@@ -482,7 +482,7 @@ export default function CoalitionDetailPage({
 
       {/* Project */}
 
-      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
             Proje
@@ -494,7 +494,7 @@ export default function CoalitionDetailPage({
         </div>
 
         {project ? (
-          <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-6">
+          <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-gray-900">
@@ -532,7 +532,7 @@ export default function CoalitionDetailPage({
             </div>
           </div>
         ) : (
-          <div className="mt-6 rounded-xl bg-gray-50 p-8">
+          <div className="mt-6 rounded-xl bg-gray-50 p-6">
             <div className="flex flex-col items-center text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
                 <BriefcaseIcon />
@@ -552,7 +552,7 @@ export default function CoalitionDetailPage({
 
       {/* Team Members */}
 
-      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
@@ -572,7 +572,7 @@ export default function CoalitionDetailPage({
         </div>
 
         {members.length === 0 ? (
-          <div className="rounded-xl bg-gray-50 p-8 text-center">
+          <div className="rounded-xl bg-gray-50 p-6 text-center">
             <Users
               size={24}
               className="mx-auto text-gray-400"
@@ -609,7 +609,7 @@ export default function CoalitionDetailPage({
                       </p>
 
                       {isCurrentUser(member) && (
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-600">
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
                           Siz
                         </span>
                       )}
@@ -633,7 +633,7 @@ export default function CoalitionDetailPage({
       {/* Team Rules / Future Actions */}
 
       {coalition.status === "active" && (
-        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
               Koalisyon Yönetimi

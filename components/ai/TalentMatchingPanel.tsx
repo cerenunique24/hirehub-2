@@ -10,7 +10,7 @@ interface TalentMatchingPanelProps {
 export default function TalentMatchingPanel({ matching }: TalentMatchingPanelProps) {
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl bg-white p-7 shadow-sm">
+      <section className="rounded-xl bg-white p-7 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <Users size={18} />
           <h3 className="font-semibold">Önerilen freelancerlar</h3>
@@ -49,7 +49,7 @@ export default function TalentMatchingPanel({ matching }: TalentMatchingPanelPro
         </div>
       </section>
 
-      <section className="rounded-3xl bg-white p-7 shadow-sm">
+      <section className="rounded-xl bg-white p-7 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
           <UsersRound size={18} />
           <h3 className="font-semibold">Önerilen koalisyonlar</h3>

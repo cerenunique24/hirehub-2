@@ -1,8 +1,9 @@
 import { cleanJsonOutput, generateJson, toSafeAiResponse } from "@/lib/ai/gemini";
+import { createClient } from "@/lib/supabase/server";
 
 type FreelancerTitleInput = {
   categories?: string[];
-  jobs?: string[];
+  expertiseAreas?: string[];
   skills?: string[];
   experience?: string;
   about?: string;
@@ -10,6 +11,18 @@ type FreelancerTitleInput = {
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return Response.json(
+        { error: "Uzmanlık başlığı oluşturmak için giriş yapmalısınız." },
+        { status: 401 }
+      );
+    }
+
     if (!process.env.GEMINI_API_KEY?.trim()) {
       console.error("[CollaCrew AI] GEMINI_API_KEY eksik.");
       return Response.json(
@@ -21,7 +34,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as FreelancerTitleInput;
 
     const categories = Array.isArray(body.categories) ? body.categories : [];
-    const jobs = Array.isArray(body.jobs) ? body.jobs : [];
+    const expertiseAreas = Array.isArray(body.expertiseAreas) ? body.expertiseAreas : [];
     const skills = Array.isArray(body.skills) ? body.skills : [];
     const experience = body.experience?.trim() || "";
     const about = body.about?.trim() || "";
@@ -77,8 +90,8 @@ export async function POST(request: Request) {
       "Kategoriler:",
       categories.length > 0 ? categories.join(", ") : "Belirtilmedi",
       "",
-      "Yaptığı işler:",
-      jobs.length > 0 ? jobs.join(", ") : "Belirtilmedi",
+      "Uzmanlık alanları:",
+      expertiseAreas.length > 0 ? expertiseAreas.join(", ") : "Belirtilmedi",
       "",
       "Beceriler / Araçlar:",
       skills.length > 0 ? skills.join(", ") : "Belirtilmedi",

@@ -923,7 +923,7 @@ function ClientMessagesContent() {
     );
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">
           Mesajlar
@@ -944,9 +944,9 @@ function ClientMessagesContent() {
               onClick={() =>
                 setActiveTab("freelancers")
               }
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "freelancers"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -958,9 +958,9 @@ function ClientMessagesContent() {
               onClick={() =>
                 setActiveTab("teams")
               }
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "teams"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -994,7 +994,7 @@ function ClientMessagesContent() {
             "freelancers" && (
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="p-6 text-center text-sm text-gray-400">
+                <div className="p-5 text-center text-sm text-gray-400">
                   Mesajlar yükleniyor...
                 </div>
               ) : filteredConversations.length ===
@@ -1061,7 +1061,7 @@ function ClientMessagesContent() {
                             className="h-11 w-11 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
                             {getInitials(
                               profile
                             )}
@@ -1165,7 +1165,7 @@ function ClientMessagesContent() {
                     className="h-10 w-10 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
                     {getInitials(
                       selectedProfile
                     )}
@@ -1208,7 +1208,7 @@ function ClientMessagesContent() {
               </div>
 
               {/* MESSAGES */}
-              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-6">
+              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-5">
                 {selectedMessages.length ===
                 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -1233,7 +1233,7 @@ function ClientMessagesContent() {
                           <div
                             className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${
                               isMe
-                                ? "bg-black text-white"
+                                ? "bg-[var(--color-primary-600)] text-white"
                                 : "border border-gray-200 bg-white text-gray-800"
                             }`}
                           >
@@ -1243,7 +1243,7 @@ function ClientMessagesContent() {
                               }
                             </p>
 
-                            <span className="mt-2 block text-[11px] opacity-60">
+                            <span className="mt-2 block text-xs opacity-60">
                               {formatTime(
                                 message.created_at
                               )}
@@ -1296,7 +1296,7 @@ function ClientMessagesContent() {
                     sending ||
                     !messageText.trim()
                   }
-                  className="flex items-center gap-2 rounded-xl bg-black px-5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-40"
+                  className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-40"
                 >
                   <Send size={16} />
 

@@ -54,7 +54,7 @@ export default function EarningsPage() {
   }
 
   return (
-    <main className="p-8">
+    <main className="p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Kazançlarım</h1>
         <p className="mt-2 text-sm text-gray-500">
@@ -80,13 +80,13 @@ export default function EarningsPage() {
       {!error && summary && (
         <>
           <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-            <div className="rounded-2xl border border-gray-200 bg-white p-6">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
               <p className="text-sm text-gray-500">Toplam Proje Bütçesi / Hakediş</p>
-              <h2 className="mt-2 text-2xl font-semibold text-black">
+              <h2 className="mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">
                 {formatCurrency(summary.totalEngagement)}
               </h2>
             </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
               <div className="flex items-center gap-2 text-emerald-700">
                 <TrendingUp size={16} />
                 <p className="text-sm font-medium">Gerçekleşen Kazanç</p>
@@ -96,7 +96,7 @@ export default function EarningsPage() {
               </h2>
               <p className="mt-1 text-xs text-emerald-700">Onaylanmış aşamalar / tamamlanmış projeler</p>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
               <div className="flex items-center gap-2 text-amber-700">
                 <Wallet size={16} />
                 <p className="text-sm font-medium">Bekleyen Hakediş</p>
@@ -117,7 +117,7 @@ export default function EarningsPage() {
               </p>
               <Link
                 href="/freelancers/discover"
-                className="mt-6 inline-flex rounded-xl bg-black px-5 py-3 text-sm font-medium text-white"
+                className="mt-6 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white"
               >
                 Projeleri keşfet
               </Link>
@@ -127,7 +127,7 @@ export default function EarningsPage() {
               {summary.projects.map((project) => (
                 <div
                   key={project.projectId}
-                  className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-6 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div>
                     <div className="flex items-center gap-3">

@@ -12,8 +12,8 @@ export default function RecommendedProjects(){
   <div className="
   bg-white
   border
-  rounded-2xl
-  p-6
+  rounded-xl
+  p-5
   ">
   
   

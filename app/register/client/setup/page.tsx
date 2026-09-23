@@ -179,7 +179,7 @@ export default function ClientSetupPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#fafafa]">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
         <div className="flex flex-col items-center gap-4 text-gray-500">
           <Loader2
             className="animate-spin"
@@ -195,7 +195,7 @@ export default function ClientSetupPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#fafafa] px-6 py-10">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-6 py-10">
       <div className="mx-auto w-full max-w-3xl">
 
         {/* Header */}
@@ -203,13 +203,13 @@ export default function ClientSetupPage() {
           <button
             type="button"
             onClick={handleBack}
-            className="flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-black"
+            className="flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft size={18} />
             Geri
           </button>
 
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <BriefcaseBusiness size={20} />
           </div>
 
@@ -219,7 +219,7 @@ export default function ClientSetupPage() {
         {/* Progress */}
         <div className="mb-10">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-black">
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">
               Proje bilgileri
             </span>
 
@@ -229,18 +229,18 @@ export default function ClientSetupPage() {
           </div>
 
           <div className="flex gap-2">
-            <div className="h-2 flex-1 rounded-full bg-black" />
+            <div className="h-2 flex-1 rounded-full bg-[var(--color-primary-600)]" />
             <div className="h-2 flex-1 rounded-full bg-gray-200" />
           </div>
         </div>
 
         {/* Page Title */}
         <div className="mb-10">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <FileText size={25} />
           </div>
 
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-900 sm:text-4xl">
             Projenden bahset.
           </h1>
 
@@ -253,7 +253,7 @@ export default function ClientSetupPage() {
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8"
+          className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8"
         >
           <div className="space-y-7">
 
@@ -274,7 +274,7 @@ export default function ClientSetupPage() {
                   setProjectName(e.target.value)
                 }
                 placeholder="Örn. Yeni e-ticaret platformumuz"
-                className="w-full rounded-xl border border-gray-200 px-4 py-3.5 text-sm text-black outline-none transition placeholder:text-gray-400 focus:border-black focus:ring-4 focus:ring-black/5"
+                className="w-full rounded-xl border border-gray-200 px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-gray-400 focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
               />
             </div>
 
@@ -293,7 +293,7 @@ export default function ClientSetupPage() {
                 onChange={(e) =>
                   setCategory(e.target.value)
                 }
-                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-black outline-none transition focus:border-black focus:ring-4 focus:ring-black/5"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
               >
                 <option value="">
                   Bir kategori seçin
@@ -333,7 +333,7 @@ export default function ClientSetupPage() {
                 }
                 placeholder="Ne yapmak istiyorsun? Projenin amacı nedir? Nasıl bir sonuca ulaşmak istiyorsun?"
                 rows={7}
-                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3.5 text-sm leading-6 text-black outline-none transition placeholder:text-gray-400 focus:border-black focus:ring-4 focus:ring-black/5"
+                className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3.5 text-sm leading-6 text-[var(--color-text-primary)] outline-none transition placeholder:text-gray-400 focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
               />
 
               <p className="mt-2 text-xs leading-5 text-gray-400">
@@ -345,7 +345,7 @@ export default function ClientSetupPage() {
             {/* AI Suggestion */}
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
               <div className="flex gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black text-white">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-600)] text-white">
                   <Sparkles size={18} />
                 </div>
 
@@ -364,7 +364,7 @@ export default function ClientSetupPage() {
                     type="button"
                     onClick={() => void improveBrief()}
                     disabled={analyzing}
-                    className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-black transition hover:opacity-70 disabled:cursor-not-allowed disabled:text-gray-400"
+                    className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)] transition hover:opacity-70 disabled:cursor-not-allowed disabled:text-gray-400"
                   >
                     {analyzing && <Loader2 size={15} className="animate-spin" />}
                     {analyzing ? "AI brief'i geliştiriyor..." : "AI ile brief'i geliştir"}
@@ -390,7 +390,7 @@ export default function ClientSetupPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {submitting ? (
                   <>

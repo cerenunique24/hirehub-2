@@ -1,12 +1,12 @@
 export default function BudgetChart() {
   const segments = [
-    { label: "Active", value: 45, color: "bg-black" },
+    { label: "Active", value: 45, color: "bg-[var(--color-primary-600)]" },
     { label: "Reserved", value: 30, color: "bg-neutral-400" },
     { label: "Available", value: 25, color: "bg-neutral-200" },
   ];
 
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+    <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
       <h2 className="mb-2 text-lg font-semibold text-neutral-900">Budget Allocation</h2>
       <p className="mb-6 text-sm text-neutral-500">Current project spend overview</p>
 

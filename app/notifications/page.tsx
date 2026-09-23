@@ -69,7 +69,7 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((item) => !item.is_read).length;
 
   return (
-    <main className="mx-auto max-w-4xl p-8">
+    <main className="mx-auto max-w-4xl p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Bildirimler</h1>
@@ -111,14 +111,14 @@ export default function NotificationsPage() {
                   setNotifications((current) => current.map((item) => item.id === notification.id ? { ...item, is_read: true } : item));
                 }
               }}
-              className={`block rounded-2xl border p-5 transition hover:bg-gray-50 ${notification.is_read ? "border-gray-200 bg-white" : "border-black/20 bg-gray-50"}`}
+              className={`block rounded-2xl border p-5 transition hover:bg-gray-50 ${notification.is_read ? "border-gray-200 bg-white" : "border-[var(--color-primary-600)]/20 bg-gray-50"}`}
             >
               <div className="flex gap-4">
                 <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100"><Bell size={16} /></div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="font-medium text-gray-900">{notification.title}</h2>
-                    {!notification.is_read && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-black" />}
+                    {!notification.is_read && <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[var(--color-primary-600)]" />}
                   </div>
                   {notification.message && <p className="mt-1 text-sm text-gray-600">{notification.message}</p>}
                   <p className="mt-3 text-xs text-gray-400">{new Date(notification.created_at).toLocaleString("tr-TR")}</p>

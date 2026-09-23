@@ -471,7 +471,7 @@ export default function Step2({
           Adım 2 / 3
         </span>
 
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-950 sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
           Uzmanlıklarını belirle
         </h1>
 
@@ -583,7 +583,7 @@ export default function Step2({
                             {selected && (
                               <Check
                                 size={16}
-                                className="text-black"
+                                className="text-[var(--color-text-primary)]"
                               />
                             )}
                           </button>
@@ -613,7 +613,7 @@ export default function Step2({
                           expertise
                         )
                       }
-                      className="text-gray-400 transition hover:text-black"
+                      className="text-gray-400 transition hover:text-[var(--color-text-primary)]"
                     >
                       <X size={13} />
                     </button>
@@ -728,7 +728,7 @@ export default function Step2({
                             {selected && (
                               <Check
                                 size={16}
-                                className="text-black"
+                                className="text-[var(--color-text-primary)]"
                               />
                             )}
                           </button>
@@ -755,7 +755,7 @@ export default function Step2({
                     onClick={() =>
                       removeSkill(skill)
                     }
-                    className="text-gray-400 transition hover:text-black"
+                    className="text-gray-400 transition hover:text-[var(--color-text-primary)]"
                   >
                     <X size={13} />
                   </button>
@@ -800,7 +800,7 @@ export default function Step2({
                   }
                   className={`rounded-xl border px-3 py-3 text-sm font-medium transition ${
                     selected
-                      ? "border-black bg-black text-white"
+                      ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                       : "border-gray-200 bg-white text-gray-700 hover:border-gray-400"
                   }`}
                 >
@@ -829,7 +829,7 @@ export default function Step2({
           <button
             type="button"
             onClick={continueStep}
-            className="flex h-12 min-w-[170px] items-center justify-center rounded-xl bg-black px-7 text-sm font-semibold text-white transition hover:bg-gray-800"
+            className="flex h-12 min-w-[170px] items-center justify-center rounded-xl bg-[var(--color-primary-600)] px-7 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
           >
             Devam et
           </button>

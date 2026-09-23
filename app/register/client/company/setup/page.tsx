@@ -65,7 +65,7 @@ return (
 <main
 className="
 min-h-screen
-bg-[#fafafa]
+bg-[var(--color-canvas)]
 flex
 items-center
 justify-center
@@ -80,7 +80,7 @@ className="
 bg-white
 max-w-3xl
 w-full
-rounded-3xl
+rounded-xl
 p-10
 shadow-sm
 "
@@ -150,7 +150,7 @@ justify-center
 cursor-pointer
 overflow-hidden
 text-gray-400
-hover:border-black
+hover:border-[var(--color-primary-600)]
 transition
 "
 
@@ -710,7 +710,7 @@ mt-8
 ${
 isValid
 ?
-"bg-black text-white"
+"bg-[var(--color-primary-600)] text-white"
 :
 "bg-gray-300 text-gray-500 cursor-not-allowed"
 }

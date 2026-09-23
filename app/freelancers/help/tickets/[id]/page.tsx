@@ -8,7 +8,7 @@ export default function FreelancerTicketDetailPage() {
   const id = params.id as string;
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mx-auto max-w-3xl">
         <TicketDetail ticketId={id} backHref="/freelancers/help" />
       </div>

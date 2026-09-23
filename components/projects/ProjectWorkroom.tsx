@@ -377,7 +377,7 @@ export default function ProjectWorkroom({
               {approvedCount}/{milestones.length || 0}
             </p>
             <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-              <div className="h-full rounded-full bg-black" style={{ width: `${progress}%` }} />
+              <div className="h-full rounded-full bg-[var(--color-primary-600)]" style={{ width: `${progress}%` }} />
             </div>
           </div>
         </section>
@@ -390,7 +390,7 @@ export default function ProjectWorkroom({
               <button
                 type="button"
                 onClick={() => setShowCreate((v) => !v)}
-                className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 <Plus size={16} />
                 Aşama ekle
@@ -439,7 +439,7 @@ export default function ProjectWorkroom({
                 <button
                   type="button"
                   onClick={() => void handleCreateMilestone()}
-                  className="rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white"
+                  className="rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white"
                 >
                   Kaydet
                 </button>
@@ -453,7 +453,7 @@ export default function ProjectWorkroom({
               Aşamalar yükleniyor...
             </div>
           ) : milestones.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
               {isClient ? "Henüz aşama eklenmedi." : "Bu proje için henüz aşama tanımlanmadı."}
             </div>
           ) : (
@@ -580,7 +580,7 @@ export default function ProjectWorkroom({
                             type="button"
                             onClick={() => void handleSubmitDelivery(milestone)}
                             disabled={busyId === milestone.id}
-                            className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
                           >
                             {busyId === milestone.id ? (
                               <Loader2 size={16} className="animate-spin" />
@@ -611,7 +611,7 @@ export default function ProjectWorkroom({
                             type="button"
                             onClick={() => void handleReview(milestone, "approved")}
                             disabled={busyId === milestone.id}
-                            className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
                           >
                             <CheckCircle2 size={16} />
                             Kabul Et
@@ -654,7 +654,7 @@ export default function ProjectWorkroom({
       )}
 
       {tab === "team" && (
-        <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2 text-gray-900">
             <Users size={18} />
             <h2 className="font-semibold">Proje ekibi</h2>
@@ -686,7 +686,7 @@ export default function ProjectWorkroom({
                       href={`${messagesBasePath}?user=${encodeURIComponent(member.id)}${
                         member.proposalId ? `&proposal=${encodeURIComponent(member.proposalId)}` : ""
                       }`}
-                      className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800"
+                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                     >
                       <MessageCircle size={15} /> Mesaj Gönder
                     </Link>
@@ -701,7 +701,7 @@ export default function ProjectWorkroom({
       {tab === "files" && <ProjectFiles projectId={project.id} canManage={isClient} />}
 
       {tab === "messages" && (
-        <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+        <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
           <p className="mb-4 text-sm text-gray-500">
             Ekip üyeleriyle olan konuşmalarınıza buradan ulaşabilirsiniz.
           </p>
@@ -739,7 +739,7 @@ export default function ProjectWorkroom({
       {tab === "deliveries" && (
         <section className="space-y-3">
           {milestones.filter((m) => m.submitted_at).length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
               Henüz teslim edilmiş bir aşama yok.
             </div>
           ) : (

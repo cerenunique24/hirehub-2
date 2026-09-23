@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Users,
-  CalendarDays,
-  Loader2,
-  Search,
-  Sparkles,
-} from "lucide-react";
+import { Search, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 type Coalition = {
@@ -365,7 +359,7 @@ export default function CoalitionsPage() {
   };
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2">
@@ -379,22 +373,15 @@ export default function CoalitionsPage() {
           </span>
         </div>
 
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+        <p className="mt-2 text-sm text-gray-500">
           Dahil olduğun projelerdeki ekiplerini,
           ekip üyelerini ve koalisyon çalışmalarını
           buradan takip edebilirsin.
         </p>
       </div>
 
-      {/* Error */}
-      {errorMessage && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {errorMessage}
-        </div>
-      )}
-
       {/* Search + Filters */}
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative w-full lg:max-w-md">
           <Search
             size={18}
@@ -408,49 +395,43 @@ export default function CoalitionsPage() {
               setSearch(event.target.value)
             }
             placeholder="Koalisyon veya ekip üyesi ara..."
-            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400"
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400"
           />
         </div>
 
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() =>
-              setActiveFilter("all")
-            }
-            className={
+            onClick={() => setActiveFilter("all")}
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "all"
-                ? "whitespace-nowrap rounded-full bg-black px-5 py-2 text-sm font-medium text-white transition"
-                : "whitespace-nowrap rounded-full bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
-            }
+                ? "bg-[var(--color-primary-600)] text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
           >
             Tümü ({coalitions.length})
           </button>
 
           <button
             type="button"
-            onClick={() =>
-              setActiveFilter("active")
-            }
-            className={
+            onClick={() => setActiveFilter("active")}
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "active"
-                ? "whitespace-nowrap rounded-full bg-black px-5 py-2 text-sm font-medium text-white transition"
-                : "whitespace-nowrap rounded-full bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
-            }
+                ? "bg-[var(--color-primary-600)] text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
           >
             Aktif ({activeCount})
           </button>
 
           <button
             type="button"
-            onClick={() =>
-              setActiveFilter("completed")
-            }
-            className={
+            onClick={() => setActiveFilter("completed")}
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "completed"
-                ? "whitespace-nowrap rounded-full bg-black px-5 py-2 text-sm font-medium text-white transition"
-                : "whitespace-nowrap rounded-full bg-gray-100 px-5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
-            }
+                ? "bg-[var(--color-primary-600)] text-white"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
           >
             Tamamlanan ({completedCount})
           </button>
@@ -459,30 +440,34 @@ export default function CoalitionsPage() {
 
       {/* Loading */}
       {loading && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
-          <Loader2
-            size={24}
-            className="mx-auto animate-spin text-gray-400"
-          />
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
+          Koalisyonların yükleniyor...
+        </div>
+      )}
 
-          <p className="mt-4 text-sm text-gray-500">
-            Koalisyonların yükleniyor...
-          </p>
+      {/* Error */}
+      {!loading && errorMessage && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-10 text-center">
+          <h2 className="font-medium text-red-800">
+            Koalisyonlar yüklenemedi
+          </h2>
+          <p className="mt-2 text-sm text-red-600">{errorMessage}</p>
+          <button
+            type="button"
+            onClick={() => void loadCoalitions()}
+            className="mt-5 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
+          >
+            Tekrar Dene
+          </button>
         </div>
       )}
 
       {/* Empty */}
       {!loading &&
+        !errorMessage &&
         filteredCoalitions.length === 0 && (
           <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-              <Users
-                size={22}
-                className="text-gray-500"
-              />
-            </div>
-
-            <h2 className="mt-4 text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-gray-900">
               {search
                 ? "Aradığın koalisyon bulunamadı"
                 : activeFilter === "completed"
@@ -490,7 +475,7 @@ export default function CoalitionsPage() {
                   : "Henüz bir koalisyona dahil değilsin"}
             </h2>
 
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
+            <p className="mt-2 text-sm text-gray-500">
               {search
                 ? "Farklı bir koalisyon adı veya ekip üyesi deneyebilirsin."
                 : "Bir projeye seçildiğinde veya bir koalisyon davetini kabul ettiğinde burada görüntülenecek."}
@@ -500,164 +485,102 @@ export default function CoalitionsPage() {
 
       {/* Coalition List */}
       {!loading &&
+        !errorMessage &&
         filteredCoalitions.length > 0 && (
-          <div className="w-full space-y-5">
-            {filteredCoalitions.map(
-              (coalition) => (
-                <div
-                  key={coalition.id}
-                  className="w-full rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md"
-                >
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-3 flex flex-wrap items-center gap-3">
-                        <h2 className="text-lg font-semibold text-gray-900">
-                          {coalition.name}
-                        </h2>
+          <div className="space-y-5">
+            {filteredCoalitions.map((coalition) => (
+              <div
+                key={coalition.id}
+                className="flex w-full items-center justify-between gap-6 rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 flex flex-wrap items-center gap-3">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {coalition.name}
+                    </h2>
 
-                        <span
-                          className={
-                            coalition.status ===
-                            "active"
-                              ? "rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700"
-                              : "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
-                          }
-                        >
-                          {coalition.status ===
-                          "active"
-                            ? "Aktif"
-                            : "Tamamlandı"}
-                        </span>
-                      </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs ${
+                        coalition.status === "active"
+                          ? "bg-green-100 text-green-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {coalition.status === "active" ? "Aktif" : "Tamamlandı"}
+                    </span>
+                  </div>
 
-                      {coalition.description && (
-                        <p className="mb-5 max-w-3xl text-sm leading-6 text-gray-500">
-                          {coalition.description}
-                        </p>
-                      )}
+                  <p className="mb-5 line-clamp-2 text-sm text-gray-500">
+                    {coalition.description || "Açıklama eklenmemiş."}
+                  </p>
 
-                      <div className="flex flex-wrap items-center gap-x-10 gap-y-5 text-sm">
-                        {/* Team */}
-                        <div>
-                          <span className="mb-2 block text-xs text-gray-400">
-                            Ekip
-                          </span>
+                  <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
+                    <div>
+                      <span className="mb-1 block text-gray-400">Ekip</span>
 
-                          <div className="flex items-center">
-                            {coalition.members.length ===
-                              0 && (
-                              <span className="text-gray-500">
-                                Henüz üye yok
-                              </span>
-                            )}
+                      <div className="flex items-center">
+                        {coalition.members.length === 0 && (
+                          <span className="font-medium text-gray-900">Henüz üye yok</span>
+                        )}
 
-                            {coalition.members
-                              .slice(0, 5)
-                              .map(
-                                (
-                                  member,
-                                  index
-                                ) => {
-                                  const avatar =
-                                    getAvatar(
-                                      member
-                                    );
+                        {coalition.members.slice(0, 4).map((member, index) => {
+                          const avatar = getAvatar(member);
 
-                                  return (
-                                    <div
-                                      key={
-                                        member.id
-                                      }
-                                      className={
-                                        "group relative " +
-                                        (index >
-                                        0
-                                          ? "-ml-2"
-                                          : "")
-                                      }
-                                    >
-                                      {avatar ? (
-                                        <img
-                                          src={
-                                            avatar
-                                          }
-                                          alt={getMemberName(
-                                            member
-                                          )}
-                                          className="h-9 w-9 rounded-full border-2 border-white object-cover"
-                                        />
-                                      ) : (
-                                        <div className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-gray-200 text-xs font-medium text-gray-600">
-                                          {getMemberName(
-                                            member
-                                          )
-                                            .charAt(
-                                              0
-                                            )
-                                            .toUpperCase()}
-                                        </div>
-                                      )}
-
-                                      <div className="absolute bottom-12 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-black px-2 py-1 text-xs text-white group-hover:block">
-                                        {getMemberName(
-                                          member
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                }
+                          return (
+                            <div
+                              key={member.id}
+                              title={getMemberName(member)}
+                              className={index > 0 ? "-ml-2" : ""}
+                            >
+                              {avatar ? (
+                                <img
+                                  src={avatar}
+                                  alt={getMemberName(member)}
+                                  className="h-7 w-7 rounded-full border-2 border-white object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-200 text-xs font-medium text-gray-600">
+                                  {getMemberName(member).charAt(0).toUpperCase()}
+                                </div>
                               )}
+                            </div>
+                          );
+                        })}
 
-                            {coalition.members.length >
-                              5 && (
-                              <span className="ml-2 text-xs text-gray-500">
-                                +
-                                {coalition.members.length -
-                                  5}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Member count */}
-                        <div>
-                          <span className="mb-1 block text-xs text-gray-400">
-                            Üye Sayısı
+                        {coalition.members.length > 4 && (
+                          <span className="ml-2 text-xs text-gray-500">
+                            +{coalition.members.length - 4}
                           </span>
-
-                          <span className="font-medium text-gray-900">
-                            {coalition.members.length} kişi
-                          </span>
-                        </div>
-
-                        {/* Created date */}
-                        <div>
-                          <span className="mb-1 flex items-center gap-1 text-xs text-gray-400">
-                            <CalendarDays
-                              size={14}
-                            />
-                            Başlangıç
-                          </span>
-
-                          <span className="font-medium text-gray-900">
-                            {formatDate(
-                              coalition.created_at
-                            )}
-                          </span>
-                        </div>
+                        )}
                       </div>
                     </div>
 
-                    <Link
-                      href={`/freelancers/coalitions/${coalition.id}`}
-                      className="inline-flex shrink-0 items-center justify-center rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800"
-                    >
-                      Detayları Gör
-                    </Link>
+                    <div>
+                      <span className="mb-1 block text-gray-400">Üye Sayısı</span>
+                      <span className="font-medium text-gray-900">
+                        {coalition.members.length} kişi
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="mb-1 block text-gray-400">Oluşturulma Tarihi</span>
+                      <span className="font-medium text-gray-900">
+                        {formatDate(coalition.created_at)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              )
-            )}
+
+                <div className="flex shrink-0 gap-3">
+                  <Link
+                    href={`/freelancers/coalitions/${coalition.id}`}
+                    className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                  >
+                    Detayları Gör
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         )}
     </main>

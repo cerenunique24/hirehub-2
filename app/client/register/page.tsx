@@ -13,7 +13,7 @@ export default function ClientRegisterPage(){
   
         <div className="
           bg-white
-          rounded-3xl
+          rounded-xl
           border
           p-10
           w-[420px]

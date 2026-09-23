@@ -78,7 +78,7 @@ export default function Step1({
           Adım 1 / 3
         </span>
 
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-950 sm:text-4xl">
+        <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
           Hangi alanlarda çalışıyorsun?
         </h1>
 
@@ -100,15 +100,15 @@ export default function Step1({
               onClick={() => toggleCategory(category)}
               className={`flex min-h-[58px] items-center justify-between rounded-2xl border px-4 text-left text-sm font-medium transition ${
                 selected
-                  ? "border-black bg-black text-white"
+                  ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                   : "border-gray-200 bg-white text-gray-800 hover:border-gray-400 hover:bg-gray-50"
               }`}
             >
               <span>{category}</span>
 
               {selected && (
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-black">
-                  <Check size={15} strokeWidth={2.5} />
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-[var(--color-text-primary)]">
+                  <Check size={15} strokeWidth={1.7} />
                 </span>
               )}
             </button>
@@ -138,7 +138,7 @@ export default function Step1({
         <button
           type="button"
           onClick={continueStep}
-          className="flex h-12 min-w-[170px] items-center justify-center rounded-xl bg-black px-7 text-sm font-semibold text-white transition hover:bg-gray-800"
+          className="flex h-12 min-w-[170px] items-center justify-center rounded-xl bg-[var(--color-primary-600)] px-7 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
         >
           Devam et
         </button>

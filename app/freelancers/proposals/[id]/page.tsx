@@ -378,7 +378,7 @@ export default function ProposalDetailPage({
 
   if (loading) {
     return (
-      <main className="w-full p-8">
+      <main className="w-full p-6">
         <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
           <p className="text-sm text-gray-500">
             Teklif detayları yükleniyor...
@@ -390,7 +390,7 @@ export default function ProposalDetailPage({
 
   if (errorMessage || !proposal) {
     return (
-      <main className="w-full p-8">
+      <main className="w-full p-6">
         <Link
           href="/freelancers/proposals"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
@@ -411,7 +411,7 @@ export default function ProposalDetailPage({
 
           <Link
             href="/freelancers/proposals"
-            className="mt-5 inline-flex rounded-xl bg-black px-5 py-2.5 text-sm text-white transition hover:bg-gray-800"
+            className="mt-5 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
           >
             Tekliflerime Dön
           </Link>
@@ -425,7 +425,7 @@ export default function ProposalDetailPage({
   const isPending = statusKey === "pending";
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       {/* HEADER */}
 
       <div className="mb-8">
@@ -482,7 +482,7 @@ export default function ProposalDetailPage({
         <div className="space-y-6">
           {/* PROJECT */}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="mb-6">
               <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
                 Proje
@@ -512,7 +512,7 @@ export default function ProposalDetailPage({
 
           {/* COVER LETTER */}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
                 <FileText
@@ -546,7 +546,7 @@ export default function ProposalDetailPage({
         <aside className="space-y-6">
           {/* PROPOSAL INFO */}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="mb-5 font-semibold text-gray-900">
               Teklif Bilgileri
             </h2>
@@ -628,7 +628,7 @@ export default function ProposalDetailPage({
 
           {/* PROJECT BUDGET */}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6">
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
             <h2 className="mb-4 font-semibold text-gray-900">
               Proje Bütçesi
             </h2>
@@ -644,7 +644,7 @@ export default function ProposalDetailPage({
 
           {/* MESSAGE */}
 
-          <section className="rounded-2xl bg-black p-6 text-white">
+          <section className="rounded-xl bg-[var(--color-primary-600)] p-5 text-white">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
                 <MessageCircle size={19} />
@@ -668,7 +668,7 @@ export default function ProposalDetailPage({
                 )}&proposal=${encodeURIComponent(
                   proposal.id
                 )}`}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:bg-gray-100"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-[var(--color-text-primary)] transition hover:bg-gray-100"
               >
                 Mesaj Gönder
                 <MessageCircle size={16} />
@@ -684,7 +684,7 @@ export default function ProposalDetailPage({
 
       {/* PROPOSAL PROCESS */}
 
-      <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-6">
+      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-6 flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
             <CheckCircle2

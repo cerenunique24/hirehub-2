@@ -25,6 +25,38 @@ export function normalizeRoleName(value: string) {
   return value.trim().toLocaleLowerCase("tr-TR");
 }
 
+/**
+ * `accept_project_placement` RPC'sinin (bkz. supabase/migrations/
+ * 202609200001_team_placement_capacity_rpc.sql) fırlattığı hata mesajlarını
+ * kullanıcıya gösterilecek Türkçe metne çevirir. Bu RPC hem davet kabul
+ * (app/freelancers/proposals/page.tsx) hem de teklif kabul
+ * (app/client/proposals/page.tsx) akışında aynı şekilde kullanılır.
+ */
+export function describeAcceptPlacementError(message: string): string {
+  if (message.includes("role_capacity_full")) {
+    return "Bu rol zaten dolu. Bu role başka bir freelancer kabul edilemez.";
+  }
+  if (message.includes("project_capacity_full")) {
+    return "Bu proje zaten bir ekip üyesi kabul etmiş; tek kişilik projelerde ikinci bir üye eklenemez.";
+  }
+  if (message.includes("already_member")) {
+    return "Bu freelancer zaten bu projenin aktif ekip üyesi.";
+  }
+  if (message.includes("project_not_open")) {
+    return "Bu proje artık yeni ekip üyesi kabul etmeye uygun değil.";
+  }
+  if (
+    message.includes("invitation_not_found_or_not_pending") ||
+    message.includes("proposal_not_found_or_not_pending")
+  ) {
+    return "Bu davet/teklif artık bekleyen durumda değil. Sayfayı yenileyip tekrar kontrol edin.";
+  }
+  if (message.includes("not_authorized") || message.includes("not_authenticated")) {
+    return "Bu işlemi yapmaya yetkin yok.";
+  }
+  return "Ekibe katılırken bir hata oluştu.";
+}
+
 export function getRoleCapacity(
   budgetBreakdown: BudgetBreakdownRole[] | null | undefined,
   roleName: string

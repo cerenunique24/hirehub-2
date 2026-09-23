@@ -5,7 +5,7 @@ import { UserRound, BriefcaseBusiness } from "lucide-react";
 
 export default function RoleSelectionPage() {
   return (
-    <main className="min-h-screen bg-[#F7F8FA] flex items-center justify-center px-6">
+    <main className="min-h-screen bg-[var(--color-canvas)] flex items-center justify-center px-6">
 
       <div className="w-full max-w-4xl">
 
@@ -32,10 +32,10 @@ export default function RoleSelectionPage() {
               bg-white
               border
               border-gray-200
-              rounded-2xl
-              p-6
+              rounded-xl
+              p-5
               transition
-              hover:border-black
+              hover:border-[var(--color-primary-600)]
               hover:shadow-md
             "
           >
@@ -76,12 +76,12 @@ export default function RoleSelectionPage() {
                 px-5
                 py-2.5
                 rounded-xl
-                bg-black
+                bg-[var(--color-primary-600)]
                 text-white
                 text-sm
                 font-medium
                 transition
-                hover:bg-gray-800
+                hover:bg-[var(--color-primary-700)]
               "
             >
               Devam Et
@@ -101,10 +101,10 @@ export default function RoleSelectionPage() {
               bg-white
               border
               border-gray-200
-              rounded-2xl
-              p-6
+              rounded-xl
+              p-5
               transition
-              hover:border-black
+              hover:border-[var(--color-primary-600)]
               hover:shadow-md
             "
           >
@@ -145,12 +145,12 @@ export default function RoleSelectionPage() {
                 px-5
                 py-2.5
                 rounded-xl
-                bg-black
+                bg-[var(--color-primary-600)]
                 text-white
                 text-sm
                 font-medium
                 transition
-                hover:bg-gray-800
+                hover:bg-[var(--color-primary-700)]
               "
             >
               Devam Et

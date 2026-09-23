@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Briefcase, Clock3, MessageSquare, Send, UserRound } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { formatDeadlineDate, formatRemainingTime } from "@/lib/utils/deadline";
+import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
+import PerformanceTeaserCard from "@/components/freelancers/PerformanceTeaserCard";
 
 type Profile = {
   first_name: string | null;
@@ -13,6 +16,7 @@ type Profile = {
   expertise: string | null;
   skills: string[] | null;
   profile_completion: number | null;
+  availability_status: string | null;
 };
 
 type Proposal = {
@@ -28,9 +32,24 @@ type Project = {
   status: string | null;
 };
 
+type Milestone = {
+  id: string;
+  project_id: string;
+  title: string;
+  due_date: string | null;
+  status: string | null;
+  sort_order: number | null;
+};
+
+type ActiveProject = Project & {
+  role: string | null;
+  deadline: string | null;
+  currentMilestone: Milestone | null;
+};
+
 type DashboardData = {
   profile: Profile | null;
-  activeProjects: Project[];
+  activeProjects: ActiveProject[];
   pendingProposals: number;
   unreadMessages: number;
   recentProposals: Array<Proposal & { project: Project | null }>;
@@ -53,10 +72,10 @@ export default function FreelancerDashboard() {
       }
 
       const [profileResult, proposalResult, messageResult, membershipResult] = await Promise.all([
-        supabase.from("profiles").select("first_name, last_name, avatar_url, expertise, skills, profile_completion").eq("id", user.id).maybeSingle(),
+        supabase.from("profiles").select("first_name, last_name, avatar_url, expertise, skills, profile_completion, availability_status").eq("id", user.id).maybeSingle(),
         supabase.from("proposals").select("id, project_id, status, created_at").eq("freelancer_id", user.id).order("created_at", { ascending: false }),
         supabase.from("messages").select("id", { count: "exact", head: true }).eq("receiver_id", user.id).is("read_at", null),
-        supabase.from("project_team_members").select("project_id").eq("freelancer_id", user.id).eq("status", "active"),
+        supabase.from("project_team_members").select("project_id, role").eq("freelancer_id", user.id).eq("status", "active"),
       ]);
 
       if (proposalResult.error) {
@@ -78,23 +97,73 @@ export default function FreelancerDashboard() {
       const projectById = new Map(((projectResult.data ?? []) as Project[]).map((project) => [project.id, project]));
 
       // Ekip üyeliği (project_team_members), hem proposal hem invitation ile
-      // katılan freelancer'ları kapsar; "aktif proje" burada gerçekten
-      // ekipte olduğun ve tamamlanmamış projeler anlamına gelir.
-      const membershipProjectIds = [
-        ...new Set((membershipResult.data ?? []).map((row: { project_id: string }) => row.project_id)),
-      ];
+      // katılan freelancer'ları kapsar. "Aktif proje" burada ürün kuralına
+      // göre projects.status === 'in_progress' olan, gerçekten ekipte
+      // olunan projeler anlamına gelir.
+      type Membership = { project_id: string; role: string | null };
+      const memberships = (membershipResult.data ?? []) as Membership[];
+      const roleByProjectId = new Map(memberships.map((row) => [row.project_id, row.role]));
+      const membershipProjectIds = [...new Set(memberships.map((row) => row.project_id))];
+
       const memberProjectsMissing = membershipProjectIds.filter((pid) => !projectById.has(pid));
       const extraProjects = memberProjectsMissing.length
-        ? await supabase.from("projects").select("id, title, status").in("id", memberProjectsMissing)
-        : { data: [] as Project[] };
+        ? await supabase.from("projects").select("id, title, status, deadline").in("id", memberProjectsMissing)
+        : { data: [] as Array<Project & { deadline: string | null }> };
 
       for (const extra of extraProjects.data ?? []) {
         projectById.set(extra.id, extra as Project);
       }
 
-      const activeProjects = membershipProjectIds
-        .map((pid) => projectById.get(pid))
-        .filter((project): project is Project => project !== undefined && project.status !== "completed");
+      const activeProjectIds = membershipProjectIds.filter((pid) => projectById.get(pid)?.status === "in_progress");
+
+      // Kalan deadline projects.deadline'da yoksa fetch edilmemiş olabilir
+      // (ilk sorgu deadline seçmiyordu) — aktif projeler için ayrıca çekilir.
+      const deadlineResult = activeProjectIds.length
+        ? await supabase.from("projects").select("id, deadline").in("id", activeProjectIds)
+        : { data: [] as Array<{ id: string; deadline: string | null }> };
+      const deadlineByProjectId = new Map((deadlineResult.data ?? []).map((row) => [row.id, row.deadline]));
+
+      const milestoneResult = activeProjectIds.length
+        ? await supabase
+            .from("project_milestones")
+            .select("id, project_id, title, due_date, status, sort_order")
+            .in("project_id", activeProjectIds)
+            .order("sort_order", { ascending: true })
+        : { data: [] as Milestone[] };
+
+      const milestonesByProject = new Map<string, Milestone[]>();
+      for (const milestone of (milestoneResult.data ?? []) as Milestone[]) {
+        const list = milestonesByProject.get(milestone.project_id) ?? [];
+        list.push(milestone);
+        milestonesByProject.set(milestone.project_id, list);
+      }
+
+      function pickCurrentMilestone(projectId: string): Milestone | null {
+        const milestones = milestonesByProject.get(projectId) ?? [];
+
+        return (
+          milestones.find((milestone) => milestone.status === "active") ??
+          milestones.find((milestone) => milestone.status !== "approved") ??
+          null
+        );
+      }
+
+      const activeProjects: ActiveProject[] = activeProjectIds
+        .map((pid) => {
+          const project = projectById.get(pid);
+
+          if (!project) {
+            return null;
+          }
+
+          return {
+            ...project,
+            role: roleByProjectId.get(pid) ?? null,
+            deadline: deadlineByProjectId.get(pid) ?? null,
+            currentMilestone: pickCurrentMilestone(pid),
+          };
+        })
+        .filter((project): project is ActiveProject => project !== null);
 
       if (active) {
         setData({
@@ -121,30 +190,173 @@ export default function FreelancerDashboard() {
   const initials = name.charAt(0).toLocaleUpperCase("tr-TR") || "F";
 
   return (
-    <main className="mx-auto max-w-7xl space-y-8 p-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
+    <main className="mx-auto max-w-7xl">
+      <header className="mb-[var(--rhythm-header-gap)] flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           {profile?.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={profile.avatar_url} alt={name} className="h-14 w-14 rounded-full object-cover" />
-          ) : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-lg font-semibold text-white">{initials}</div>}
-          <div><h1 className="text-2xl font-semibold text-gray-900">Hoş geldin, {name}</h1><p className="mt-1 text-sm text-gray-500">Tekliflerini, projelerini ve mesajlarını buradan takip edebilirsin.</p></div>
+          ) : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-lg font-semibold text-white">{initials}</div>}
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Hoş geldin, {name}</h1>
+            <p className="mt-[var(--rhythm-title-gap)] text-sm text-gray-500">
+              Tekliflerini, projelerini ve mesajlarını buradan takip edebilirsin.
+            </p>
+          </div>
         </div>
-        <Link href="/freelancers/discover" className="rounded-xl bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800">Proje keşfet</Link>
+        <Link href="/freelancers/discover" className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-primary-700)]">Proje keşfet</Link>
       </header>
 
-      <section className="grid gap-5 md:grid-cols-3">
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] md:grid-cols-3">
         <Metric icon={<Briefcase size={19} />} label="Aktif projeler" value={data?.activeProjects.length ?? 0} detail="Ekibinde olduğun, tamamlanmamış projeler" />
         <Metric icon={<Clock3 size={19} />} label="Bekleyen teklifler" value={data?.pendingProposals ?? 0} detail="Müşteri değerlendirmesini bekliyor" />
         <Metric icon={<MessageSquare size={19} />} label="Okunmamış mesajlar" value={data?.unreadMessages ?? 0} detail="Yeni gelen mesajlar" />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-gray-900">Aktif projeler</h2><p className="mt-1 text-sm text-gray-500">Ekibinde olduğun projeler</p></div><Link href="/freelancers/proposals" className="text-sm font-medium text-gray-700 hover:text-black">Tekliflerim</Link></div>{data?.activeProjects.length ? <div className="mt-5 space-y-3">{data.activeProjects.map((project) => <Link key={project.id} href={project.status === "in_progress" ? `/freelancers/projects/${project.id}` : `/freelancers/discover/${project.id}`} className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"><p className="font-medium text-gray-900">{project.title}</p><p className="mt-1 text-sm text-gray-500">{statusLabel(project.status)}</p></Link>)}</div> : <Empty text="Henüz ekibinde olduğun bir proje yok." />}</div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-gray-900">Son teklifler</h2><p className="mt-1 text-sm text-gray-500">Gerçek teklif hareketlerin</p></div><Send size={18} className="text-gray-400" /></div>{data?.recentProposals.length ? <div className="mt-5 space-y-3">{data.recentProposals.map((proposal) => <Link key={proposal.id} href={`/freelancers/proposals/${proposal.id}`} className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"><div className="flex items-start justify-between gap-3"><p className="font-medium text-gray-900">{proposal.project?.title ?? "Proje bilgisi bulunamadı"}</p><span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">{statusLabel(proposal.status)}</span></div><p className="mt-2 text-xs text-gray-400">{new Date(proposal.created_at).toLocaleDateString("tr-TR")}</p></Link>)}</div> : <Empty text="Henüz teklif göndermedin." />}</div>
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Aktif projeler</h2>
+              <p className="mt-1 text-sm text-gray-500">Ekibinde olduğun, devam eden projeler</p>
+            </div>
+            <Link href="/freelancers/proposals" className="text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]">Tekliflerim</Link>
+          </div>
+
+          {data?.activeProjects.length ? (
+            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
+              {data.activeProjects.map((project) => {
+                const remaining = formatRemainingTime(project.deadline);
+                const deadlineDate = formatDeadlineDate(project.deadline);
+                const milestoneRemaining = project.currentMilestone
+                  ? formatRemainingTime(project.currentMilestone.due_date)
+                  : null;
+
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/freelancers/projects/${project.id}`}
+                    className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-gray-900">{project.title}</p>
+                        {project.role && <p className="mt-0.5 text-sm text-gray-500">{project.role}</p>}
+                      </div>
+                      <span
+                        className={
+                          "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium " +
+                          (remaining.overdue ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-600")
+                        }
+                      >
+                        {remaining.label}
+                      </span>
+                    </div>
+
+                    {deadlineDate && (
+                      <p className="mt-2 text-xs text-gray-400">Teslim tarihi: {deadlineDate}</p>
+                    )}
+
+                    {project.currentMilestone && milestoneRemaining && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Mevcut aşama: <span className="font-medium text-gray-700">{project.currentMilestone.title}</span>{" "}
+                        · {milestoneRemaining.label}
+                      </p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty text="Henüz ekibinde olduğun devam eden bir proje yok." />
+          )}
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Son teklifler</h2>
+              <p className="mt-1 text-sm text-gray-500">Gerçek teklif hareketlerin</p>
+            </div>
+            <Send size={18} className="text-gray-400" />
+          </div>
+          {data?.recentProposals.length ? (
+            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
+              {data.recentProposals.map((proposal) => (
+                <Link
+                  key={proposal.id}
+                  href={`/freelancers/proposals/${proposal.id}`}
+                  className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-gray-900">
+                      {proposal.project?.title ?? "Proje bilgisi bulunamadı"}
+                    </p>
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
+                      {statusLabel(proposal.status)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-400">
+                    {new Date(proposal.created_at).toLocaleDateString("tr-TR")}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Empty text="Henüz teklif göndermedin." />
+          )}
+        </div>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-gray-900">Profil özeti</h2><p className="mt-1 text-sm text-gray-500">Profili tamamlamak, keşfet ekranındaki görünürlüğünü iyileştirir.</p></div><Link href="/freelancers/profile" className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-black"><UserRound size={16} />Profili düzenle</Link></div><div className="mt-5"><div className="flex justify-between text-sm"><span className="text-gray-500">Profil tamamlanma</span><span className="font-medium text-gray-900">{profile?.profile_completion ?? 0}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100"><div className="h-full rounded-full bg-black" style={{ width: `${Math.max(0, Math.min(100, profile?.profile_completion ?? 0))}%` }} /></div>{profile?.expertise && <p className="mt-5 text-sm text-gray-700">{profile.expertise}</p>}{profile?.skills?.length ? <div className="mt-3 flex flex-wrap gap-2">{profile.skills.map((skill) => <span key={skill} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">{skill}</span>)}</div> : <p className="mt-4 text-sm text-gray-500">Henüz yetenek eklenmemiş.</p>}</div></section>
+      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
+        <AvailabilityCard
+          status={profile?.availability_status ?? null}
+          activeProjectCount={data?.activeProjects.length ?? 0}
+        />
+        <PerformanceTeaserCard />
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="font-semibold text-gray-900">Profil özeti</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Profili tamamlamak, keşfet ekranındaki görünürlüğünü iyileştirir.
+            </p>
+          </div>
+          <Link
+            href="/freelancers/profile"
+            className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]"
+          >
+            <UserRound size={16} />
+            Profili düzenle
+          </Link>
+        </div>
+
+        <div className="mt-[var(--rhythm-group-gap)]">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Profil tamamlanma</span>
+            <span className="font-medium text-gray-900">{profile?.profile_completion ?? 0}%</span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
+            <div
+              className="h-full rounded-full bg-[var(--color-primary-600)]"
+              style={{ width: `${Math.max(0, Math.min(100, profile?.profile_completion ?? 0))}%` }}
+            />
+          </div>
+          {profile?.expertise && <p className="mt-[var(--rhythm-group-gap)] text-sm text-gray-700">{profile.expertise}</p>}
+          {profile?.skills?.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {profile.skills.map((skill) => (
+                <span key={skill} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+                  {skill}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500">Henüz yetenek eklenmemiş.</p>
+          )}
+        </div>
+      </section>
     </main>
   );
 }

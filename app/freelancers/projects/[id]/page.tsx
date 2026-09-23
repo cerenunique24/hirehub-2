@@ -123,9 +123,9 @@ function FreelancerWorkroomContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
         <div className="mx-auto max-w-5xl">
-          <div className="rounded-2xl border border-gray-100 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
             <p className="text-sm text-gray-500">Çalışma alanı yükleniyor...</p>
           </div>
         </div>
@@ -135,7 +135,7 @@ function FreelancerWorkroomContent() {
 
   if (error || !project) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
         <div className="mx-auto max-w-5xl">
           <Link
             href="/freelancers/projects"
@@ -144,7 +144,7 @@ function FreelancerWorkroomContent() {
             <ArrowLeft size={16} />
             Projelere dön
           </Link>
-          <div className="rounded-2xl border border-red-100 bg-white p-8 shadow-sm">
+          <div className="rounded-xl border border-red-100 bg-white p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-gray-900">Çalışma alanı görüntülenemedi</h1>
             <p className="mt-2 text-sm text-gray-500">{error || "Aradığınız proje bulunamadı."}</p>
           </div>
@@ -154,7 +154,7 @@ function FreelancerWorkroomContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 sm:p-8">
+    <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
       <div className="mx-auto max-w-5xl space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
@@ -170,7 +170,7 @@ function FreelancerWorkroomContent() {
               href={`/freelancers/messages?user=${encodeURIComponent(backToMessagesUser)}${
                 backToMessagesProposal ? `&proposal=${encodeURIComponent(backToMessagesProposal)}` : ""
               }`}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
             >
               <ArrowLeft size={16} />
               Mesajlara dön
@@ -178,8 +178,8 @@ function FreelancerWorkroomContent() {
           )}
         </div>
 
-        <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
-          <h1 className="text-3xl font-semibold tracking-tight text-gray-900">{project.title}</h1>
+        <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
+          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-gray-900">{project.title}</h1>
           {project.description && (
             <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-gray-600">
               {project.description}

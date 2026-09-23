@@ -135,7 +135,7 @@ export default function IndividualVerifyPage() {
 
       className="
       min-h-screen
-      bg-[#fafafa]
+      bg-[var(--color-canvas)]
       flex
       items-center
       justify-center
@@ -149,7 +149,7 @@ export default function IndividualVerifyPage() {
 
         className="
         bg-white
-        rounded-3xl
+        rounded-xl
         shadow-sm
         p-10
         w-full
@@ -257,7 +257,7 @@ export default function IndividualVerifyPage() {
                   text-xl
                   font-semibold
                   focus:outline-none
-                  focus:border-black
+                  focus:border-[var(--color-primary-600)]
                   "
 
                 />
@@ -301,7 +301,7 @@ export default function IndividualVerifyPage() {
 
             ?
 
-            "bg-black hover:bg-gray-800"
+            "bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)]"
 
             :
 

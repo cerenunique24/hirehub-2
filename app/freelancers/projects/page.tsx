@@ -167,7 +167,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <main className="p-8">
+    <main className="p-6">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Projelerim</h1>
         <p className="mt-2 text-sm text-gray-500">
@@ -216,7 +216,7 @@ export default function ProjectsPage() {
           </p>
           <Link
             href="/freelancers/discover"
-            className="mt-6 inline-flex rounded-xl bg-black px-5 py-3 text-sm font-medium text-white"
+            className="mt-6 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white"
           >
             Projeleri keşfet
           </Link>
@@ -234,7 +234,7 @@ export default function ProjectsPage() {
             <Link
               key={project.id}
               href={href}
-              className="group rounded-2xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
+              className="group rounded-xl border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
             >
               <div className="mb-4 flex items-start justify-between gap-4">
                 <h2 className="font-semibold text-gray-900">{project.title}</h2>

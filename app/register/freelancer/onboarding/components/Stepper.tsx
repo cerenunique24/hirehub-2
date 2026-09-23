@@ -21,7 +21,7 @@ export default function Stepper({ step }: StepperProps) {
 
         {/* İlerleme çizgisi */}
         <div
-          className="absolute left-[16.66%] top-5 h-px bg-black transition-all duration-500"
+          className="absolute left-[16.66%] top-5 h-px bg-[var(--color-primary-600)] transition-all duration-500"
           style={{
             width:
               step === 1
@@ -51,9 +51,9 @@ export default function Stepper({ step }: StepperProps) {
                     text-sm font-semibold transition-all duration-300
                     ${
                       completed
-                        ? "border-black bg-black text-white"
+                        ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)] text-white"
                         : active
-                          ? "border-black bg-white text-black ring-4 ring-gray-100"
+                          ? "border-[var(--color-primary-600)] bg-white text-[var(--color-text-primary)] ring-4 ring-gray-100"
                           : "border-gray-200 bg-white text-gray-400"
                     }
                   `}

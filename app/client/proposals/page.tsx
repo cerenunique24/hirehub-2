@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
+import { calculateClientPricing, formatRatePercent, getProjectCommissionRate } from "@/lib/pricing";
 import {
   checkAndUpdateProjectReadiness,
+  describeAcceptPlacementError,
   getRoleCapacity as getRoleCapacityForRoles,
   normalizeRoleName,
 } from "@/lib/projects/teamReadiness";
@@ -80,6 +82,13 @@ type Freelancer = {
   last_name: string | null;
   title: string | null;
   skills: string[] | null;
+  availability_status: string | null;
+};
+
+const AVAILABILITY_LABEL: Record<string, string> = {
+  available: "🟢 Müsait",
+  limited: "🟡 Kısmen Müsait",
+  unavailable: "🔴 Müsait Değil",
 };
 
 type BudgetBreakdownRole = {
@@ -95,6 +104,7 @@ type Project = {
   client_id: string;
   status: string | null;
   budget_breakdown: BudgetBreakdownRole[] | null;
+  commission_rate: number | null;
 };
 
 type RawProposal = {
@@ -107,6 +117,7 @@ type RawProposal = {
   cover_letter: string | null;
   status: string | null;
   created_at: string;
+  viewed_at: string | null;
 };
 
 type Proposal = RawProposal & {
@@ -167,6 +178,7 @@ export default function ClientProposalsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
 
   const [sentInvitations, setSentInvitations] = useState<
     SentInvitation[]
@@ -377,7 +389,7 @@ export default function ClientProposalsPage() {
           error: projectsError,
         } = await supabase
           .from("projects")
-          .select("id, title, client_id, status, budget_breakdown")
+          .select("id, title, client_id, status, budget_breakdown, commission_rate")
           .eq("client_id", user.id);
 
         if (projectsError) {
@@ -416,7 +428,8 @@ export default function ClientProposalsPage() {
               delivery_days,
               cover_letter,
               status,
-              created_at
+              created_at,
+              viewed_at
             `
           )
           .in("project_id", projectIds)
@@ -465,7 +478,8 @@ export default function ClientProposalsPage() {
               first_name,
               last_name,
               title,
-              skills
+              skills,
+              availability_status
             `
           )
           .in("id", freelancerIds);
@@ -506,6 +520,27 @@ export default function ClientProposalsPage() {
           }));
 
         setProposals(formattedProposals);
+
+        /*
+         * Freelancer'ın Premium teklif performans analizindeki
+         * "görüntülenen teklif" sayısı bu alana dayanır — client
+         * teklifi listesinde gördüğünde bir kere işaretlenir.
+         */
+        const unviewedIds = proposalsData
+          .filter((proposal) => !proposal.viewed_at)
+          .map((proposal) => proposal.id);
+
+        if (unviewedIds.length > 0) {
+          void supabase
+            .from("proposals")
+            .update({ viewed_at: new Date().toISOString() })
+            .in("id", unviewedIds)
+            .then(({ error: viewError }) => {
+              if (viewError) {
+                console.error("TEKLİF GÖRÜNTÜLENME İŞARETİ HATASI:", viewError);
+              }
+            });
+        }
       } catch (unexpectedError) {
         console.error(
           "BEKLENMEYEN TEKLİF HATASI:",
@@ -613,12 +648,17 @@ export default function ClientProposalsPage() {
         return;
       }
 
+      // Hızlı, kullanıcı dostu ön kontrol (UX amaçlı) — gerçek
+      // yetkilendirme sınırı bu değil, aşağıdaki accept_project_placement
+      // DB fonksiyonu. Bu fonksiyon hem burada hem de freelancer'ın davet
+      // kabul akışında (app/freelancers/proposals/page.tsx) aynı şekilde
+      // kullanılıyor ve kapasite/tekrar-üyelik kontrolünü proje satırını
+      // kilitleyerek atomik ve race-condition'a dayanıklı şekilde yapıyor.
       const roleCapacity = getRoleCapacity(
         proposal.project,
         proposal.role
       );
 
-      // Aynı role ait aktif ekip üyesi var mı?
       const {
         data: existingMembers,
         error: membersError,
@@ -640,15 +680,25 @@ export default function ClientProposalsPage() {
         return;
       }
 
+      const isTeamProject =
+        Array.isArray(proposal.project.budget_breakdown) &&
+        proposal.project.budget_breakdown.length > 0;
+
       const sameRoleMembers = (existingMembers ?? []).filter(
         (member) =>
           normalizeRoleName(member.role ?? "") ===
           normalizeRoleName(proposal.role ?? "")
       );
 
-      if (sameRoleMembers.length >= roleCapacity) {
+      const relevantMemberCount = isTeamProject
+        ? sameRoleMembers.length
+        : (existingMembers ?? []).length;
+
+      if (relevantMemberCount >= roleCapacity) {
         setError(
-          `"${proposal.role}" rolü zaten dolu. Bu role başka bir freelancer kabul edilemez.`
+          isTeamProject
+            ? `"${proposal.role}" rolü zaten dolu. Bu role başka bir freelancer kabul edilemez.`
+            : "Bu proje zaten bir ekip üyesi kabul etmiş."
         );
         return;
       }
@@ -664,65 +714,16 @@ export default function ClientProposalsPage() {
         return;
       }
 
-      // Önce teklifi kabul et.
-      const { error: proposalError } = await supabase
-        .from("proposals")
-        .update({
-          status: "accepted",
-        })
-        .eq("id", proposalId)
-        .eq("status", "pending");
+      // Asıl kabul + kapasite/tekrar-üyelik doğrulaması + ekibe ekleme,
+      // tek bir atomik DB transaction'ında (accept_project_placement RPC).
+      const { error: acceptError } = await supabase.rpc(
+        "accept_project_placement",
+        { p_source: "proposal", p_source_id: proposal.id }
+      );
 
-      if (proposalError) {
-        console.error(
-          "TEKLİF KABUL HATASI:",
-          proposalError
-        );
-
-        setError(
-          `Teklif kabul edilemedi: ${proposalError.message}`
-        );
-        return;
-      }
-
-      // Kabul edilen freelancerı gerçek proje ekibine ekle.
-      const { error: memberError } = await supabase
-        .from("project_team_members")
-        .insert({
-          project_id: proposal.project_id,
-          freelancer_id: proposal.freelancer_id,
-          role: proposal.role,
-          proposal_id: proposal.id,
-          joined_via: "proposal",
-          status: "active",
-        });
-
-      if (memberError) {
-        console.error(
-          "EKİP ÜYESİ EKLEME HATASI:",
-          memberError
-        );
-
-        // Ekip eklenemezse teklifi tekrar pending'e al.
-        await supabase
-          .from("proposals")
-          .update({
-            status: "pending",
-          })
-          .eq("id", proposal.id);
-
-        if (
-          memberError.code === "23505"
-        ) {
-          setError(
-            "Bu teklif için zaten bir ekip üyeliği oluşturulmuş. Sayfayı yenileyip tekrar kontrol edin."
-          );
-        } else {
-          setError(
-            `Freelancer ekibe eklenemedi: ${memberError.message}`
-          );
-        }
-
+      if (acceptError) {
+        console.error("TEKLİF KABUL HATASI:", acceptError);
+        setError(describeAcceptPlacementError(acceptError.message));
         return;
       }
 
@@ -816,10 +817,10 @@ export default function ClientProposalsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mx-auto max-w-7xl">
         <div>
-          <h1 className="text-3xl font-bold text-neutral-900">
+          <h1 className="text-3xl font-semibold text-neutral-900">
             Teklifler
           </h1>
 
@@ -834,9 +835,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setActiveTab("received")}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
               activeTab === "received"
-                ? "border-black text-neutral-900"
+                ? "border-[var(--color-primary-600)] text-neutral-900"
                 : "border-transparent text-neutral-500 hover:text-neutral-800"
             }`}
           >
@@ -850,9 +851,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setActiveTab("sent")}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition ${
+            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
               activeTab === "sent"
-                ? "border-black text-neutral-900"
+                ? "border-[var(--color-primary-600)] text-neutral-900"
                 : "border-transparent text-neutral-500 hover:text-neutral-800"
             }`}
           >
@@ -869,9 +870,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setFilterValue("all")}
-            className={`rounded-full px-5 py-2 text-sm transition ${
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               filterValue === "all"
-                ? "bg-black text-white"
+                ? "bg-[var(--color-primary-600)] text-white"
                 : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
             }`}
           >
@@ -881,9 +882,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setFilterValue("pending")}
-            className={`rounded-full px-5 py-2 text-sm transition ${
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               filterValue === "pending"
-                ? "bg-black text-white"
+                ? "bg-[var(--color-primary-600)] text-white"
                 : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
             }`}
           >
@@ -893,9 +894,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setFilterValue("accepted")}
-            className={`rounded-full px-5 py-2 text-sm transition ${
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               filterValue === "accepted"
-                ? "bg-black text-white"
+                ? "bg-[var(--color-primary-600)] text-white"
                 : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
             }`}
           >
@@ -905,9 +906,9 @@ export default function ClientProposalsPage() {
           <button
             type="button"
             onClick={() => setFilterValue("rejected")}
-            className={`rounded-full px-5 py-2 text-sm transition ${
+            className={`rounded-lg px-4 py-1.5 text-sm transition ${
               filterValue === "rejected"
-                ? "bg-black text-white"
+                ? "bg-[var(--color-primary-600)] text-white"
                 : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
             }`}
           >
@@ -967,7 +968,7 @@ export default function ClientProposalsPage() {
             return (
               <article
                 key={proposal.id}
-                className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+                className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -992,6 +993,15 @@ export default function ClientProposalsPage() {
                       <p className="mt-1 text-sm text-neutral-500">
                         {proposal.freelancer.title}
                       </p>
+                    )}
+
+                    {proposal.freelancer && (
+                      <span className="mt-2 inline-block rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">
+                        {AVAILABILITY_LABEL[
+                          proposal.freelancer.availability_status ??
+                            "available"
+                        ] ?? AVAILABILITY_LABEL.available}
+                      </span>
                     )}
                   </div>
 
@@ -1067,13 +1077,31 @@ export default function ClientProposalsPage() {
                       ? `${proposal.delivery_days} gün`
                       : "Teslim süresi belirtilmedi"}
                   </p>
+
+                  {proposal.project && Number(proposal.bid_amount ?? 0) > 0 && (() => {
+                    // Rate frozen on the project at creation — not the client's current plan.
+                    const pricing = calculateClientPricing(
+                      Number(proposal.bid_amount),
+                      getProjectCommissionRate(proposal.project)
+                    );
+                    return (
+                      <dl className="mt-3 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-[13px] text-neutral-500">
+                        <dt>Freelancer bedeli</dt>
+                        <dd className="text-right tabular-nums text-neutral-700">{formatCurrency(pricing.freelancerAmount)}</dd>
+                        <dt>Platform hizmet bedeli ({formatRatePercent(pricing.rate)})</dt>
+                        <dd className="text-right tabular-nums text-neutral-700">{formatCurrency(pricing.platformFee)}</dd>
+                        <dt className="font-medium text-neutral-800">Toplam maliyet</dt>
+                        <dd className="text-right font-medium tabular-nums text-neutral-900">{formatCurrency(pricing.clientTotal)}</dd>
+                      </dl>
+                    );
+                  })()}
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">
                   {proposal.project && (
                     <Link
                       href={`/client/projects/${proposal.project.id}`}
-                      className="text-sm font-medium text-neutral-700 transition hover:text-black"
+                      className="text-sm font-medium text-neutral-700 transition hover:text-[var(--color-text-primary)]"
                     >
                       Projeyi görüntüle
                     </Link>
@@ -1092,7 +1120,7 @@ export default function ClientProposalsPage() {
                             "accepted"
                           )
                         }
-                        className="rounded-lg bg-black px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50"
+                        className="rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
                       >
                         {updatingId === proposal.id
                           ? "İşleniyor..."
@@ -1120,7 +1148,7 @@ export default function ClientProposalsPage() {
                   {proposal.status === "accepted" && (
                     <Link
                       href={`/client/messages?user=${proposal.freelancer_id}&proposal=${proposal.id}`}
-                      className="inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-800"
+                      className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                     >
                       <MessageCircle size={15} />
                       Freelancer&apos;a mesaj gönder
@@ -1183,7 +1211,7 @@ export default function ClientProposalsPage() {
               return (
                 <article
                   key={invitation.id}
-                  className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+                  className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -1246,7 +1274,7 @@ export default function ClientProposalsPage() {
                     {invitation.project && (
                       <Link
                         href={`/client/projects/${invitation.project.id}`}
-                        className="text-sm font-medium text-neutral-700 transition hover:text-black"
+                        className="text-sm font-medium text-neutral-700 transition hover:text-[var(--color-text-primary)]"
                       >
                         Projeyi görüntüle
                       </Link>
@@ -1270,7 +1298,7 @@ export default function ClientProposalsPage() {
                     {invitation.status === "accepted" && (
                       <Link
                         href={`/client/messages?user=${invitation.freelancer_id}`}
-                        className="inline-flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-xs font-medium text-white transition hover:bg-neutral-800"
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                       >
                         <MessageCircle size={15} />
                         Freelancer&apos;a mesaj gönder

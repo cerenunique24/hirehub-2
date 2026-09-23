@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { usePremium } from "@/lib/hooks/usePremium";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 
 type Profile = {
   first_name: string | null;
@@ -72,11 +76,13 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
 
       if (user) {
         setEmail(user.email ?? "");
-        const { data } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, phone, notification_preferences, profile_visibility")
-          .eq("id", user.id)
-          .maybeSingle<Profile>();
+
+        // `phone`/`notification_preferences`/`profile_visibility` are
+        // private columns no longer selectable via a plain table query
+        // (see supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
+        // Reading one's OWN full row goes through this RPC instead.
+        const { data: rows } = await supabase.rpc("get_my_full_profile");
+        const data = Array.isArray(rows) ? (rows[0] as Profile | undefined) : undefined;
 
         if (data) {
           setProfile(data);
@@ -148,7 +154,7 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500">
+      <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
         <Loader2 size={18} className="animate-spin" />
         Yükleniyor...
       </div>
@@ -156,18 +162,22 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+    <div className="grid gap-[var(--rhythm-card-gap)] lg:grid-cols-[220px_1fr]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
         {TABS.map((t) => {
           const Icon = t.icon;
+          const active = tab === t.id;
           return (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`flex shrink-0 items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${
-                tab === t.id ? "bg-gray-900 text-white" : "text-gray-600 hover:bg-gray-100"
-              }`}
+              className={[
+                "flex shrink-0 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-sm font-medium transition-colors",
+                active
+                  ? "bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
+                  : "text-[var(--color-text-secondary)] hover:bg-[var(--color-canvas)] hover:text-[var(--color-text-primary)]",
+              ].join(" ")}
             >
               <Icon size={15} />
               {t.label}
@@ -176,45 +186,47 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
         })}
       </nav>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8">
+      <Card>
         {tab === "hesap" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Hesap</h2>
-            <p className="mt-1 text-sm text-gray-500">Temel hesap bilgilerin.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Hesap</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Temel hesap bilgilerin.</p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium text-gray-500">Ad Soyad</p>
-                <p className="mt-1 text-sm text-gray-900">
+                <p className="text-xs font-medium text-[var(--color-text-secondary)]">Ad Soyad</p>
+                <p className="mt-1 text-sm text-[var(--color-text-primary)]">
                   {[profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "Belirtilmemiş"}
                 </p>
               </div>
               <div>
-                <p className="text-xs font-medium text-gray-500">E-posta</p>
-                <p className="mt-1 text-sm text-gray-900">{email}</p>
+                <p className="text-xs font-medium text-[var(--color-text-secondary)]">E-posta</p>
+                <p className="mt-1 text-sm text-[var(--color-text-primary)]">{email}</p>
               </div>
               <div className="sm:col-span-2">
-                <label className="text-xs font-medium text-gray-500">Telefon</label>
+                <label className="text-xs font-medium text-[var(--color-text-secondary)]">Telefon</label>
                 <div className="mt-1 flex gap-2">
-                  <input
+                  <Input
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="+90 5xx xxx xx xx"
-                    className="w-full max-w-xs rounded-xl border border-gray-200 px-3.5 py-2 text-sm"
+                    className="max-w-xs"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
                     onClick={() => void persistProfile({ phone }, "phone")}
-                    disabled={savingField === "phone"}
-                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    loading={savingField === "phone"}
                   >
                     {savingField === "phone" ? "Kaydediliyor..." : "Kaydet"}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
 
-            <Link href={profileHref} className="mt-6 inline-block text-sm font-medium text-gray-700 underline-offset-2 hover:underline">
+            <Link
+              href={profileHref}
+              className="mt-6 inline-block text-sm font-medium text-[var(--color-primary-600)] underline-offset-2 hover:underline"
+            >
               Profil bilgilerini düzenle →
             </Link>
           </section>
@@ -222,17 +234,19 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
 
         {tab === "bildirimler" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Bildirimler</h2>
-            <p className="mt-1 text-sm text-gray-500">Hangi konularda bildirim almak istediğini seç.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Bildirimler</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Hangi konularda bildirim almak istediğini seç.
+            </p>
 
-            <div className="mt-6 divide-y divide-gray-100">
+            <div className="mt-6 divide-y divide-[var(--color-border-subtle)]">
               {NOTIFICATION_KEYS.map((item) => {
                 const enabled = notificationPrefs[item.key] !== false;
                 return (
                   <div key={item.key} className="flex items-center justify-between gap-4 py-3.5">
                     <div>
-                      <p className="text-sm font-medium text-gray-800">{item.label}</p>
-                      <p className="text-xs text-gray-500">{item.description}</p>
+                      <p className="text-sm font-medium text-[var(--color-text-primary)]">{item.label}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">{item.description}</p>
                     </div>
                     <button
                       type="button"
@@ -242,10 +256,12 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
                           item.key
                         )
                       }
-                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${enabled ? "bg-gray-900" : "bg-gray-200"}`}
+                      className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                        enabled ? "bg-[var(--color-primary-600)]" : "bg-[var(--color-surface-2)]"
+                      }`}
                     >
                       <span
-                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--color-surface-1)] shadow transition ${
                           enabled ? "left-5" : "left-0.5"
                         }`}
                       />
@@ -259,8 +275,10 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
 
         {tab === "gizlilik" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Gizlilik</h2>
-            <p className="mt-1 text-sm text-gray-500">Profilinin kimler tarafından görülebileceğini yönet.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Gizlilik</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Profilinin kimler tarafından görülebileceğini yönet.
+            </p>
 
             <div className="mt-6 space-y-3">
               {(
@@ -268,76 +286,80 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
                   { value: "public" as const, label: "Herkese açık", description: "Profilin arama ve keşfette herkese görünür." },
                   { value: "private" as const, label: "Sadece ilgili taraflar", description: "Sadece birlikte çalıştığın client/freelancer'lar görebilir." },
                 ]
-              ).map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => void persistProfile({ profile_visibility: option.value }, "visibility")}
-                  className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${
-                    profile?.profile_visibility === option.value ? "border-gray-900 bg-gray-50" : "border-gray-200"
-                  }`}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{option.label}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">{option.description}</p>
-                  </div>
-                </button>
-              ))}
+              ).map((option) => {
+                const selected = profile?.profile_visibility === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => void persistProfile({ profile_visibility: option.value }, "visibility")}
+                    className={[
+                      "flex w-full items-start gap-3 rounded-lg border p-4 text-left transition",
+                      selected
+                        ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)]"
+                        : "border-[var(--color-border-subtle)] hover:border-[var(--color-border-strong)]",
+                    ].join(" ")}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[var(--color-text-primary)]">{option.label}</p>
+                      <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">{option.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </section>
         )}
 
         {tab === "guvenlik" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Güvenlik</h2>
-            <p className="mt-1 text-sm text-gray-500">Şifreni güncelle.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Güvenlik</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Şifreni güncelle.</p>
 
-            {passwordError && <p className="mt-4 text-sm text-red-600">{passwordError}</p>}
-            {passwordSuccess && <p className="mt-4 text-sm text-emerald-700">{passwordSuccess}</p>}
+            {passwordError && <p className="mt-4 text-sm text-[var(--color-error-600)]">{passwordError}</p>}
+            {passwordSuccess && <p className="mt-4 text-sm text-[var(--color-success-600)]">{passwordSuccess}</p>}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input
+              <Input
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Yeni şifre"
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
               />
-              <input
+              <Input
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Yeni şifre (tekrar)"
-                className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm"
               />
             </div>
-            <button
-              type="button"
+
+            <Button
+              variant="primary"
+              className="mt-4"
               onClick={() => void handleChangePassword()}
-              disabled={passwordSaving}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+              loading={passwordSaving}
             >
-              {passwordSaving && <Loader2 size={16} className="animate-spin" />}
               Şifreyi Güncelle
-            </button>
+            </Button>
           </section>
         )}
 
         {tab === "uyelik" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Üyelik</h2>
-            <p className="mt-1 text-sm text-gray-500">Plan durumun ve Premium yönetimi.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Üyelik</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Plan durumun ve Premium yönetimi.</p>
 
-            <div className="mt-6 rounded-xl bg-gray-50 p-5">
+            <div className="mt-6 rounded-lg bg-[var(--color-canvas)] p-5">
               {subscriptionLoading ? (
-                <p className="text-sm text-gray-500">Yükleniyor...</p>
-              ) : subscription?.plan === "premium" ? (
+                <p className="text-sm text-[var(--color-text-secondary)]">Yükleniyor...</p>
+              ) : subscription?.plan === "plus" || subscription?.plan === "pro" ? (
                 <>
-                  <p className="text-sm font-semibold text-emerald-700">
-                    Premium {subscription.status === "trial" ? "(deneme)" : ""} aktif
+                  <p className="text-sm font-semibold text-[var(--color-success-600)]">
+                    {subscription.plan === "pro" ? "Pro" : "Plus"} {subscription.status === "trial" ? "(deneme)" : ""} aktif
                   </p>
                   {subscription.expires_at && (
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                       {new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "long", year: "numeric" }).format(
                         new Date(subscription.expires_at)
                       )}{" "}
@@ -346,54 +368,50 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
                   )}
                 </>
               ) : (
-                <p className="text-sm text-gray-600">Şu anda Ücretsiz plandasın.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">Şu anda Ücretsiz plandasın.</p>
               )}
-              <Link
-                href="/premium"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white"
-              >
+
+              <Button variant="primary" className="mt-4" onClick={() => router.push("/premium")}>
                 <Sparkles size={15} />
-                Premium'u Yönet
-              </Link>
+                Paketimi Yönet
+              </Button>
             </div>
           </section>
         )}
 
         {tab === "hesap-islemleri" && (
           <section>
-            <h2 className="font-semibold text-gray-900">Hesap İşlemleri</h2>
-            <p className="mt-1 text-sm text-gray-500">Oturumunu kapat veya hesabınla ilgili işlemleri yönet.</p>
+            <h2 className="font-semibold text-[var(--color-text-primary)]">Hesap İşlemleri</h2>
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+              Oturumunu kapat veya hesabınla ilgili işlemleri yönet.
+            </p>
 
             <div className="mt-6 space-y-3">
-              <button
-                type="button"
-                onClick={() => void handleLogout()}
-                className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
-              >
+              <Button variant="secondary" onClick={() => void handleLogout()}>
                 <LogOut size={16} />
                 Çıkış Yap
-              </button>
+              </Button>
 
-              <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-lg bg-[var(--color-canvas)] px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Hesabı devre dışı bırak</p>
-                  <p className="text-xs text-gray-500">Yakında eklenecek.</p>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)]">Hesabı devre dışı bırak</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Yakında eklenecek.</p>
                 </div>
-                <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600">Yakında</span>
+                <Badge>Yakında</Badge>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between rounded-lg bg-[var(--color-canvas)] px-4 py-3">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">Hesabı sil</p>
-                  <p className="text-xs text-gray-500">Yakında eklenecek.</p>
+                  <p className="text-sm font-medium text-[var(--color-text-primary)]">Hesabı sil</p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Yakında eklenecek.</p>
                 </div>
-                <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-600">Yakında</span>
+                <Badge>Yakında</Badge>
               </div>
             </div>
           </section>
         )}
 
-        {saveMessage && <p className="mt-6 text-sm text-emerald-700">{saveMessage}</p>}
-      </div>
+        {saveMessage && <p className="mt-6 text-sm text-[var(--color-success-600)]">{saveMessage}</p>}
+      </Card>
     </div>
   );
 }

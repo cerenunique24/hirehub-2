@@ -7,12 +7,13 @@ ArrowRight,
 BriefcaseBusiness,
 UserRound,
 } from "lucide-react";
+import AuthShell from "@/components/auth/AuthShell";
 
 export default function RegisterPage() {
-return ( <main className="flex min-h-screen items-center justify-center bg-[#fafafa] px-6 py-12"> <div className="w-full max-w-2xl">
-{/* Header */} <div className="mb-10 text-center"> <div className="mb-6 flex justify-center"> <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-white"> <BriefcaseBusiness size={24} /> </div> </div>
+return ( <AuthShell><main className="flex flex-1 items-center justify-center bg-[var(--color-canvas)] px-6 py-12"> <div className="w-full max-w-2xl">
+{/* Header */} <div className="mb-10 text-center">
 
-      <h1 className="text-3xl font-bold tracking-tight text-neutral-900">
+      <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-900">
         CollaCrew&apos;a hoş geldiniz
       </h1>
 
@@ -25,9 +26,9 @@ return ( <main className="flex min-h-screen items-center justify-center bg-[#faf
     <div className="grid gap-4 sm:grid-cols-2">
       <Link
         href="/register/freelancer"
-        className="group relative rounded-3xl border border-gray-200 bg-white p-7 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-black hover:shadow-lg"
+        className="group relative rounded-xl border border-gray-200 bg-white p-7 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[var(--color-primary-600)] hover:shadow-lg"
       >
-        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 transition-colors group-hover:bg-black group-hover:text-white">
+        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 transition-colors group-hover:bg-[var(--color-primary-700)] group-hover:text-white">
           <UserRound size={22} />
         </div>
 
@@ -40,7 +41,7 @@ return ( <main className="flex min-h-screen items-center justify-center bg-[#faf
           insanlarla birlikte çalışın.
         </p>
 
-        <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-black">
+        <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
           Freelancer olarak devam et
 
           <ArrowRight
@@ -52,9 +53,9 @@ return ( <main className="flex min-h-screen items-center justify-center bg-[#faf
 
       <Link
         href="/register/client"
-        className="group relative rounded-3xl border border-gray-200 bg-white p-7 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-black hover:shadow-lg"
+        className="group relative rounded-xl border border-gray-200 bg-white p-7 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-[var(--color-primary-600)] hover:shadow-lg"
       >
-        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 transition-colors group-hover:bg-black group-hover:text-white">
+        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 transition-colors group-hover:bg-[var(--color-primary-700)] group-hover:text-white">
           <BriefcaseBusiness size={22} />
         </div>
 
@@ -67,7 +68,7 @@ return ( <main className="flex min-h-screen items-center justify-center bg-[#faf
           geçirin.
         </p>
 
-        <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-black">
+        <div className="mt-6 flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
           Proje sahibi olarak devam et
 
           <ArrowRight
@@ -82,14 +83,14 @@ return ( <main className="flex min-h-screen items-center justify-center bg-[#faf
     <div className="mt-8 text-center">
       <Link
         href="/login"
-        className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-black"
+        className="inline-flex items-center gap-2 text-sm text-gray-500 transition-colors hover:text-[var(--color-text-primary)]"
       >
         <ArrowLeft size={16} />
         Zaten hesabınız var mı? Giriş yapın
       </Link>
     </div>
   </div>
-</main>
+</main></AuthShell>
 
 );
 }

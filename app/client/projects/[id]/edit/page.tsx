@@ -372,7 +372,7 @@ export default function EditProjectPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
         <div className="flex items-center gap-3 text-sm text-neutral-500">
           <Loader2 className="h-5 w-5 animate-spin" />
           Proje yükleniyor...
@@ -383,7 +383,7 @@ export default function EditProjectPage() {
 
   if (!project) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
         <div className="text-center">
           <p className="text-lg font-semibold text-neutral-900">
             Proje bulunamadı
@@ -402,7 +402,7 @@ export default function EditProjectPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f7f5]">
+    <div className="min-h-screen bg-[var(--color-canvas)]">
       <main className="mx-auto w-full max-w-[1180px] px-6 py-8">
         <div className="mb-8 flex items-center justify-between gap-4">
           <Link
@@ -453,7 +453,7 @@ export default function EditProjectPage() {
             <span>Düzenle</span>
           </div>
 
-          <h1 className="text-3xl font-semibold tracking-tight text-neutral-950">
+          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-950">
             Proje bilgilerini düzenle
           </h1>
 
@@ -478,7 +478,7 @@ export default function EditProjectPage() {
         )}
 
         <div className="grid gap-6">
-          <section className="rounded-3xl border border-neutral-200 bg-white p-6">
+          <section className="rounded-xl border border-neutral-200 bg-white p-5">
             <div className="mb-6">
               <h2 className="text-base font-semibold text-neutral-950">
                 Proje bilgileri
@@ -563,7 +563,7 @@ export default function EditProjectPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-neutral-200 bg-white p-6">
+          <section className="rounded-xl border border-neutral-200 bg-white p-5">
             <div className="mb-5">
               <h2 className="text-base font-semibold text-neutral-950">
                 Proje ihtiyaçları
@@ -659,7 +659,7 @@ export default function EditProjectPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-neutral-200 bg-white p-6">
+          <section className="rounded-xl border border-neutral-200 bg-white p-5">
             <div className="mb-5">
               <h2 className="text-base font-semibold text-neutral-950">
                 Teslimatlar
@@ -744,7 +744,7 @@ export default function EditProjectPage() {
             type="button"
             onClick={saveProject}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e60000] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#c90000] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-error-600)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-error-600)]/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -761,7 +761,7 @@ export default function EditProjectPage() {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
             <h2 className="text-lg font-semibold text-neutral-950">
               Projeyi silmek istediğine emin misin?
             </h2>

@@ -7,38 +7,32 @@ type CheckboxProps = React.InputHTMLAttributes<HTMLInputElement> & {
   description?: string;
 };
 
+/** CollaCrew Design System — Checkbox. */
 const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
   ({ label, description, className = "", ...props }, ref) => {
     return (
-      <label className="flex items-start gap-3 cursor-pointer">
+      <label className="flex cursor-pointer items-start gap-3">
         <input
           ref={ref}
           type="checkbox"
-          className={`
-            mt-1
-            h-5
-            w-5
-            rounded
-            border-gray-300
-            accent-black
-            ${className}
-          `}
+          className={[
+            "mt-0.5 h-4 w-4 rounded border-[var(--color-border-strong)] text-[var(--color-primary-600)] accent-[var(--color-primary-600)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary-50)]",
+            className,
+          ].join(" ")}
           {...props}
         />
 
-        <div>
-          {label && (
-            <p className="text-sm font-medium text-gray-900">
-              {label}
-            </p>
-          )}
+        {(label || description) && (
+          <div>
+            {label && (
+              <p className="text-sm font-medium text-[var(--color-text-primary)]">{label}</p>
+            )}
 
-          {description && (
-            <p className="text-sm text-gray-500 mt-1">
-              {description}
-            </p>
-          )}
-        </div>
+            {description && (
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{description}</p>
+            )}
+          </div>
+        )}
       </label>
     );
   }

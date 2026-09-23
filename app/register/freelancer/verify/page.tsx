@@ -135,16 +135,16 @@ export default function VerifyAccount() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F7F8FA] px-4 py-6 sm:px-6 sm:py-10">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-4 py-6 sm:px-6 sm:py-10">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-2xl items-center justify-center sm:min-h-[calc(100vh-5rem)]">
         <div className="w-full overflow-hidden rounded-[28px] bg-white shadow-[0_20px_70px_rgba(0,0,0,0.08)] sm:rounded-[32px]">
 
           {/* ÜST BÖLÜM */}
-          <div className="p-6 sm:p-10 lg:p-12">
+          <div className="p-5 sm:p-10 lg:p-12">
 
             {/* LOGO + ADIM */}
             <div className="mb-8 flex items-center justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-black text-sm font-bold text-white">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-primary-600)] text-sm font-bold text-white">
                 C
               </div>
 
@@ -161,7 +161,7 @@ export default function VerifyAccount() {
 
             {/* PROGRESS */}
             <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-              <div className="h-full w-2/3 rounded-full bg-black transition-all" />
+              <div className="h-full w-2/3 rounded-full bg-[var(--color-primary-600)] transition-all" />
             </div>
 
             {/* İKON */}
@@ -173,15 +173,15 @@ export default function VerifyAccount() {
                   className="text-gray-900"
                 />
 
-                <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-black text-white">
-                  <Check size={14} strokeWidth={2.5} />
+                <div className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-[var(--color-primary-600)] text-white">
+                  <Check size={14} strokeWidth={1.7} />
                 </div>
               </div>
             </div>
 
             {/* BAŞLIK */}
             <div className="mt-8 text-center">
-              <h1 className="text-3xl font-semibold tracking-tight text-gray-950 sm:text-[34px]">
+              <h1 className="text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-[34px]">
                 E-postanı doğrula
               </h1>
 
@@ -193,7 +193,7 @@ export default function VerifyAccount() {
 
             {/* E-POSTA */}
             <div className="mx-auto mt-7 max-w-md rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-center text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">
+              <p className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">
                 Doğrulama gönderilen adres
               </p>
 
@@ -228,7 +228,7 @@ export default function VerifyAccount() {
               type="button"
               onClick={checkVerification}
               disabled={checking}
-              className="mx-auto mt-7 flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl bg-black px-6 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mx-auto mt-7 flex h-12 w-full max-w-md items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-6 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {checking ? (
                 <>
@@ -256,7 +256,7 @@ export default function VerifyAccount() {
                   cooldown > 0 ||
                   !email
                 }
-                className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {resending ? (
                   <>

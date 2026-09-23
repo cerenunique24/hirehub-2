@@ -70,7 +70,7 @@ export default function IndividualRegisterPage() {
     <main
       className="
       min-h-screen
-      bg-[#fafafa]
+      bg-[var(--color-canvas)]
       flex
       items-center
       justify-center
@@ -83,8 +83,8 @@ export default function IndividualRegisterPage() {
         w-full
         max-w-md
         bg-white
-        rounded-3xl
-        p-8
+        rounded-xl
+        p-6
         shadow-sm
         "
       >
@@ -326,7 +326,7 @@ export default function IndividualRegisterPage() {
             ${
               isValid
               ?
-              "bg-black text-white"
+              "bg-[var(--color-primary-600)] text-white"
               :
               "bg-gray-300 text-gray-500"
             }

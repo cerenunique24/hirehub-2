@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  FolderPlus,
   Loader2,
   Plus,
   UsersRound,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uniqueSkills } from "@/lib/matching";
+import { EmptyState } from "@/components/common/EmptyState";
 
 type Coalition = {
   id: string;
@@ -253,11 +255,11 @@ export default function ClientCoalitionsPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mx-auto max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900">
+            <h1 className="text-3xl font-semibold text-neutral-900">
               Koalisyonlarım
             </h1>
 
@@ -269,7 +271,7 @@ export default function ClientCoalitionsPage() {
           <button
             type="button"
             onClick={() => void openCreateModal()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
           >
             <Plus size={17} />
             Koalisyon Oluştur
@@ -286,53 +288,40 @@ export default function ClientCoalitionsPage() {
             {error}
           </p>
         ) : coalitions.length === 0 ? (
-          <div className="rounded-2xl border border-neutral-200 bg-white p-10 text-center">
-            <UsersRound className="mx-auto text-neutral-400" />
-
-            <h2 className="mt-4 text-lg font-semibold">
-              Henüz bir koalisyon oluşturmadınız
-            </h2>
-
-            <p className="mt-2 text-sm text-neutral-500">
-              Bir projeniz için ekip oluşturarak freelancer önerilerini
-              yönetmeye başlayabilirsiniz.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => void openCreateModal()}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
-            >
-              <Plus size={17} />
-              İlk Koalisyonu Oluştur
-            </button>
-          </div>
+          <EmptyState
+            icon={UsersRound}
+            title="Henüz bir koalisyon oluşturmadınız"
+            description="Bir projeniz için ekip oluşturarak freelancer önerilerini yönetmeye başlayabilirsiniz."
+          />
         ) : (
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid gap-[var(--rhythm-card-gap)] md:grid-cols-2 xl:grid-cols-3">
             {coalitions.map((coalition) => (
               <Link
                 key={coalition.id}
                 href={`/client/coalitions/${coalition.id}`}
-                className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm transition hover:shadow-md"
+                className="flex h-full flex-col rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-300"
               >
-                <h2 className="font-semibold text-neutral-900">
-                  {coalition.name}
-                </h2>
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="min-w-0 truncate text-base font-semibold text-neutral-900">
+                    {coalition.name}
+                  </h2>
 
-                <p className="mt-2 line-clamp-2 text-sm leading-6 text-neutral-500">
-                  {coalition.description ||
-                    "Açıklama eklenmemiş."}
+                  {/* Bu sayfa zaten yalnızca status="active" koalisyonları getiriyor
+                      (bkz. yukarıdaki sorgu), bu yüzden rozet ek bir alan çekmeden
+                      güvenle "Aktif" gösterebilir. */}
+                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+                    Aktif
+                  </span>
+                </div>
+
+                <p className="mt-[var(--rhythm-title-gap)] line-clamp-2 text-sm leading-6 text-neutral-500">
+                  {coalition.description || "Açıklama eklenmemiş."}
                 </p>
 
-                <p className="mt-5 text-sm text-neutral-600">
-                  {coalition.memberCount} aktif üye
-                </p>
-
-                {coalition.skills.length ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {coalition.skills
-                      .slice(0, 6)
-                      .map((skill) => (
+                <div className="mt-[var(--rhythm-group-gap)] flex min-h-7 flex-wrap items-start gap-2">
+                  {coalition.skills.length > 0 ? (
+                    <>
+                      {coalition.skills.slice(0, 4).map((skill) => (
                         <span
                           key={skill}
                           className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700"
@@ -340,12 +329,25 @@ export default function ClientCoalitionsPage() {
                           {skill}
                         </span>
                       ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-neutral-500">
-                    Ekip yeteneği henüz eklenmemiş.
-                  </p>
-                )}
+
+                      {coalition.skills.length > 4 && (
+                        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
+                          +{coalition.skills.length - 4}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-sm text-neutral-400">Ekip yeteneği henüz eklenmemiş.</span>
+                  )}
+                </div>
+
+                <div className="mt-auto flex items-center justify-between gap-3 pt-[var(--rhythm-group-gap)]">
+                  <span className="text-sm text-neutral-600">{coalition.memberCount} aktif üye</span>
+
+                  <span className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-600)] px-3.5 py-2 text-sm font-medium text-white">
+                    Detayları Gör
+                  </span>
+                </div>
               </Link>
             ))}
           </div>
@@ -379,7 +381,7 @@ export default function ClientCoalitionsPage() {
 
             <div className="space-y-5 px-6 py-6">
               {loadingProjects ? (
-                <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 p-6 text-sm text-neutral-500">
+                <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 p-5 text-sm text-neutral-500">
                   <Loader2
                     size={17}
                     className="animate-spin"
@@ -387,23 +389,20 @@ export default function ClientCoalitionsPage() {
                   Projeleriniz yükleniyor...
                 </div>
               ) : projects.length === 0 ? (
-                <div className="rounded-xl bg-neutral-50 p-5 text-center">
-                  <p className="text-sm font-medium text-neutral-800">
-                    Henüz bir projeniz yok.
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-neutral-500">
-                    Önce bir proje oluşturmanız gerekiyor.
-                  </p>
-
-                  <Link
-                    href="/client/create-project"
-                    onClick={closeCreateModal}
-                    className="mt-4 inline-flex rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800"
-                  >
-                    Proje Oluştur
-                  </Link>
-                </div>
+                <EmptyState
+                  icon={FolderPlus}
+                  title="Henüz bir projeniz yok"
+                  description="Önce bir proje oluşturmanız gerekiyor."
+                  action={
+                    <Link
+                      href="/client/create-project"
+                      onClick={closeCreateModal}
+                      className="inline-flex h-[var(--button-height-sm)] items-center justify-center rounded-lg bg-[var(--color-primary-600)] px-3 text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                    >
+                      Proje Oluştur
+                    </Link>
+                  }
+                />
               ) : (
                 <>
                   <div>
@@ -489,7 +488,7 @@ export default function ClientCoalitionsPage() {
                   type="button"
                   onClick={() => void createCoalition()}
                   disabled={creating}
-                  className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating && (
                     <Loader2

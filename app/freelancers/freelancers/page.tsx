@@ -5,8 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
-  MapPin,
-  Briefcase,
   UserPlus,
   SlidersHorizontal,
   Loader2,
@@ -15,6 +13,7 @@ import {
   Check,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { FreelancerCard } from "@/components/freelancers/FreelancerCard";
 
 type Profile = {
   id: string;
@@ -320,7 +319,7 @@ function FreelancersContent() {
   };
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -435,100 +434,27 @@ function FreelancersContent() {
         )}
 
         {!loading && !error && filteredProfiles.length > 0 && (
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="flex flex-col gap-4">
             {filteredProfiles.map((profile) => {
-              const fullName = getFullName(profile);
               const memberStatus = getMemberStatus(profile.id);
               const suggestionAllowed = canSuggest(profile);
 
               return (
-                <div
+                <FreelancerCard
                   key={profile.id}
-                  className="rounded-2xl border border-gray-200 bg-white p-6 transition hover:border-gray-300 hover:shadow-sm"
-                >
-                  <div className="flex items-start gap-4">
-                    {profile.avatar_url ? (
-                      <img
-                        src={profile.avatar_url}
-                        alt={fullName}
-                        className="h-16 w-16 shrink-0 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg font-semibold text-gray-600">
-                        {getInitials(profile)}
-                      </div>
-                    )}
-
-                    <div className="min-w-0">
-                      <h2 className="truncate font-semibold text-gray-900">
-                        {fullName}
-                      </h2>
-
-                      <p className="mt-1 truncate text-sm text-gray-500">
-                        {profile.title || "Freelancer"}
-                      </p>
-
-                      {profile.expertise && (
-                        <p className="mt-2 text-xs font-medium text-gray-700">
-                          {profile.expertise}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 space-y-2 text-sm text-gray-500">
-                    {profile.city && (
-                      <div className="flex items-center gap-2">
-                        <MapPin size={15} />
-                        <span>{profile.city}</span>
-                      </div>
-                    )}
-
-                    {profile.experience && (
-                      <div className="flex items-center gap-2">
-                        <Briefcase size={15} />
-                        <span>{profile.experience}</span>
-                      </div>
-                    )}
-
-                    {profile.hourly_rate !== null && (
-                      <div className="text-sm font-medium text-gray-900">
-                        ₺{profile.hourly_rate}/saat
-                      </div>
-                    )}
-                  </div>
-
-                  {profile.skills && profile.skills.length > 0 && (
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {profile.skills.slice(0, 5).map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-gray-100 px-3 py-1.5 text-xs text-gray-600"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="mt-6 flex gap-2">
-                    <Link
-                      href={`/freelancers/${profile.id}`}
-                      className="flex-1 rounded-xl border border-gray-200 px-4 py-2.5 text-center text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                    >
-                      Profili Gör
-                    </Link>
-
-                    {coalitionId && (
+                  freelancer={profile}
+                  viewerRole="freelancer"
+                  action={
+                    coalitionId ? (
                       <button
                         type="button"
                         disabled={!suggestionAllowed}
                         onClick={() => setSelectedProfile(profile)}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary-600)] text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                       >
                         {memberStatus === "pending" ? (
                           <>
-                            <Check size={16} />
+                            <Check size={14} />
                             Önerildi
                           </>
                         ) : memberStatus === "active" ? (
@@ -537,14 +463,14 @@ function FreelancersContent() {
                           "Sen"
                         ) : (
                           <>
-                            <UserPlus size={16} />
+                            <UserPlus size={14} />
                             Ekip Üyesi Öner
                           </>
                         )}
                       </button>
-                    )}
-                  </div>
-                </div>
+                    ) : undefined
+                  }
+                />
               );
             })}
           </div>
@@ -553,7 +479,7 @@ function FreelancersContent() {
 
       {selectedProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -626,7 +552,7 @@ function FreelancersContent() {
                 type="button"
                 disabled={suggesting}
                 onClick={() => void handleSuggest()}
-                className="flex-1 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex-1 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {suggesting ? (
                   <span className="flex items-center justify-center gap-2">
@@ -652,7 +578,7 @@ export default function FreelancersPage() {
   return (
     <Suspense
       fallback={
-        <main className="w-full p-8">
+        <main className="w-full p-6">
           <div className="mx-auto flex min-h-[300px] max-w-7xl items-center justify-center rounded-2xl border border-gray-200 bg-white">
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Loader2 size={18} className="animate-spin" />

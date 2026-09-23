@@ -112,7 +112,7 @@ export default function ProposalMessages({
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+      <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Loader2 size={18} className="animate-spin" />
           Mesajlar yükleniyor...
@@ -123,7 +123,7 @@ export default function ProposalMessages({
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-gray-100 p-6">
+      <div className="flex items-center gap-3 border-b border-gray-100 p-5">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100">
           <MessageCircle size={20} className="text-gray-700" />
         </div>
@@ -139,7 +139,7 @@ export default function ProposalMessages({
         </div>
       </div>
 
-      <div className="max-h-[450px] space-y-3 overflow-y-auto p-6">
+      <div className="max-h-[450px] space-y-3 overflow-y-auto p-5">
         {messages.length === 0 ? (
           <div className="py-10 text-center">
             <MessageCircle
@@ -169,7 +169,7 @@ export default function ProposalMessages({
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
                     isMine
-                      ? "bg-black text-white"
+                      ? "bg-[var(--color-primary-600)] text-white"
                       : "bg-gray-100 text-gray-800"
                   }`}
                 >
@@ -178,7 +178,7 @@ export default function ProposalMessages({
                   </p>
 
                   <p
-                    className={`mt-2 text-[11px] ${
+                    className={`mt-2 text-xs ${
                       isMine
                         ? "text-gray-300"
                         : "text-gray-400"
@@ -219,7 +219,7 @@ export default function ProposalMessages({
             type="button"
             onClick={() => void sendMessage()}
             disabled={!content.trim() || sending}
-            className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-black text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-600)] text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Mesaj gönder"
           >
             {sending ? (

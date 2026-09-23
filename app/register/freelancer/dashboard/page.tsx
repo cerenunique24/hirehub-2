@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export default function FreelancerDashboard() {
   return (
-    <main className="min-h-screen bg-[#f7f7f7]">
+    <main className="min-h-screen bg-[var(--color-canvas)]">
       <div className="mx-auto max-w-7xl px-8 py-10">
         <div className="mb-10">
           <h1 className="text-4xl font-bold">Hoş Geldin 👋</h1>
@@ -15,14 +15,14 @@ export default function FreelancerDashboard() {
 
         <div className="grid grid-cols-12 gap-8">
           <div className="col-span-12 space-y-8 lg:col-span-8">
-            <div className="rounded-3xl bg-white p-8 shadow-sm">
+            <div className="rounded-xl bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-semibold">Profil Tamamlanma</h2>
                 <span className="font-bold">%45</span>
               </div>
 
               <div className="mt-6 h-3 w-full overflow-hidden rounded-full bg-gray-200">
-                <div className="h-full w-[45%] rounded-full bg-black" />
+                <div className="h-full w-[45%] rounded-full bg-[var(--color-primary-600)]" />
               </div>
 
               <div className="mt-8 grid grid-cols-2 gap-4">
@@ -42,12 +42,12 @@ export default function FreelancerDashboard() {
           </div>
 
           <div className="col-span-12 space-y-6 lg:col-span-4">
-            <div className="rounded-3xl bg-white p-8 shadow-sm">
+            <div className="rounded-xl bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold">Hızlı İşlemler</h2>
               <div className="mt-6 space-y-4">
                 <Link
                   href="/freelancers/discover"
-                  className="block rounded-xl bg-black py-3 text-center text-white"
+                  className="block rounded-xl bg-[var(--color-primary-600)] py-3 text-center text-white"
                 >
                   + Projeleri Keşfet
                 </Link>
@@ -60,7 +60,7 @@ export default function FreelancerDashboard() {
               </div>
             </div>
 
-            <div className="rounded-3xl bg-white p-8 shadow-sm">
+            <div className="rounded-xl bg-white p-6 shadow-sm">
               <h2 className="mb-6 text-xl font-semibold">CollaCrew Önerileri</h2>
               <div className="space-y-4 text-gray-600">
                 <p>✅ Profil fotoğrafı ekle</p>
@@ -78,7 +78,7 @@ export default function FreelancerDashboard() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-white p-8 shadow-sm">
+    <div className="rounded-xl bg-white p-6 shadow-sm">
       <p className="text-gray-500">{label}</p>
       <h2 className="mt-4 text-5xl font-bold">{value}</h2>
     </div>

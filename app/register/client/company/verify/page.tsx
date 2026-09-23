@@ -108,7 +108,7 @@ return (
 <main
 className="
 min-h-screen
-bg-[#fafafa]
+bg-[var(--color-canvas)]
 flex
 items-center
 justify-center
@@ -120,7 +120,7 @@ px-6
 <div
 className="
 bg-white
-rounded-3xl
+rounded-xl
 shadow-sm
 p-10
 w-full
@@ -206,7 +206,7 @@ text-center
 text-xl
 font-semibold
 focus:outline-none
-focus:border-black
+focus:border-[var(--color-primary-600)]
 "
 
 />
@@ -240,7 +240,7 @@ text-white
 ${
 complete
 ?
-"bg-black hover:bg-gray-800"
+"bg-[var(--color-primary-600)] hover:bg-[var(--color-primary-700)]"
 :
 "bg-gray-300 cursor-not-allowed"
 }

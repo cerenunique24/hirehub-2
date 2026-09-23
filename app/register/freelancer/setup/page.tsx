@@ -7,12 +7,12 @@ export default function FreelancerSetupPage() {
   const router = useRouter();
 
   return (
-    <main className="min-h-screen bg-[#F7F8FA] px-4 py-8 sm:px-6 sm:py-12">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-3xl items-center justify-center">
         <div className="w-full rounded-[28px] bg-white shadow-[0_20px_70px_rgba(0,0,0,0.06)] sm:rounded-[32px]">
           <div className="p-7 sm:p-12">
             <div className="mx-auto max-w-xl text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-white">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
                 <Sparkles size={24} strokeWidth={1.8} />
               </div>
 
@@ -20,7 +20,7 @@ export default function FreelancerSetupPage() {
                 Profil kurulumu
               </p>
 
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-gray-950 sm:text-4xl">
+              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.01em] text-gray-950 sm:text-4xl">
                 Profilini birlikte oluşturalım
               </h1>
 
@@ -62,7 +62,7 @@ export default function FreelancerSetupPage() {
                 onClick={() =>
                   router.push("/register/freelancer/onboarding")
                 }
-                className="mt-8 flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-black px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+                className="mt-8 flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Profile başla
                 <ArrowRight size={17} />

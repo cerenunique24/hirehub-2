@@ -179,7 +179,7 @@ export default function ClientDashboardPage() {
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-6">
         <div className="mx-auto max-w-7xl rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
           {error}
         </div>
@@ -190,37 +190,39 @@ export default function ClientDashboardPage() {
   if (!data || data.projectCount === 0) return <EmptyDashboard />;
 
   return (
-    <div className="p-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <div className="mx-auto max-w-7xl">
+        <header className="mb-[var(--rhythm-header-gap)] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900">Panel</h1>
-            <p className="mt-1 text-sm text-neutral-500">Projelerinizin güncel durumunu buradan takip edin.</p>
+            <h1 className="text-3xl font-semibold text-neutral-900">Panel</h1>
+            <p className="mt-[var(--rhythm-title-gap)] text-sm text-neutral-500">
+              Projelerinizin güncel durumunu buradan takip edin.
+            </p>
           </div>
           <QuickActions />
         </header>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-[var(--rhythm-section-gap)] grid grid-cols-1 gap-[var(--rhythm-card-gap)] md:grid-cols-2 xl:grid-cols-4">
           <StatCard title="Toplam Proje" value={data.projectCount} subtitle="Tüm projeleriniz" />
           <StatCard title="Aktif Proje" value={data.activeCount} subtitle="Devam ediyor" />
           <StatCard title="Yayındaki Proje" value={data.openCount} subtitle="Teklif bekliyor" />
           <StatCard title="Tamamlanan" value={data.completedCount} subtitle="Teslim edildi" />
         </div>
 
-        <section>
-          <div className="mb-4 flex items-center justify-between">
+        <section className="mb-[var(--rhythm-section-gap)]">
+          <div className="mb-[var(--rhythm-group-gap)] flex items-center justify-between">
             <h2 className="text-lg font-semibold text-neutral-900">Aktif Projeler</h2>
-            <Link href="/client/projects" className="text-sm font-medium text-neutral-600 hover:text-black">
+            <Link href="/client/projects" className="text-sm font-medium text-neutral-600 hover:text-[var(--color-text-primary)]">
               Tümünü gör
             </Link>
           </div>
 
           {data.activeProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
+            <div className="rounded-xl border border-dashed border-neutral-200 bg-white p-6 text-center text-sm text-neutral-500">
               Şu anda üzerinde çalışılan bir projeniz yok.
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-[var(--rhythm-card-gap)] md:grid-cols-2">
               {data.activeProjects.map((project) => {
                 const roles = roleNamesFromBreakdown(project.budget_breakdown);
                 const progress =
@@ -279,20 +281,20 @@ export default function ClientDashboardPage() {
           )}
         </section>
 
-        <section>
-          <div className="mb-4 flex items-center justify-between">
+        <section className="mb-[var(--rhythm-section-gap)]">
+          <div className="mb-[var(--rhythm-group-gap)] flex items-center justify-between">
             <h2 className="text-lg font-semibold text-neutral-900">Yayındaki Projeler</h2>
-            <Link href="/client/projects" className="text-sm font-medium text-neutral-600 hover:text-black">
+            <Link href="/client/projects" className="text-sm font-medium text-neutral-600 hover:text-[var(--color-text-primary)]">
               Tümünü gör
             </Link>
           </div>
 
           {data.openProjects.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
+            <div className="rounded-xl border border-dashed border-neutral-200 bg-white p-6 text-center text-sm text-neutral-500">
               Şu anda yayında bir projeniz yok.
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-[var(--rhythm-card-gap)] md:grid-cols-2">
               {data.openProjects.map((project) => {
                 const roles = roleNamesFromBreakdown(project.budget_breakdown);
                 return (
@@ -319,8 +321,8 @@ export default function ClientDashboardPage() {
           )}
         </section>
 
-        <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
+        <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+          <div className="mb-[var(--rhythm-group-gap)] flex items-center gap-2">
             <Bell size={16} className="text-neutral-500" />
             <h2 className="text-lg font-semibold text-neutral-900">Son Aktiviteler</h2>
           </div>
@@ -328,7 +330,7 @@ export default function ClientDashboardPage() {
           {data.activities.length === 0 ? (
             <p className="text-sm text-neutral-500">Henüz bir aktivite yok.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-[var(--rhythm-row-gap)]">
               {data.activities.map((activity) => {
                 const content = (
                   <div className="rounded-xl border border-neutral-100 p-4 transition hover:bg-neutral-50">
@@ -355,13 +357,13 @@ export default function ClientDashboardPage() {
 
 function EmptyDashboard() {
   return (
-    <div className="p-8">
-      <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center rounded-3xl border border-neutral-200 bg-white p-8 text-center shadow-sm">
+    <div className="p-6">
+      <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center rounded-xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
         <div>
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-100"><FolderPlus size={25} /></div>
-          <h1 className="mt-6 text-3xl font-bold text-neutral-900">Henüz bir projen yok</h1>
+          <h1 className="mt-6 text-3xl font-semibold text-neutral-900">Henüz bir projen yok</h1>
           <p className="mx-auto mt-3 max-w-md leading-7 text-neutral-500">İlk projenizi oluşturarak doğru freelancer ve ekiplerle çalışmaya başlayabilirsiniz.</p>
-          <Link href="/client/projects/new" className="mt-7 inline-flex items-center rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-neutral-800">Yeni Proje Oluştur</Link>
+          <Link href="/client/projects/new" className="mt-7 inline-flex h-10 items-center rounded-lg bg-[var(--color-primary-600)] px-4 text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)]">Yeni Proje Oluştur</Link>
         </div>
       </div>
     </div>

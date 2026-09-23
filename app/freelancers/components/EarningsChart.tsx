@@ -7,8 +7,8 @@ return (
 <div className="
 bg-white
 border
-rounded-2xl
-p-6
+rounded-xl
+p-5
 ">
 
 <h3 className="
@@ -68,7 +68,7 @@ flex-1
 <div
 className="
 w-full
-bg-black
+bg-[var(--color-primary-600)]
 rounded-lg
 "
 style={{

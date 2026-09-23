@@ -216,7 +216,7 @@ export default function ProjectAnalysisDisplay({
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
         <div className="bg-neutral-950 px-6 py-8 text-white md:px-8">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10">
@@ -228,7 +228,7 @@ export default function ProjectAnalysisDisplay({
                 CollaCrew AI Analizi
               </p>
 
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight md:text-3xl">
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.01em] md:text-3xl">
                 Projenizi analiz ettik
               </h2>
 
@@ -240,7 +240,7 @@ export default function ProjectAnalysisDisplay({
           </div>
         </div>
 
-        <div className="p-6 md:p-8">
+        <div className="p-5 md:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-medium text-neutral-400">
@@ -256,7 +256,7 @@ export default function ProjectAnalysisDisplay({
               </p>
             </div>
 
-            <span className="inline-flex w-fit shrink-0 items-center rounded-full bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-700">
+            <span className="inline-flex w-fit shrink-0 items-center rounded-lg bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-700">
               {category}
             </span>
           </div>
@@ -319,7 +319,7 @@ export default function ProjectAnalysisDisplay({
         items={deliverables}
       />
 
-      <section className="rounded-3xl bg-neutral-950 p-6 text-white md:p-8">
+      <section className="rounded-xl bg-neutral-950 p-5 text-white md:p-8">
         <div className="flex items-start gap-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10">
             <Sparkles size={18} />
@@ -338,7 +338,7 @@ export default function ProjectAnalysisDisplay({
       </section>
 
       {considerations.length > 0 && (
-        <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm md:p-8">
+        <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm md:p-8">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-700">
               <AlertCircle size={18} />
@@ -380,7 +380,7 @@ function InfoSection({
   items: string[];
 }) {
   return (
-    <section className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm md:p-7">
+    <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm md:p-7">
       <div className="flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-neutral-700">
           {icon}
@@ -427,7 +427,7 @@ function MetricCard({
   value: string;
 }) {
   return (
-    <div className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
+    <div className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-100 text-neutral-700">
         {icon}
       </div>

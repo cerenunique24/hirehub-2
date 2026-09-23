@@ -552,7 +552,7 @@ export default function ClientProjectDetailsPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#fafafa]">
+      <main className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
         <div className="flex flex-col items-center gap-4 text-gray-500">
           <Loader2
             className="animate-spin"
@@ -568,7 +568,7 @@ export default function ClientProjectDetailsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#fafafa] px-6 py-10">
+    <main className="min-h-screen bg-[var(--color-canvas)] px-6 py-10">
       <div className="mx-auto w-full max-w-3xl">
 
         {/* Header */}
@@ -576,13 +576,13 @@ export default function ClientProjectDetailsPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-black"
+            className="flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft size={18} />
             Geri
           </button>
 
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <BriefcaseBusiness size={20} />
           </div>
 
@@ -592,7 +592,7 @@ export default function ClientProjectDetailsPage() {
         {/* Progress */}
         <div className="mb-10">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-semibold text-black">
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">
               Proje detayları
             </span>
 
@@ -602,18 +602,18 @@ export default function ClientProjectDetailsPage() {
           </div>
 
           <div className="flex gap-2">
-            <div className="h-2 flex-1 rounded-full bg-black" />
-            <div className="h-2 flex-1 rounded-full bg-black" />
+            <div className="h-2 flex-1 rounded-full bg-[var(--color-primary-600)]" />
+            <div className="h-2 flex-1 rounded-full bg-[var(--color-primary-600)]" />
           </div>
         </div>
 
         {/* Page Title */}
         <div className="mb-10">
-          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-white">
+          <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-primary-600)] text-white">
             <BriefcaseBusiness size={25} />
           </div>
 
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 sm:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-900 sm:text-4xl">
             Proje detaylarını belirle.
           </h1>
 
@@ -630,7 +630,7 @@ export default function ClientProjectDetailsPage() {
         >
 
           {/* Budget */}
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
                 <Wallet size={21} />
@@ -658,7 +658,7 @@ export default function ClientProjectDetailsPage() {
                 onChange={(e) =>
                   setBudget(e.target.value)
                 }
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-black outline-none transition focus:border-black focus:ring-4 focus:ring-black/5"
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
               >
                 <option value="">
                   Bütçe aralığını seç
@@ -677,7 +677,7 @@ export default function ClientProjectDetailsPage() {
           </section>
 
           {/* Duration */}
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
                 <Clock3 size={21} />
@@ -705,7 +705,7 @@ export default function ClientProjectDetailsPage() {
                 onChange={(e) =>
                   setDuration(e.target.value)
                 }
-                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-black outline-none transition focus:border-black focus:ring-4 focus:ring-black/5"
+                className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
               >
                 <option value="">
                   Süre seç
@@ -724,7 +724,7 @@ export default function ClientProjectDetailsPage() {
           </section>
 
           {/* Location */}
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
                 <MapPin size={21} />
@@ -755,7 +755,7 @@ export default function ClientProjectDetailsPage() {
                   onChange={(e) =>
                     handleCountryChange(e.target.value)
                   }
-                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-black outline-none transition focus:border-black focus:ring-4 focus:ring-black/5"
+                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5"
                 >
                   <option value="">
                     Ülke seç
@@ -784,7 +784,7 @@ export default function ClientProjectDetailsPage() {
                     setCity(e.target.value)
                   }
                   disabled={!country}
-                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-black outline-none transition focus:border-black focus:ring-4 focus:ring-black/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+                  className="w-full appearance-none rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-primary-600)] focus:ring-4 focus:ring-[var(--color-primary-600)]/5 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
                 >
                   <option value="">
                     Şehir seç
@@ -806,7 +806,7 @@ export default function ClientProjectDetailsPage() {
           </section>
 
           {/* Expertise */}
-          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-100">
                 <Zap size={21} />
@@ -841,7 +841,7 @@ export default function ClientProjectDetailsPage() {
                         onClick={() =>
                           toggleExpertise(item)
                         }
-                        className="inline-flex items-center gap-1.5 rounded-full bg-black px-3 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-800"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-primary-600)] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                       >
                         <Check size={13} />
                         {item}
@@ -870,7 +870,7 @@ export default function ClientProjectDetailsPage() {
                           }
                           className={
                             selected
-                              ? "flex items-center justify-between rounded-lg bg-black px-3 py-2.5 text-left text-sm text-white transition"
+                              ? "flex items-center justify-between rounded-lg bg-[var(--color-primary-600)] px-3 py-2.5 text-left text-sm text-white transition"
                               : "flex items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-100"
                           }
                         >
@@ -910,7 +910,7 @@ export default function ClientProjectDetailsPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? (
                 <>

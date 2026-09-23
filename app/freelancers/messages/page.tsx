@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { notifyUsers } from "@/lib/notifications";
+import { usePremium } from "@/lib/hooks/usePremium";
 import {
   Send,
   Search,
@@ -106,6 +107,25 @@ function FreelancerMessagesContent() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState("");
+
+  const { can: canUseMessagingFeature, loading: premiumLoading } = usePremium();
+
+  /*
+   * YENİ (henüz hiç mesajı olmayan) KONUŞMA YETKİ KONTROLÜ
+   * ----------------------------------------------------
+   * URL'den gelen ?user=&proposal= ile, hiç mesajı olmayan bir
+   * konuşma açılmaya çalışılıyorsa, gerçek yetki server-side
+   * `/api/messages/send`'de zaten kontrol edilir — ama UI'ın
+   * kullanıcıya "bu konuşma açık, yaz gönder" izlenimi vermemesi
+   * için burada da (RLS'e saygılı, salt-okunur) bir ön kontrol
+   * yapılır. Bu SADECE görüntü amaçlıdır; asıl yetkilendirme
+   * sunucuda tekrarlanır.
+   */
+  const [newConversationCheck, setNewConversationCheck] = useState<{
+    key: string;
+    authorized: boolean;
+  } | null>(null);
 
   /*
    * URL'DEN GELEN KONUŞMAYI SEÇ
@@ -793,6 +813,87 @@ function FreelancerMessagesContent() {
       );
     });
 
+  const hasExistingThread =
+    selectedMessages.length > 0;
+
+  /*
+   * Yeni (mesajsız) bir konuşma için ön-yetki kontrolü — bkz. yukarı.
+   * Zaten mesajı olan konuşmalar için hiçbir şey değişmez (mevcut
+   * davranış korunur).
+   */
+  useEffect(() => {
+    if (
+      !currentUserId ||
+      !selectedUserId ||
+      hasExistingThread
+    ) {
+      return;
+    }
+
+    const key = `${selectedUserId}:${selectedProposalId ?? "none"}`;
+
+    let cancelled = false;
+
+    async function checkAuthorization() {
+      if (selectedProposalId) {
+        const { data: proposal } = await supabase
+          .from("proposals")
+          .select("id, project_id")
+          .eq("id", selectedProposalId)
+          .eq("freelancer_id", currentUserId)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        if (!proposal) {
+          setNewConversationCheck({ key, authorized: false });
+          return;
+        }
+
+        const { data: project } = await supabase
+          .from("projects")
+          .select("client_id")
+          .eq("id", proposal.project_id)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        setNewConversationCheck({
+          key,
+          authorized: project?.client_id === selectedUserId,
+        });
+      } else {
+        // Teklif öncesi / proje bağlamı olmayan yeni konuşma — Pro gerekir.
+        setNewConversationCheck({
+          key,
+          authorized: canUseMessagingFeature("pre_proposal_messaging"),
+        });
+      }
+    }
+
+    void checkAuthorization();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currentUserId,
+    selectedUserId,
+    selectedProposalId,
+    hasExistingThread,
+    supabase,
+    canUseMessagingFeature,
+  ]);
+
+  const newConversationKey = selectedUserId
+    ? `${selectedUserId}:${selectedProposalId ?? "none"}`
+    : null;
+
+  const canComposeToSelected =
+    hasExistingThread ||
+    (newConversationCheck?.key === newConversationKey &&
+      newConversationCheck.authorized);
+
   /*
    * MESAJLARI OKUNDU YAP
    */
@@ -863,8 +964,13 @@ function FreelancerMessagesContent() {
 
   /*
    * MESAJ GÖNDER
-   *
-   * Aynı proposal_id ile kaydedilir.
+   * ----------------------------------------------------
+   * GÜVENLİK: bu artık doğrudan `messages` tablosuna insert
+   * yapmıyor. Gerçek yetkilendirme (proposal ilişkisi VEYA Pro
+   * entitlement'ı) `/api/messages/send` route'unda server-side
+   * kontrol edilir — `receiver_id`/`proposal_id` URL'den gelse bile
+   * client-side hiçbir şeye güvenilmez. `canComposeToSelected` burada
+   * sadece UI'ı erken durdurmak için var; asıl kapı sunucudadır.
    */
   const sendMessage = async () => {
     const text =
@@ -874,44 +980,43 @@ function FreelancerMessagesContent() {
       !text ||
       !currentUserId ||
       !selectedUserId ||
-      sending
+      sending ||
+      !canComposeToSelected
     ) {
       return;
     }
 
     setSending(true);
+    setSendError("");
 
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("messages")
-      .insert({
-        sender_id: currentUserId,
-        receiver_id: selectedUserId,
-        proposal_id:
-          selectedProposalId,
+    const response = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        receiverId: selectedUserId,
+        proposalId: selectedProposalId,
         content: text,
-        attachment_url: null,
-        attachment_name: null,
-        attachment_type: null,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) {
+    const responseData = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
       console.error(
         "Mesaj gönderilemedi:",
-        error
+        responseData
       );
 
-      alert(
-        `Mesaj gönderilemedi: ${error.message}`
+      setSendError(
+        (responseData as { error?: string }).error ||
+          "Mesaj gönderilemedi."
       );
 
       setSending(false);
       return;
     }
+
+    const data = responseData.message as Message | undefined;
 
     if (data) {
       setMessages((current) => {
@@ -926,7 +1031,7 @@ function FreelancerMessagesContent() {
 
         return [
           ...current,
-          data as Message,
+          data,
         ];
       });
 
@@ -982,7 +1087,7 @@ function FreelancerMessagesContent() {
     );
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">
           Mesajlar
@@ -1003,9 +1108,9 @@ function FreelancerMessagesContent() {
               onClick={() =>
                 setActiveTab("clients")
               }
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "clients"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -1017,9 +1122,9 @@ function FreelancerMessagesContent() {
               onClick={() =>
                 setActiveTab("teams")
               }
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "teams"
-                  ? "bg-black text-white"
+                  ? "bg-[var(--color-primary-600)] text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -1053,12 +1158,12 @@ function FreelancerMessagesContent() {
             "clients" && (
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="p-6 text-center text-sm text-gray-400">
+                <div className="p-5 text-center text-sm text-gray-400">
                   Mesajlar yükleniyor...
                 </div>
               ) : filteredConversations.length ===
                 0 ? (
-                <div className="flex h-full flex-col items-center justify-center p-6 text-center">
+                <div className="flex h-full flex-col items-center justify-center p-5 text-center">
                   <MessageCircle
                     size={30}
                     className="mb-3 text-gray-300"
@@ -1118,7 +1223,7 @@ function FreelancerMessagesContent() {
                             className="h-11 w-11 rounded-full object-cover"
                           />
                         ) : (
-                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
                             {getInitials(
                               profile
                             )}
@@ -1168,7 +1273,7 @@ function FreelancerMessagesContent() {
 
           {/* EKİPLER */}
           {activeTab === "teams" && (
-            <div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center p-5 text-center">
               <Users
                 size={32}
                 className="mb-3 text-gray-300"
@@ -1222,7 +1327,7 @@ function FreelancerMessagesContent() {
                     className="h-10 w-10 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-xs font-semibold text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-xs font-semibold text-white">
                     {getInitials(
                       selectedProfile
                     )}
@@ -1268,7 +1373,7 @@ function FreelancerMessagesContent() {
               </div>
 
               {/* MESAJLAR */}
-              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-6">
+              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-5">
                 {selectedMessages.length ===
                 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-gray-400">
@@ -1293,7 +1398,7 @@ function FreelancerMessagesContent() {
                           <div
                             className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${
                               isMe
-                                ? "bg-black text-white"
+                                ? "bg-[var(--color-primary-600)] text-white"
                                 : "border border-gray-200 bg-white text-gray-800"
                             }`}
                           >
@@ -1303,7 +1408,7 @@ function FreelancerMessagesContent() {
                               }
                             </p>
 
-                            <span className="mt-2 block text-[11px] opacity-60">
+                            <span className="mt-2 block text-xs opacity-60">
                               {formatTime(
                                 message.created_at
                               )}
@@ -1317,54 +1422,88 @@ function FreelancerMessagesContent() {
               </div>
 
               {/* MESAJ INPUT */}
-              <div className="flex gap-3 border-t border-gray-200 p-5">
-                <button
-                  type="button"
-                  aria-label="Dosya ekle"
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500"
-                >
-                  <Paperclip size={18} />
-                </button>
+              {!hasExistingThread &&
+              (premiumLoading ||
+                newConversationCheck?.key !==
+                  newConversationKey) ? (
+                <div className="border-t border-gray-200 p-5 text-center text-sm text-gray-400">
+                  Konuşma kontrol ediliyor...
+                </div>
+              ) : !canComposeToSelected ? (
+                <div className="border-t border-gray-200 bg-gray-50 p-5 text-center">
+                  {selectedProposalId ? (
+                    <p className="text-sm text-gray-500">
+                      Bu konuşmaya mesaj gönderme yetkin yok.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-gray-700">
+                        Teklif göndermeden önce mesajlaşmak Pro paketine özeldir.
+                      </p>
+                      <Link
+                        href="/premium"
+                        className="mt-2 inline-block text-sm font-medium text-gray-900 underline underline-offset-2"
+                      >
+                        Pro Planını İncele
+                      </Link>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="border-t border-gray-200 p-5">
+                  {sendError && (
+                    <p className="mb-3 text-sm text-red-600">{sendError}</p>
+                  )}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      aria-label="Dosya ekle"
+                      className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500"
+                    >
+                      <Paperclip size={18} />
+                    </button>
 
-                <input
-                  value={messageText}
-                  onChange={(event) =>
-                    setMessageText(
-                      event.target.value
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (
-                      event.key ===
-                      "Enter"
-                    ) {
-                      event.preventDefault();
-                      void sendMessage();
-                    }
-                  }}
-                  placeholder="Mesaj yaz..."
-                  disabled={sending}
-                  className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-200"
-                />
+                    <input
+                      value={messageText}
+                      onChange={(event) =>
+                        setMessageText(
+                          event.target.value
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (
+                          event.key ===
+                          "Enter"
+                        ) {
+                          event.preventDefault();
+                          void sendMessage();
+                        }
+                      }}
+                      placeholder="Mesaj yaz..."
+                      disabled={sending}
+                      className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                    />
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    void sendMessage()
-                  }
-                  disabled={
-                    sending ||
-                    !messageText.trim()
-                  }
-                  className="flex items-center gap-2 rounded-xl bg-black px-5 text-sm font-medium text-white disabled:opacity-40"
-                >
-                  <Send size={16} />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void sendMessage()
+                      }
+                      disabled={
+                        sending ||
+                        !messageText.trim()
+                      }
+                      className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white disabled:opacity-40"
+                    >
+                      <Send size={16} />
 
-                  {sending
-                    ? "Gönderiliyor..."
-                    : "Gönder"}
-                </button>
-              </div>
+                      {sending
+                        ? "Gönderiliyor..."
+                        : "Gönder"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

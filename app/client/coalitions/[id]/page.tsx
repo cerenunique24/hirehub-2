@@ -264,7 +264,7 @@ export default function ClientCoalitionDetailPage() {
 
   if (!coalition) {
     return (
-      <div className="p-8">
+      <div className="p-6">
         <Link
           href="/client/coalitions"
           className="inline-flex items-center gap-2 text-sm text-gray-500"
@@ -285,11 +285,11 @@ export default function ClientCoalitionDetailPage() {
   );
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mx-auto max-w-4xl">
         <Link
           href="/client/coalitions"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-black"
+          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[var(--color-text-primary)]"
         >
           <ArrowLeft size={16} />
           Koalisyonlara dön
@@ -301,8 +301,8 @@ export default function ClientCoalitionDetailPage() {
           </div>
         )}
 
-        <section className="mt-6 rounded-3xl border border-neutral-200 bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-bold text-neutral-900">
+        <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-7 shadow-sm">
+          <h1 className="text-3xl font-semibold text-neutral-900">
             {coalition.name}
           </h1>
 
@@ -439,7 +439,7 @@ export default function ClientCoalitionDetailPage() {
                             onClick={() =>
                               void handleApprove(member.id)
                             }
-                            className="inline-flex items-center gap-2 rounded-xl bg-black px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-3 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isProcessing ? (
                               <Loader2

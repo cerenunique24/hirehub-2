@@ -84,7 +84,7 @@ export default function TicketDetail({ ticketId, backHref }: { ticketId: string;
 
   if (error || !ticket) {
     return (
-      <div className="rounded-2xl border border-red-100 bg-white p-8">
+      <div className="rounded-xl border border-red-100 bg-white p-6">
         <p className="text-sm text-red-600">{error || "Destek talebi bulunamadı."}</p>
       </div>
     );
@@ -97,7 +97,7 @@ export default function TicketDetail({ ticketId, backHref }: { ticketId: string;
         Destek taleplerine dön
       </Link>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">{ticket.subject}</h1>
@@ -112,7 +112,7 @@ export default function TicketDetail({ ticketId, backHref }: { ticketId: string;
         <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-gray-700">{ticket.description}</p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+      <div className="rounded-xl border border-gray-200 bg-white p-5">
         <h2 className="mb-4 font-semibold text-gray-900">Mesajlar</h2>
         <div className="space-y-3">
           {messages.length === 0 ? (
@@ -138,7 +138,7 @@ export default function TicketDetail({ ticketId, backHref }: { ticketId: string;
             type="button"
             onClick={() => void handleSendReply()}
             disabled={sending || !reply.trim()}
-            className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>

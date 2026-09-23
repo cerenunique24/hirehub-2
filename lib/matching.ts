@@ -18,11 +18,36 @@ function normalize(skill: string) {
     .replace(/\s+/g, " ");
 }
 
+const STOP_WORDS = new Set(["ve", "ile", "de", "da", "of", "and", "the", "for"]);
+
+/**
+ * Words that describe a *kind* of work rather than a specific skill. Sharing
+ * only one of these is not a match: "Interior Design" is not "Graphic Design",
+ * "Frontend Developer" is not "Backend Developer".
+ */
+const GENERIC_WORDS = new Set([
+  "design",
+  "designer",
+  "tasarim",
+  "tasarimi",
+  "tasarimci",
+  "development",
+  "developer",
+  "gelistirme",
+  "engineering",
+  "engineer",
+  "management",
+  "yonetimi",
+  "uzmani",
+  "specialist",
+]);
+
 function getWords(value: string) {
   return value
     .split(/[\s,/&+()-]+/)
     .map((word) => word.trim())
-    .filter((word) => word.length >= 3);
+    // 2-letter tokens like "ui", "ux", "3d", "ai" are meaningful skills.
+    .filter((word) => word.length >= 2 && !STOP_WORDS.has(word));
 }
 
 /**
@@ -43,7 +68,7 @@ function isSameSkill(a: string, b: string) {
 
   if (leftWords.length === 0 || rightWords.length === 0) return false;
 
-  return leftWords.some((word) => rightWords.includes(word));
+  return leftWords.some((word) => !GENERIC_WORDS.has(word) && rightWords.includes(word));
 }
 
 /**

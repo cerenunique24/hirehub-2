@@ -271,11 +271,11 @@ export default function DashboardNavbar() {
   };
 
   return (
-    <header className="relative flex h-20 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8">
+    <header className="relative flex h-16 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8">
       {/* Arama */}
-      <div className="flex w-[350px] items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3">
+      <div className="flex h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-gray-100 bg-white px-3">
         <Search
-          size={18}
+          size={16}
           className="text-gray-400"
         />
 
@@ -292,13 +292,13 @@ export default function DashboardNavbar() {
         <button
           type="button"
           onClick={toggleMessages}
-          className="relative rounded-xl border border-gray-100 bg-white p-3 transition hover:bg-gray-50"
+          className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
           aria-label="Mesajlar"
         >
-          <MessageCircle size={20} />
+          <MessageCircle size={18} />
 
           {unreadMessages > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-black px-1 text-[10px] font-semibold text-white">
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--color-primary-600)] px-1 text-[10px] font-semibold text-white">
               {unreadMessages}
             </span>
           )}
@@ -308,10 +308,10 @@ export default function DashboardNavbar() {
         <button
           type="button"
           onClick={toggleNotifications}
-          className="relative rounded-xl border border-gray-100 bg-white p-3 transition hover:bg-gray-50"
+          className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
           aria-label="Bildirimler"
         >
-          <Bell size={20} />
+          <Bell size={18} />
 
           {unreadNotifications > 0 && (
             <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
@@ -323,9 +323,9 @@ export default function DashboardNavbar() {
         {/* Profil */}
         <Link
           href="/freelancers/profile"
-          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-2 transition hover:bg-gray-50"
+          className="flex h-9 items-center gap-2.5 rounded-[var(--radius-button)] border border-gray-100 bg-white px-2.5 transition hover:bg-gray-50"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-black text-sm font-semibold text-white">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-primary-600)] text-sm font-semibold text-white">
             {avatarUrl ? (
               <img
                 src={avatarUrl}
@@ -351,7 +351,7 @@ export default function DashboardNavbar() {
 
       {/* Mesajlar Dropdown */}
       {showMessages && (
-        <div className="absolute right-[170px] top-14 z-50 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+        <div className="absolute right-[170px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
@@ -408,7 +408,7 @@ export default function DashboardNavbar() {
                         </p>
 
                         {!message.is_read && (
-                          <span className="h-2 w-2 shrink-0 rounded-full bg-black" />
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-primary-600)]" />
                         )}
                       </div>
 
@@ -436,7 +436,7 @@ export default function DashboardNavbar() {
 
       {/* Bildirimler Dropdown */}
       {showNotifications && (
-        <div className="absolute right-[110px] top-14 z-50 w-80 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+        <div className="absolute right-[110px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
@@ -524,7 +524,7 @@ export default function DashboardNavbar() {
                         </p>
                       )}
 
-                      <p className="mt-2 text-[10px] text-gray-400">
+                      <p className="mt-2 text-xs text-gray-400">
                         {formatRelativeTime(notification.created_at)}
                       </p>
                     </div>

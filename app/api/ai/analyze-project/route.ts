@@ -3,6 +3,10 @@ import type {
   ProjectAnalysis,
 } from "@/types/ai";
 import { cleanJsonOutput, generateJson, toSafeAiResponse } from "@/lib/ai/gemini";
+import { createClient } from "@/lib/supabase/server";
+import { getUserAccessContext, canUseFeature, incrementAiExtraAnalysisUsage } from "@/lib/premium";
+import { checkRateLimit, rateLimitKey, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rateLimit";
+import { buildPlusAnalysis, buildProAnalysis } from "@/lib/ai/projectAnalysisEnrichment";
 
 /**
  * CollaCrew AI - Proje Analiz Endpoint'i
@@ -386,6 +390,26 @@ export async function POST(
     }
 
     /**
+     * Rate limit — bu endpoint'in temel analizi kasıtlı olarak
+     * oturumsuz erişime açık (bkz. HIREHUB_AUDIT_CONTEXT.md §18), bu
+     * yüzden kullanıcı yerine IP bazlı sınırlanır — asıl Gemini
+     * maliyetini oluşturan çağrı burada.
+     */
+    const rateLimitSupabase = await createClient();
+    const clientIp = getClientIp(request);
+
+    const { ok: withinLimit } = await checkRateLimit(
+      rateLimitSupabase,
+      rateLimitKey("ai_analyze_project", clientIp),
+      15,
+      600
+    );
+
+    if (!withinLimit) {
+      return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+    }
+
+    /**
      * Request body.
      */
     const body =
@@ -505,9 +529,59 @@ export async function POST(
         prompt
       );
 
+    /*
+     * PLUS/PRO ZENGİNLEŞTİRME
+     * ----------------------------------------------------
+     * ÖNEMLİ: Bu blok, `analysis` alanının Free kullanıcı için
+     * döndüğü haliyle BİREBİR AYNI kalmasını garanti eder — hiçbir
+     * koşulda temel analiz değiştirilmez veya kısıtlanmaz. Ek alanlar
+     * (`advancedAnalysis`, `proAnalysis`, `aiUsage`) tamamen additive'dir;
+     * mevcut create-project/page.tsx tüketimini etkilemez.
+     *
+     * Auth/plan kontrolü burada başarısız olsa bile (misafir istek,
+     * beklenmeyen hata vb.) sadece zenginleştirme atlanır, temel
+     * analiz yanıtı asla bloklanmaz.
+     */
+    let advancedAnalysis: ReturnType<typeof buildPlusAnalysis> | null = null;
+    let proAnalysis: ReturnType<typeof buildProAnalysis> | null = null;
+    let aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null = null;
+
+    try {
+      const supabase = await createClient();
+      const context = await getUserAccessContext(supabase);
+
+      if (canUseFeature(context, "advanced_project_analysis")) {
+        const { data: usage } = await incrementAiExtraAnalysisUsage(supabase);
+
+        if (usage) {
+          aiUsage = {
+            count: usage.count,
+            monthlyLimit: usage.monthly_limit,
+            limitReached: usage.limit_reached,
+          };
+        }
+
+        if (!usage?.limit_reached) {
+          advancedAnalysis = buildPlusAnalysis(analysis, brief);
+
+          if (canUseFeature(context, "advanced_matching_client")) {
+            proAnalysis = buildProAnalysis(analysis, brief, advancedAnalysis);
+          }
+        }
+      }
+    } catch (enrichmentError) {
+      console.error(
+        "[CollaCrew AI] Plus/Pro zenginleştirme atlandı (temel analiz etkilenmedi):",
+        enrichmentError
+      );
+    }
+
     return Response.json(
       {
         analysis,
+        advancedAnalysis,
+        proAnalysis,
+        aiUsage,
       },
       {
         status: 200,
@@ -522,6 +596,7 @@ export async function POST(
       "AI analizinde geçerli rol detayları bulunamadı.",
       "Gemini geçerli bir proje analiz nesnesi döndürmedi.",
       "Gemini geçerli bir analiz formatı döndürmedi.",
+      "Bazı roller için detay oluşturulamadı:",
     ]);
 
     return Response.json(responseBody, { status });

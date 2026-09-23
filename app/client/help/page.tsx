@@ -22,9 +22,9 @@ export default function ClientHelpPage() {
   }, [supabase]);
 
   return (
-    <div className="p-8">
+    <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-neutral-900">Yardım</h1>
+        <h1 className="text-3xl font-semibold text-neutral-900">Yardım</h1>
         <p className="mt-2 text-sm text-neutral-500">
           Sık sorulan sorulara göz at ya da bir destek talebi oluştur.
         </p>

@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectAnalysis } from "@/types/ai";
 
 import { matchSkills } from "@/lib/matching";
+import { normalizeStringArray } from "@/lib/utils/normalizeStringArray";
+import { computeRoleEligibility } from "@/lib/matching/roleEligibility";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -17,8 +19,10 @@ type Profile = {
   bio: string | null;
   skills: string[] | null;
   availability: string | null;
+  availability_status: string | null;
   experience: string | number | null;
   expertise: string | null;
+  project_types: string[] | null;
   role: string | null;
 };
 
@@ -78,6 +82,17 @@ export type TalentMatch = {
   memberCount?: number;
   budgetPerPerson?: number;
   budget?: number;
+
+  /**
+   * Freelancer → project matching ile AYNI deterministic helper
+   * (lib/matching/roleEligibility.ts) kullanılarak hesaplanır.
+   *
+   * Client proje oluştururken bir role için önerilen freelancer
+   * listesi de bu role gerçekten uygun olmayan (role family
+   * uyumsuz) profilleri "en iyi eşleşme" olarak öne çıkarmamalı —
+   * Discover / proje detay sayfalarındaki KURAL burada da geçerli.
+   */
+  isEligibleForRole: boolean;
 };
 
 export type RoleMatchInput = {
@@ -107,18 +122,36 @@ export type FreelancerRoleMatch = {
   memberCount?: number;
 
   /**
-   * Bütçe yalnızca eşleşen rol için döndürülür.
+   * matchScore (0-100) ile isEligibleForRole (true/false) ayrı
+   * kavramlardır. Yüksek skor tek başına proposal gönderme izni
+   * vermez — role family uyumsuzsa ya da skor eşiğin altındaysa
+   * isEligibleForRole false döner.
+   */
+  isEligibleForRole: boolean;
+
+  /**
+   * Bütçe ve süre yalnızca isEligibleForRole === true olan rol için
+   * döndürülür.
    *
-   * 0 ise client tarafından bu rol için
-   * görünür bir bütçe tanımlanmamış kabul edilir.
+   * 0 / undefined ise client tarafından bu rol için görünür bir
+   * bütçe tanımlanmamış kabul edilir.
    */
   budgetPerPerson?: number;
   budget?: number;
+  duration?: string;
+
+  /**
+   * Eşleşmeyi destekleyen somut kriterler (beceri/portfolyo örtüşümü).
+   * Yalnızca isEligibleForRole === true iken doldurulur — Premium
+   * "Bu proje neden eşleşiyor?" panelinde checklist olarak gösterilir.
+   */
+  matchingSkills?: string[];
 };
 
 type MatchCalculation = {
   score: number;
   reason: string;
+  matchingSkills: string[];
 };
 
 /* -------------------------------------------------------------------------- */
@@ -176,7 +209,7 @@ export async function matchTalent(
 
     for (const profile of profiles) {
       const freelancerSkills =
-        normalizeSkills(profile.skills);
+        buildFreelancerSkillPool(profile);
 
       const result = calculateMatch({
         profile,
@@ -199,7 +232,15 @@ export async function matchTalent(
 
       const availability =
         normalizeAvailability(
-          profile.availability
+          profile.availability,
+          profile.availability_status
+        );
+
+      const eligibility =
+        computeRoleEligibility(
+          result.score,
+          role.name,
+          buildFreelancerFamilyText(profile)
         );
 
       freelancers.push({
@@ -220,10 +261,26 @@ export async function matchTalent(
         memberCount,
         budgetPerPerson,
         budget,
+        isEligibleForRole:
+          eligibility.isEligibleForRole,
       });
     }
 
+    /**
+     * Eligible freelancerlar her zaman ineligible olanların önünde
+     * sıralanır — client "en iyi eşleşme" olarak role family uyumsuz
+     * bir profil görmemeli, skor ne olursa olsun.
+     */
     freelancers.sort((a, b) => {
+      if (
+        a.isEligibleForRole !==
+        b.isEligibleForRole
+      ) {
+        return a.isEligibleForRole
+          ? -1
+          : 1;
+      }
+
       if (b.score !== a.score) {
         return b.score - a.score;
       }
@@ -320,8 +377,10 @@ export async function matchFreelancerToProjectRoles(
           "bio",
           "skills",
           "availability",
+          "availability_status",
           "experience",
           "expertise",
+          "project_types",
           "role",
         ].join(", ")
       )
@@ -484,20 +543,25 @@ export async function matchFreelancerToProjectRoles(
       });
 
     /**
-     * ÖNEMLİ: düşük skorlu bir rol asla listeden düşürülmez.
+     * ROLE ELIGIBILITY
+     * ----------------------------------------------------
+     * matchScore (calculation.score) ile isEligibleForRole ayrı
+     * kavramlardır. Bir rol asla listeden düşürülmez (freelancer
+     * kendi profiliyle hangi rollere ne kadar uyduğunu görebilmeli),
+     * ancak yalnızca isEligibleForRole === true olan roller için
+     * proposal gönderilebilir ve bütçe/süre bilgisi döndürülür.
      *
-     * Ürün kuralı: "%40 eşleşen freelancer da teklif gönderebilmeli"
-     * — eşleşme yüzdesi yalnızca bilgilendirme amaçlıdır, teklif
-     * gönderimini engelleyen bir kapı DEĞİLDİR. Önceki sürümde
-     * 40 puanın altındaki roller response'tan tamamen çıkarılıyordu;
-     * bu da Discover ekranında "uygun eşleşme yok" görünüp teklif
-     * formunun tamamen kilitlenmesine yol açıyordu.
-     *
-     * Bütçe gizliliği yine korunuyor: yalnızca gerçekten eşleşen
-     * (>= 40) roller için per-person bütçe döndürülür, düşük
-     * skorlu roller bütçesiz döner.
+     * Eligibility iki sinyale bakar:
+     * 1) matchScore >= ELIGIBILITY_MATCH_THRESHOLD
+     * 2) role family uyumu (ör. Architect / Interior Architect,
+     *    Brand Designer / Digital Marketing / Full Stack Developer
+     *    ile otomatik eşleşmez — bkz. lib/matching/roleEligibility.ts)
      */
-    const isRealMatch = calculation.score >= 40;
+    const eligibility = computeRoleEligibility(
+      calculation.score,
+      roleName,
+      buildFreelancerFamilyText(profile)
+    );
 
     results.push({
       roleId:
@@ -512,6 +576,9 @@ export async function matchFreelancerToProjectRoles(
       reason:
         calculation.reason,
 
+      isEligibleForRole:
+        eligibility.isEligibleForRole,
+
       memberCount:
         budgetInfo.memberCount ??
         normalizePositiveInteger(
@@ -520,16 +587,27 @@ export async function matchFreelancerToProjectRoles(
         ),
 
       /**
-       * Bütçe sadece gerçekten eşleşen (>= 40) rol için döndürülür.
-       * Eğer client bütçe girmemişse normalizeMoney() zaten 0 döndürür.
+       * Bütçe ve süre sadece isEligibleForRole === true olan rol için
+       * döndürülür. Eğer client bütçe girmemişse normalizeMoney() zaten
+       * 0 döndürür — o durumda budgetPerPerson/budget hiç eklenmez.
        */
-      budgetPerPerson: isRealMatch
-        ? budgetInfo.budgetPerPerson
-        : 0,
-
-      budget: isRealMatch
-        ? budgetInfo.budget
-        : 0,
+      ...(eligibility.isEligibleForRole
+        ? {
+            budgetPerPerson:
+              budgetInfo.budgetPerPerson || undefined,
+            budget:
+              budgetInfo.budget || undefined,
+            duration:
+              typeof projectRole.duration === "string" &&
+              projectRole.duration.trim()
+                ? projectRole.duration.trim()
+                : undefined,
+            matchingSkills:
+              calculation.matchingSkills.length > 0
+                ? calculation.matchingSkills
+                : undefined,
+          }
+        : {}),
     });
   }
 
@@ -537,6 +615,31 @@ export async function matchFreelancerToProjectRoles(
     (a, b) =>
       b.score - a.score
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Freelancer skill pool                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Skill overlap uses everything the freelancer declared on their profile:
+ * the `skills` tool list (e.g. "AutoCAD") AND the `expertise` areas
+ * (e.g. "Interior Design, Space Planning"). Before, expertise was ignored,
+ * so a role requiring "Interior Design" scored low against an interior
+ * architect whose expertise listed exactly that.
+ */
+function buildFreelancerSkillPool(profile: Profile): string[] {
+  return uniqueStrings([
+    ...normalizeSkills(profile.skills),
+    ...normalizeStringArray(profile.expertise),
+  ]);
+}
+
+/** Project category ↔ the freelancer's declared project types. */
+function hasProjectTypeMatch(profile: Profile, category: string | null): boolean {
+  if (!category || !profile.project_types?.length) return false;
+  const target = normalizeText(category);
+  return profile.project_types.some((type) => normalizeText(type) === target);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -576,9 +679,10 @@ function calculateFreelancerProjectRoleMatch({
     roleData.roleId === "fallback-single-role";
 
   const freelancerSkills =
-    normalizeSkills(
-      profile.skills
-    );
+    buildFreelancerSkillPool(profile);
+
+  const projectTypeMatch =
+    hasProjectTypeMatch(profile, project.category);
 
   /* ---------------------------------------------------------------------- */
   /* Role-specific skills                                                    */
@@ -615,6 +719,7 @@ function calculateFreelancerProjectRoleMatch({
     profile.title,
     profile.expertise,
     profile.bio,
+    ...(profile.project_types ?? []),
   ].filter(
     (
       value
@@ -821,6 +926,12 @@ function calculateFreelancerProjectRoleMatch({
       portfolioRoleScore * 0.15 +
       experienceScore * 0.05;
 
+  // Declared project-type compatibility only ever adds a little, and never
+  // on its own (a role signal must already exist).
+  if (projectTypeMatch && score > 0) {
+    score += 5;
+  }
+
   /**
    * Çok güçlü profil + role-specific skill.
    */
@@ -862,10 +973,25 @@ function calculateFreelancerProjectRoleMatch({
 
   /**
    * Hiçbir temel role sinyali yoksa kesinlikle eşleşme yok.
+   *
+   * ÖNEMLİ: burada roleSkillMatch (SADECE role-specific requiredSkills/
+   * skills alanına bakar) değil, weightedSkillScore kontrol edilir.
+   * roleData.requiredSkills/skills boşsa (client bir role için beceri
+   * girmeden projeyi yayınlayabiliyor — bkz. app/client/create-project)
+   * roleSkillMatch.percentage HER ZAMAN 0'dır, ama weightedSkillScore bu
+   * durumda zaten projectSkillMatch'e (projenin genel beceri listesi)
+   * düşer (bkz. yukarıdaki "else if (projectSkills.length > 0)" dalı).
+   * Eskiden roleSkillMatch.percentage kontrol edildiği için, sırf o rol
+   * için beceri tanımlanmamış diye — freelancer'ın genel proje
+   * becerileriyle güçlü örtüşmesi olsa bile — skor sıfırlanıyordu. Bu,
+   * "veri alanı eksikliği gerçekten uyan bir freelancer'ı %0 yapmamalı"
+   * kuralını ihlal ediyordu. calculateMatch() (aşağıda) zaten aynı sinyali
+   * doğru şekilde weightedSkillScore üzerinden kontrol ediyor — burası
+   * ona tutarlı hale getirildi.
    */
   if (
     roleScore === 0 &&
-    roleSkillMatch.percentage === 0 &&
+    weightedSkillScore === 0 &&
     portfolioRoleScore === 0 &&
     responsibilityScore === 0
   ) {
@@ -881,17 +1007,28 @@ function calculateFreelancerProjectRoleMatch({
       )
     );
 
+  /**
+   * For a named role, only the role's own skills are reported as "matching"
+   * — project-wide skills still feed the score, but listing them under e.g.
+   * "Frontend Developer" would be a misleading reason.
+   */
   const matchingSkills =
-    uniqueStrings([
-      ...roleSkillMatch.matchingSkills,
-      ...preferredSkillMatch.matchingSkills,
-      ...projectSkillMatch.matchingSkills,
-      ...portfolioSkillMatch.matchingSkills,
-    ]);
+    isGeneralProjectRole || roleSkills.length === 0
+      ? uniqueStrings([
+          ...roleSkillMatch.matchingSkills,
+          ...preferredSkillMatch.matchingSkills,
+          ...projectSkillMatch.matchingSkills,
+          ...portfolioSkillMatch.matchingSkills,
+        ])
+      : uniqueStrings([
+          ...roleSkillMatch.matchingSkills,
+          ...preferredSkillMatch.matchingSkills,
+        ]);
 
   const availability =
     normalizeAvailability(
-      profile.availability
+      profile.availability,
+      profile.availability_status
     );
 
   const reason =
@@ -904,11 +1041,13 @@ function calculateFreelancerProjectRoleMatch({
       matchingSkills,
       finalScore,
       availability,
+      projectTypeMatch,
     });
 
   return {
     score: finalScore,
     reason,
+    matchingSkills,
   };
 }
 
@@ -1390,7 +1529,8 @@ function calculateMatch({
 
   const availability =
     normalizeAvailability(
-      profile.availability
+      profile.availability,
+      profile.availability_status
     );
 
   const reason =
@@ -1407,6 +1547,7 @@ function calculateMatch({
   return {
     score: finalScore,
     reason,
+    matchingSkills,
   };
 }
 
@@ -1706,7 +1847,9 @@ function buildFreelancerProjectReason({
   matchingSkills,
   finalScore,
   availability,
+  projectTypeMatch = false,
 }: {
+  projectTypeMatch?: boolean;
   roleName: string;
   roleScore: number;
   responsibilityScore: number;
@@ -1767,8 +1910,14 @@ function buildFreelancerProjectReason({
     );
   }
 
+  if (projectTypeMatch && finalScore >= 40) {
+    reasons.push("Proje türü uyumu");
+  }
+
+  // Experience only supports an existing match — it is not a reason by itself.
   if (
-    experienceScore >= 80
+    experienceScore >= 80 &&
+    finalScore >= 40
   ) {
     reasons.push(
       "Deneyim seviyen proje için uygun"
@@ -1945,8 +2094,10 @@ async function getFreelancerProfiles(
         "bio",
         "skills",
         "availability",
+          "availability_status",
         "experience",
         "expertise",
+        "project_types",
         "role",
       ].join(", ")
     )
@@ -1971,6 +2122,26 @@ async function getFreelancerProfiles(
       (profile) =>
         profile.id.length > 0
     );
+}
+
+/**
+ * Role family tespiti için kullanılan freelancer metni.
+ *
+ * title + expertise + skills birleşimi kullanılır: title tek başına
+ * yetersiz kalabilir (ör. "Freelancer"), skills ise family sinyalini
+ * güçlendirir.
+ */
+function buildFreelancerFamilyText(profile: Profile): string {
+  const skills = Array.isArray(profile.skills)
+    ? profile.skills.join(" ")
+    : "";
+
+  return [profile.title, profile.expertise, skills]
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0
+    )
+    .join(" ");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2037,6 +2208,12 @@ function normalizeProfile(
         ? profile.availability
         : null,
 
+    availability_status:
+      typeof profile.availability_status ===
+      "string"
+        ? profile.availability_status
+        : null,
+
     experience:
       typeof profile.experience ===
         "string" ||
@@ -2050,6 +2227,12 @@ function normalizeProfile(
       "string"
         ? profile.expertise
         : null,
+
+    project_types: Array.isArray(profile.project_types)
+      ? profile.project_types.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0
+        )
+      : null,
 
     role:
       typeof profile.role ===
@@ -2328,11 +2511,29 @@ function getBudgetInfo(
 /* -------------------------------------------------------------------------- */
 
 function normalizeAvailability(
-  value: string | null
+  value: string | null,
+  statusValue?: string | null
 ):
   | "available"
   | "partially_available"
   | "busy" {
+  /*
+   * availability_status kanonik enum kolonudur ('available' | 'limited'
+   * | 'unavailable'). Doluysa serbest metin (`availability`)
+   * heuristiği yerine doğrudan bu kullanılır.
+   */
+  if (statusValue === "limited") {
+    return "partially_available";
+  }
+
+  if (statusValue === "unavailable") {
+    return "busy";
+  }
+
+  if (statusValue === "available") {
+    return "available";
+  }
+
   if (!value) {
     return "available";
   }
@@ -2345,6 +2546,8 @@ function normalizeAvailability(
       "available" ||
     normalized ===
       "musait" ||
+    normalized ===
+      "tamamen musait" ||
     normalized ===
       "available now" ||
     normalized ===
@@ -2374,7 +2577,9 @@ function normalizeAvailability(
     normalized ===
       "unavailable" ||
     normalized ===
-      "unavailable now"
+      "unavailable now" ||
+    normalized ===
+      "yeni projelere kapali"
   ) {
     return "busy";
   }
@@ -2564,6 +2769,11 @@ function getMeaningfulWords(
       "of",
       "for",
       "and",
+      // Generic activity words: "konsept geliştirme" in a bio must not
+      // count as a partial match for "Frontend Geliştirme".
+      "gelistirme",
+      "uzmani",
+      "uzman",
     ]);
 
   return value

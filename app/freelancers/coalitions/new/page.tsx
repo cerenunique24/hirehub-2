@@ -286,7 +286,7 @@ export default function NewCoalitionPage() {
   };
 
   return (
-    <main className="w-full p-8">
+    <main className="w-full p-6">
       <div className="mx-auto max-w-5xl">
         <Link
           href="/freelancers/coalitions"
@@ -315,7 +315,7 @@ export default function NewCoalitionPage() {
         )}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_1.25fr]">
-          <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">
               Koalisyon bilgileri
             </h2>
@@ -391,7 +391,7 @@ export default function NewCoalitionPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
@@ -469,7 +469,7 @@ export default function NewCoalitionPage() {
                 </div>
               ) : filteredFreelancers.length ===
                 0 ? (
-                <div className="rounded-xl bg-gray-50 p-8 text-center">
+                <div className="rounded-xl bg-gray-50 p-6 text-center">
                   <Users
                     size={22}
                     className="mx-auto text-gray-400"
@@ -545,7 +545,7 @@ export default function NewCoalitionPage() {
                           <div
                             className={
                               selected
-                                ? "ml-4 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black text-white"
+                                ? "ml-4 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-white"
                                 : "ml-4 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-300 text-transparent"
                             }
                           >
@@ -577,7 +577,7 @@ export default function NewCoalitionPage() {
               loading ||
               !name.trim()
             }
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-6 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {creating && (
               <Loader2

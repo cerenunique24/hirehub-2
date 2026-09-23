@@ -8,6 +8,7 @@ import {
 
 import type { ProjectAnalysis } from "@/types/ai";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, rateLimitKey, RATE_LIMIT_MESSAGE } from "@/lib/rateLimit";
 
 export async function POST(request: Request) {
   try {
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
       analysis?: ProjectAnalysis;
       roles?: RoleMatchInput[];
       projectId?: string;
+      projectIds?: string[];
     };
 
     const supabase = await createClient();
@@ -30,6 +32,17 @@ export async function POST(request: Request) {
         },
         { status: 401 }
       );
+    }
+
+    const { ok: withinLimit } = await checkRateLimit(
+      supabase,
+      rateLimitKey("ai_match_talent", user.id),
+      30,
+      600
+    );
+
+    if (!withinLimit) {
+      return NextResponse.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
     }
 
     /*
@@ -52,7 +65,7 @@ export async function POST(request: Request) {
      * taşınabilir.
      */
 
-    if (body.projectId) {
+    if (body.projectId || body.projectIds) {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("id, role")
@@ -83,14 +96,66 @@ export async function POST(request: Request) {
         );
       }
 
-      const matching = await matchFreelancerToProjectRoles(
-        supabase,
-        body.projectId,
-        user.id
+      if (body.projectId) {
+        const matching = await matchFreelancerToProjectRoles(
+          supabase,
+          body.projectId,
+          user.id
+        );
+
+        return NextResponse.json({
+          matching,
+        });
+      }
+
+      /*
+       * ----------------------------------------------------
+       * TOPLU (BATCH) FREELANCER PROJE MATCHING
+       * ----------------------------------------------------
+       *
+       * Discover LİSTE sayfası, her açık proje kartı için bir
+       * eşleşme özeti (en iyi rol/skor/uygun bütçe) gösterir.
+       * Bu hesaplama projects.budget_breakdown'ın TAMAMINI okur
+       * (tüm rollerin bütçeleri) — bu yüzden SADECE burada,
+       * server-side, kullanıcının kendi tarayıcısına hiç
+       * gitmeyecek şekilde çalıştırılır. Liste sayfası artık
+       * matchFreelancerToProjectRoles()'u kendi (browser)
+       * Supabase client'ıyla DOĞRUDAN çağırmaz — aksi halde her
+       * açık projenin TÜM rollerinin bütçesi, sadece en iyi rol
+       * render edilse bile, network response'unda tarayıcıya
+       * gönderilirdi (bkz. HIREHUB_AUDIT_CONTEXT.md — "budget
+       * breakdown UI'da gizleniyor ama response'ta hâlâ mevcut").
+       */
+      const projectIds = Array.isArray(body.projectIds)
+        ? body.projectIds.filter(
+            (id): id is string => typeof id === "string" && id.trim().length > 0
+          )
+        : [];
+
+      const matchingByProject: Record<string, Awaited<ReturnType<typeof matchFreelancerToProjectRoles>>> = {};
+
+      await Promise.all(
+        projectIds.map(async (projectId) => {
+          try {
+            matchingByProject[projectId] = await matchFreelancerToProjectRoles(
+              supabase,
+              projectId,
+              user.id
+            );
+          } catch (matchError) {
+            console.error(
+              "Proje eşleşmesi hesaplanamadı:",
+              projectId,
+              matchError
+            );
+
+            matchingByProject[projectId] = [];
+          }
+        })
       );
 
       return NextResponse.json({
-        matching,
+        matching: matchingByProject,
       });
     }
 
