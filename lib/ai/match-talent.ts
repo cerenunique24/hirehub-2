@@ -191,12 +191,42 @@ export async function matchTalent(
     roles
   );
 
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      "[MATCH DEBUG] category:",
+      analysis?.category,
+      "rolesCount:",
+      rolesToMatch.length,
+      "roles:",
+      rolesToMatch.map((role) => role.name)
+    );
+  }
+
   if (rolesToMatch.length === 0) {
     return [];
   }
 
-  const profiles =
-    await getFreelancerProfiles(supabase);
+  let profiles: Profile[];
+
+  try {
+    profiles = await getFreelancerProfiles(supabase);
+  } catch (profilesError) {
+    console.error(
+      "[CollaCrew AI] matchTalent: freelancer profilleri getirilemedi:",
+      profilesError instanceof Error
+        ? `${profilesError.name}: ${profilesError.message}`
+        : profilesError
+    );
+
+    throw profilesError;
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      "[MATCH DEBUG] candidates:",
+      profiles.length
+    );
+  }
 
   type PendingSemanticReview = {
     pairId: string;
@@ -480,6 +510,16 @@ export async function matchTalent(
         });
       }
     }
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      "[MATCH DEBUG] finalMatches per role:",
+      roleMatchings.map((role) => ({
+        role: role.role,
+        count: role.freelancers.length,
+      }))
+    );
   }
 
   return roleMatchings;

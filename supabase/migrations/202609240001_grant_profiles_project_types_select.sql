@@ -1,0 +1,23 @@
+-- ROOT CAUSE: 202609200002_restrict_profile_pii_exposure.sql revoked SELECT
+-- on public.profiles for `authenticated` and re-granted it only for a
+-- specific column allowlist. `project_types` was left off that allowlist,
+-- even though it is not PII (it's the freelancer's self-declared list of
+-- project categories) and IS read cross-user by the matching pipeline:
+--   - lib/ai/match-talent.ts: getFreelancerProfiles() (client "create
+--     project" AI matching) and matchFreelancerToProjectRoles() (freelancer
+--     Discover / project-detail matching) both select `project_types`
+--     alongside other profiles columns.
+--   - lib/ai/improve-proposal.ts also selects it for proposal improvement.
+--
+-- Postgres requires SELECT privilege on EVERY selected column, not just a
+-- subset — so any query selecting `project_types` together with other
+-- columns fails outright with `permission denied for table profiles`
+-- (reproduced directly against this project: see column_privileges check).
+-- This is why AI matching returned 0 matches for every role regardless of
+-- category/skills: the freelancer-candidate query never returned data, it
+-- threw, and the API/UI layers swallowed the error into an empty result.
+--
+-- Fix: add `project_types` to the existing SELECT grant. No new table,
+-- schema, or RLS policy — this only restores a column that was
+-- inadvertently dropped from the allowlist.
+grant select (project_types) on public.profiles to authenticated;
