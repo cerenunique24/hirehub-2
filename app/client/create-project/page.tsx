@@ -95,15 +95,6 @@ const DELIVERY_FORMATS = [
   "Diğer",
 ];
 
-const BUDGET_PRESETS = [
-  { label: "₺5.000 – ₺10.000", value: 7500 },
-  { label: "₺10.000 – ₺25.000", value: 17500 },
-  { label: "₺25.000 – ₺50.000", value: 37500 },
-  { label: "₺50.000 – ₺100.000", value: 75000 },
-  { label: "₺100.000 – ₺250.000", value: 175000 },
-  { label: "₺250.000+", value: 250000 },
-];
-
 const DURATION_OPTIONS = [
   {
     label: "1 haftadan az",
@@ -428,12 +419,6 @@ export default function CreateProjectPage() {
     useState<Talent | null>(null);
 
   const [generalBudget, setGeneralBudget] =
-    useState("");
-
-  const [generalBudgetMode, setGeneralBudgetMode] =
-    useState<"preset" | "custom">("preset");
-
-  const [generalBudgetPreset, setGeneralBudgetPreset] =
     useState("");
 
   const [projectDuration, setProjectDuration] =
@@ -894,29 +879,6 @@ export default function CreateProjectPage() {
     setStep("budget");
   }
 
-  function handleGeneralBudgetPreset(
-    value: string
-  ) {
-    setGeneralBudgetPreset(value);
-    setGeneralBudgetMode("preset");
-
-    const numericValue = Number(value);
-
-    if (numericValue > 0) {
-      setGeneralBudget(
-        String(numericValue)
-      );
-    }
-  }
-
-  function handleGeneralBudgetCustom(
-    value: string
-  ) {
-    setGeneralBudgetMode("custom");
-    setGeneralBudgetPreset("");
-    setGeneralBudget(value);
-  }
-
   async function publishProject() {
     setError("");
 
@@ -1209,26 +1171,8 @@ export default function CreateProjectPage() {
             generalBudget={
               generalBudget
             }
-            generalBudgetMode={
-              generalBudgetMode
-            }
-            generalBudgetPreset={
-              generalBudgetPreset
-            }
             setGeneralBudget={
               setGeneralBudget
-            }
-            setGeneralBudgetMode={
-              setGeneralBudgetMode
-            }
-            setGeneralBudgetPreset={
-              setGeneralBudgetPreset
-            }
-            handleGeneralBudgetPreset={
-              handleGeneralBudgetPreset
-            }
-            handleGeneralBudgetCustom={
-              handleGeneralBudgetCustom
             }
             projectDuration={
               projectDuration
@@ -2296,13 +2240,7 @@ function BudgetPublishStep({
   updateRole,
   selectedFreelancer,
   generalBudget,
-  generalBudgetMode,
-  generalBudgetPreset,
   setGeneralBudget,
-  setGeneralBudgetMode,
-  setGeneralBudgetPreset,
-  handleGeneralBudgetPreset,
-  handleGeneralBudgetCustom,
   projectDuration,
   setProjectDuration,
   totalBudget,
@@ -2322,23 +2260,7 @@ function BudgetPublishStep({
     | Talent
     | null;
   generalBudget: string;
-  generalBudgetMode:
-    | "preset"
-    | "custom";
-  generalBudgetPreset: string;
   setGeneralBudget: (
-    value: string
-  ) => void;
-  setGeneralBudgetMode: (
-    value: "preset" | "custom"
-  ) => void;
-  setGeneralBudgetPreset: (
-    value: string
-  ) => void;
-  handleGeneralBudgetPreset: (
-    value: string
-  ) => void;
-  handleGeneralBudgetCustom: (
     value: string
   ) => void;
   projectDuration: string;
@@ -2467,18 +2389,7 @@ function BudgetPublishStep({
             <BudgetSelector
               label="Proje bütçesi"
               value={generalBudget}
-              presetValue={
-                generalBudgetPreset
-              }
-              mode={
-                generalBudgetMode
-              }
-              onPresetChange={
-                handleGeneralBudgetPreset
-              }
-              onCustomChange={
-                handleGeneralBudgetCustom
-              }
+              onChange={setGeneralBudget}
             />
 
             <DurationSelector
@@ -2613,39 +2524,9 @@ function RoleBudgetCard({
     updates: Partial<Role>
   ) => void;
 }) {
-  const [budgetMode, setBudgetMode] =
-    useState<"preset" | "custom">(
-      role.budgetPerPerson > 0
-        ? "custom"
-        : "preset"
-    );
-
-  const [presetValue, setPresetValue] =
-    useState("");
-
-  function handlePreset(
+  function handleBudgetChange(
     value: string
   ) {
-    setBudgetMode("preset");
-    setPresetValue(value);
-
-    const numericValue =
-      Number(value);
-
-    if (numericValue > 0) {
-      onUpdate({
-        budgetPerPerson:
-          numericValue,
-      });
-    }
-  }
-
-  function handleCustom(
-    value: string
-  ) {
-    setBudgetMode("custom");
-    setPresetValue("");
-
     onUpdate({
       budgetPerPerson:
         parseTL(value),
@@ -2706,15 +2587,8 @@ function RoleBudgetCard({
                 )
               : ""
           }
-          presetValue={presetValue}
-          mode={budgetMode}
           compact
-          onPresetChange={
-            handlePreset
-          }
-          onCustomChange={
-            handleCustom
-          }
+          onChange={handleBudgetChange}
         />
 
         <DurationSelector
@@ -2748,23 +2622,24 @@ function RoleBudgetCard({
   );
 }
 
+/**
+ * Client'ın gerçek proje/rol bütçesini elle girdiği alan.
+ *
+ * ÖNEMLİ: Bilinçli olarak bir "bütçe bandı" (₺5.000-₺10.000 gibi)
+ * dropdown'u DEĞİLDİR — bant, gerçek bütçe yerine yaklaşık bir aralık
+ * ima eder ve source-of-truth olamaz. Client burada tam TL rakamını
+ * girer; toplam bütçe bu rakamdan hesaplanır, AI hiçbir bütçe alanını
+ * belirlemez/değiştirmez.
+ */
 function BudgetSelector({
   label,
   value,
-  presetValue,
-  mode,
-  onPresetChange,
-  onCustomChange,
+  onChange,
   compact = false,
 }: {
   label: string;
   value: string;
-  presetValue: string;
-  mode: "preset" | "custom";
-  onPresetChange: (
-    value: string
-  ) => void;
-  onCustomChange: (
+  onChange: (
     value: string
   ) => void;
   compact?: boolean;
@@ -2775,101 +2650,34 @@ function BudgetSelector({
         {label}
       </label>
 
-      {mode === "preset" ? (
-        <div className="relative">
-          <select
-            value={presetValue}
-            onChange={(event) => {
-              if (
-                event.target.value ===
-                "custom"
-              ) {
-                onCustomChange("");
-              } else {
-                onPresetChange(
-                  event.target.value
-                );
-              }
-            }}
-            className={`${INPUT} appearance-none pr-10 ${
-              compact
-                ? "h-11"
-                : ""
-            }`}
-          >
-            <option value="">
-              Bütçe aralığı seçin
-            </option>
-
-            {BUDGET_PRESETS.map(
-              (preset) => (
-                <option
-                  key={preset.label}
-                  value={String(
-                    preset.value
-                  )}
-                >
-                  {preset.label}
-                </option>
-              )
-            )}
-
-            <option value="custom">
-              Kendim belirlemek istiyorum
-            </option>
-          </select>
-
-          <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={
-                value
-                  ? formatTL(
-                      parseTL(value)
-                    )
-                  : ""
-              }
-              onChange={(event) =>
-                onCustomChange(
-                  event.target.value
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={
+            value
+              ? formatTL(
+                  parseTL(value)
                 )
-              }
-              placeholder="Örn. 37.500"
-              className={`${INPUT} pr-12 ${
-                compact
-                  ? "h-11"
-                  : ""
-              }`}
-            />
+              : ""
+          }
+          onChange={(event) =>
+            onChange(
+              event.target.value
+            )
+          }
+          placeholder="Örn. 37.500"
+          className={`${INPUT} pr-12 ${
+            compact
+              ? "h-11"
+              : ""
+          }`}
+        />
 
-            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
-              TL
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              onPresetChange("")
-            }
-            className="shrink-0 rounded-xl border border-gray-200 px-3 text-xs font-medium text-gray-500 transition hover:border-gray-300 hover:text-[#222]"
-          >
-            Aralık
-          </button>
-        </div>
-      )}
-
-      {mode === "custom" && (
-        <p className="mt-1.5 text-xs text-gray-400">
-          Bütçeyi istediğiniz rakam
-          olarak belirleyebilirsiniz.
-        </p>
-      )}
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+          TL
+        </span>
+      </div>
     </div>
   );
 }

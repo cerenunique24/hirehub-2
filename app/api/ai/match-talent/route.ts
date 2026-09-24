@@ -195,7 +195,34 @@ export async function POST(request: Request) {
       matching,
     });
   } catch (error) {
-    console.error("Freelancer eşleştirme hatası:", error);
+    /*
+     * Güvenli, tanı koyulabilir sunucu logu:
+     * - Error instance'ıysa name/message/stack (ilk birkaç satır).
+     * - Değilse (ör. throw ile atılan plain bir değer — normalde
+     *   olmamalı ama "Freelancer eşleştirme tamamlanamadı." generic
+     *   mesajının döndüğü TEK durum budur) tipini ve string halini
+     *   logla ki kök neden görünür olsun.
+     *
+     * ASLA loglanmaz: GEMINI_API_KEY, Supabase service role key,
+     * şifre, komple profile/proje nesnesi. `error.message` Supabase/
+     * Gemini hata mesajlarını içerebilir ama bunlar hiçbir zaman
+     * secret/PII taşımaz (bkz. lib/ai/gemini.ts, lib/ai/match-talent.ts
+     * içindeki hata sınıflandırması).
+     */
+    if (error instanceof Error) {
+      console.error(
+        "[CollaCrew AI] /api/ai/match-talent hata:",
+        `${error.name}: ${error.message}`,
+        error.stack?.split("\n").slice(0, 3).join(" | ")
+      );
+    } else {
+      console.error(
+        "[CollaCrew AI] /api/ai/match-talent beklenmeyen (Error olmayan) " +
+          "bir değer fırlattı:",
+        `type=${typeof error}`,
+        `value=${String(error)}`
+      );
+    }
 
     if (error instanceof Error) {
       return NextResponse.json(

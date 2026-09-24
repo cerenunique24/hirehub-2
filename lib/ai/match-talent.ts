@@ -229,23 +229,46 @@ export async function matchTalent(
       );
 
     for (const profile of profiles) {
+      /**
+       * HATA İZOLASYONU
+       * ----------------------------------------------------
+       * Tek bir freelancer profilindeki eksik/bozuk bir alan (ör.
+       * beklenmeyen bir tip) bu adayın skorlanmasını başarısız
+       * kılabilir — ama bu, aynı rol için diğer TÜM adayları ya da
+       * diğer rolleri (ve dolayısıyla tüm endpoint'i) 500'e
+       * düşürmemeli. Hatayı logla, bu adayı atla, devam et.
+       */
       const freelancerSkills =
         buildFreelancerSkillPool(profile);
 
-      const result = calculateMatch({
-        profile,
-        requiredRole: role.name,
-        requiredSkills: uniqueStrings(
-          role.skills
-        ),
-        preferredSkills: uniqueStrings(
-          role.preferredSkills ?? []
-        ),
-        responsibilities: uniqueStrings(
-          role.responsibilities ?? []
-        ),
-        freelancerSkills,
-      });
+      let result: MatchCalculation;
+
+      try {
+        result = calculateMatch({
+          profile,
+          requiredRole: role.name,
+          requiredSkills: uniqueStrings(
+            role.skills
+          ),
+          preferredSkills: uniqueStrings(
+            role.preferredSkills ?? []
+          ),
+          responsibilities: uniqueStrings(
+            role.responsibilities ?? []
+          ),
+          freelancerSkills,
+        });
+      } catch (matchError) {
+        console.error(
+          `[CollaCrew AI] matchTalent: aday skorlanamadı ` +
+            `(profileId=${profile.id}, role=${JSON.stringify(role.name)}):`,
+          matchError instanceof Error
+            ? matchError.message
+            : matchError
+        );
+
+        continue;
+      }
 
       if (result.score <= 0) {
         continue;
@@ -406,10 +429,28 @@ export async function matchTalent(
       deterministicScore: review.calculation.score,
     }));
 
-    const verdicts = await reviewMatchPairs(
-      projectContext,
-      pairs
-    );
+    /**
+     * reviewMatchPairs kendi içinde zaten try/catch ile `null` döner —
+     * ama semantic katman deterministic sonucu ASLA kıramaz, bu yüzden
+     * burada da ekstra bir güvenlik ağı var: beklenmeyen bir hata
+     * (ör. tip hatası) olsa bile deterministic sonuçlar aynen döner.
+     */
+    let verdicts: Awaited<ReturnType<typeof reviewMatchPairs>> = null;
+
+    try {
+      verdicts = await reviewMatchPairs(
+        projectContext,
+        pairs
+      );
+    } catch (semanticError) {
+      console.error(
+        "[CollaCrew AI] matchTalent: semantic review beklenmeyen şekilde " +
+          "başarısız oldu, deterministic sonuçlara devam ediliyor:",
+        semanticError instanceof Error
+          ? semanticError.message
+          : semanticError
+      );
+    }
 
     if (verdicts) {
       for (const review of sortedReviews) {
@@ -678,16 +719,35 @@ export async function matchFreelancerToProjectRoles(
         1,
     };
 
-    const calculation =
-      calculateFreelancerProjectRoleMatch({
-        project,
-        projectRole:
-          projectRoleRecord,
-        profile,
-        portfolioItems,
-        projectSkills,
-        roleData: projectRole,
-      });
+    /**
+     * HATA İZOLASYONU
+     * ----------------------------------------------------
+     * Tek bir rolün skorlanması (ör. beklenmeyen bir veri şekli
+     * yüzünden) başarısız olursa bu SADECE o rolü response'tan
+     * düşürür — diğer roller ve tüm endpoint etkilenmez.
+     */
+    let calculation: MatchCalculation;
+
+    try {
+      calculation =
+        calculateFreelancerProjectRoleMatch({
+          project,
+          projectRole:
+            projectRoleRecord,
+          profile,
+          portfolioItems,
+          projectSkills,
+          roleData: projectRole,
+        });
+    } catch (matchError) {
+      console.error(
+        `[CollaCrew AI] matchFreelancerToProjectRoles: rol skorlanamadı ` +
+          `(roleId=${projectRoleRecord.id}, role=${JSON.stringify(roleName)}):`,
+        matchError instanceof Error ? matchError.message : matchError
+      );
+
+      continue;
+    }
 
     /**
      * ROLE ELIGIBILITY
@@ -814,14 +874,27 @@ export async function matchFreelancerToProjectRoles(
       deterministicScore: review.calculation.score,
     }));
 
-    const verdicts = await reviewMatchPairs(
-      {
-        title: project.title,
-        description: project.description,
-        deliverables: project.deliverables ?? [],
-      },
-      pairs
-    );
+    let verdicts: Awaited<ReturnType<typeof reviewMatchPairs>> = null;
+
+    try {
+      verdicts = await reviewMatchPairs(
+        {
+          title: project.title,
+          description: project.description,
+          deliverables: project.deliverables ?? [],
+        },
+        pairs
+      );
+    } catch (semanticError) {
+      console.error(
+        "[CollaCrew AI] matchFreelancerToProjectRoles: semantic review " +
+          "beklenmeyen şekilde başarısız oldu, deterministic sonuçlara " +
+          "devam ediliyor:",
+        semanticError instanceof Error
+          ? semanticError.message
+          : semanticError
+      );
+    }
 
     if (verdicts) {
       for (const review of pendingReviews) {
