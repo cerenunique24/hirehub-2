@@ -64,7 +64,40 @@ export async function GET(request: Request) {
     );
   }
 
+  /*
+   * `next` az önce yalnızca sabit bir allowlist'ten seçildi, ama yine de
+   * sadece istemcinin gönderdiği bir değer — gerçek yetkilendirme kararı
+   * değil. Kullanıcının GERÇEK rolünü burada, kendi `profiles` satırından
+   * okuyup `next` ile karşılaştırıyoruz: biri diğeriyle çelişirse (ör.
+   * bir client linki bir freelancer hesabıyla açılırsa) rol her zaman
+   * kazanır. Rol tanımlı değilse (profil satırı henüz oluşmadıysa)
+   * `next`'e güvenmeye devam ederiz — sonraki adımlarda ilgili panel zaten
+   * kendi oturum/rol kontrolünü ayrıca yapar.
+   */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let destination = allowedNext;
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.role === "client" && allowedNext !== "/client/dashboard") {
+      destination = "/client/dashboard";
+    } else if (
+      profile?.role === "freelancer" &&
+      allowedNext === "/client/dashboard"
+    ) {
+      destination = "/register/freelancer/setup";
+    }
+  }
+
   return NextResponse.redirect(
-    new URL(allowedNext, requestUrl.origin)
+    new URL(destination, requestUrl.origin)
   );
 }

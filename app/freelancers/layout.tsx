@@ -1,6 +1,7 @@
 import Sidebar from "./components/Sidebar";
 import DashboardNavbar from "./components/DashboardNavbar";
 import PageContainer from "@/components/layout/PageContainer";
+import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 
 /*
  * NOT: Bu layout, korumalı davet/proposal/dashboard sayfalarıyla birlikte
@@ -23,16 +24,18 @@ export default function FreelancersLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen bg-[var(--color-canvas)]">
-      <Sidebar />
+    <MobileSidebarProvider>
+      <div className="flex min-h-screen bg-[var(--color-canvas)]">
+        <Sidebar />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <DashboardNavbar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <DashboardNavbar />
 
-        <main className="panel-main min-w-0 flex-1 overflow-x-hidden">
-          <PageContainer>{children}</PageContainer>
-        </main>
+          <main className="panel-main min-w-0 flex-1 overflow-x-hidden">
+            <PageContainer>{children}</PageContainer>
+          </main>
+        </div>
       </div>
-    </div>
+    </MobileSidebarProvider>
   );
 }

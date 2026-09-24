@@ -5,6 +5,16 @@ import type { ProjectAnalysis } from "@/types/ai";
 import { matchSkills } from "@/lib/matching";
 import { normalizeStringArray } from "@/lib/utils/normalizeStringArray";
 import { computeRoleEligibility } from "@/lib/matching/roleEligibility";
+import { reviewMatchPairs, type SemanticPair } from "@/lib/ai/semanticMatch";
+
+/**
+ * Deterministic skor bu aralıktaysa ("ne net eşleşme ne net uyumsuzluk")
+ * semantic (Gemini) ikinci görüş devreye girer. Aralık dışındaki adaylar
+ * (çok düşük = gerçekten ilgisiz, çok yüksek = zaten güvenilir eşleşme)
+ * maliyeti azaltmak için AI'a hiç gönderilmez — bkz. lib/ai/semanticMatch.ts.
+ */
+const SEMANTIC_REVIEW_MIN_SCORE = 15;
+const SEMANTIC_REVIEW_MAX_SCORE = 65;
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
@@ -63,6 +73,7 @@ type ProjectRecord = {
   description: string | null;
   skills: string[] | null;
   category: string | null;
+  deliverables: string[] | null;
   budget_breakdown: BudgetBreakdownItem[] | null;
 };
 
@@ -187,7 +198,17 @@ export async function matchTalent(
   const profiles =
     await getFreelancerProfiles(supabase);
 
-  return rolesToMatch.map((role) => {
+  type PendingSemanticReview = {
+    pairId: string;
+    target: TalentMatch;
+    roleInput: RoleMatchInput;
+    profile: Profile;
+    calculation: MatchCalculation;
+  };
+
+  const pendingReviews: PendingSemanticReview[] = [];
+
+  const roleMatchings = rolesToMatch.map((role) => {
     const freelancers: TalentMatch[] = [];
 
     const memberCount =
@@ -243,7 +264,7 @@ export async function matchTalent(
           buildFreelancerFamilyText(profile)
         );
 
-      freelancers.push({
+      const talentMatch: TalentMatch = {
         id: profile.id,
         name: getProfileName(profile),
         title:
@@ -263,7 +284,34 @@ export async function matchTalent(
         budget,
         isEligibleForRole:
           eligibility.isEligibleForRole,
-      });
+      };
+
+      freelancers.push(talentMatch);
+
+      /**
+       * SEMANTIC REVIEW ADAYI MI?
+       * ----------------------------------------------------
+       * Deterministic skor kararsız bölgede ve rol ailesi uyumluysa,
+       * bu aday matchTalent() çağrısının SONUNDA tek bir batch Gemini
+       * isteğiyle (tüm roller/adaylar birlikte) ikinci kez
+       * değerlendirilmek üzere işaretlenir. Aday/rol başına ayrı
+       * çağrı YOK — bkz. lib/ai/semanticMatch.ts. `target` bir nesne
+       * referansı olduğu için, aşağıdaki sort/dedup sonrasında da
+       * geçerliliğini korur.
+       */
+      if (
+        result.score >= SEMANTIC_REVIEW_MIN_SCORE &&
+        result.score < SEMANTIC_REVIEW_MAX_SCORE &&
+        eligibility.familyCompatible
+      ) {
+        pendingReviews.push({
+          pairId: String(pendingReviews.length),
+          target: talentMatch,
+          roleInput: role,
+          profile,
+          calculation: result,
+        });
+      }
     }
 
     /**
@@ -306,6 +354,94 @@ export async function matchTalent(
       budget,
     };
   });
+
+  /**
+   * TEK BATCH SEMANTIC REVIEW
+   * ----------------------------------------------------
+   * Tüm rollerdeki tüm kararsız-bölge adayları toplanıp TEK bir Gemini
+   * isteğiyle değerlendirilir (aday/rol sayısı ne olursa olsun bu
+   * matchTalent() çağrısı başına en fazla 1 ek istek). reviewMatchPairs
+   * içeride ayrıca MAX_PAIRS_PER_CALL ile sert bir üst sınır uygular —
+   * en olası adayları kaybetmemek için önce deterministic skora göre
+   * sıralanır.
+   */
+  if (pendingReviews.length > 0) {
+    const sortedReviews = [...pendingReviews].sort(
+      (a, b) => b.calculation.score - a.calculation.score
+    );
+
+    const projectContext = {
+      title:
+        analysis.category?.trim() ||
+        analysis.summary?.slice(0, 60) ||
+        "Proje",
+      description: analysis.summary || analysis.insights || null,
+      deliverables: analysis.deliverables ?? [],
+    };
+
+    const pairs: SemanticPair[] = sortedReviews.map((review) => ({
+      pairId: review.pairId,
+      role: {
+        name: review.roleInput.name,
+        responsibilities: uniqueStrings(
+          review.roleInput.responsibilities ?? []
+        ),
+        requiredSkills: uniqueStrings(review.roleInput.skills ?? []),
+        preferredSkills: uniqueStrings(
+          review.roleInput.preferredSkills ?? []
+        ),
+      },
+      freelancer: {
+        title: review.profile.title,
+        bio: review.profile.bio,
+        skills: buildFreelancerSkillPool(review.profile),
+        expertise: review.profile.expertise,
+        experience: review.profile.experience,
+        // Bu toplu (potansiyel olarak onlarca aday) yolda her profil
+        // için ayrıca portfolyo sorgusu atmıyoruz — maliyet/performans
+        // tercihi. Tek-freelancer yolunda (matchFreelancerToProjectRoles)
+        // portfolyo zaten dahil.
+        portfolio: [],
+      },
+      deterministicScore: review.calculation.score,
+    }));
+
+    const verdicts = await reviewMatchPairs(
+      projectContext,
+      pairs
+    );
+
+    if (verdicts) {
+      for (const review of sortedReviews) {
+        const verdict = verdicts.get(review.pairId);
+
+        if (!verdict) continue;
+
+        review.target.score = verdict.score;
+        review.target.reason = verdict.reason;
+        review.target.isEligibleForRole = verdict.isMatch;
+      }
+
+      for (const roleMatching of roleMatchings) {
+        roleMatching.freelancers.sort((a, b) => {
+          if (a.isEligibleForRole !== b.isEligibleForRole) {
+            return a.isEligibleForRole ? -1 : 1;
+          }
+
+          if (b.score !== a.score) {
+            return b.score - a.score;
+          }
+
+          return (
+            availabilitySortValue(a.availability) -
+            availabilitySortValue(b.availability)
+          );
+        });
+      }
+    }
+  }
+
+  return roleMatchings;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -359,11 +495,12 @@ export async function matchFreelancerToProjectRoles(
           description,
           skills,
           category,
+          deliverables,
           budget_breakdown
         `
       )
       .eq("id", projectId)
-      .single(),
+      .maybeSingle(),
 
     supabase
       .from("profiles")
@@ -386,7 +523,7 @@ export async function matchFreelancerToProjectRoles(
       )
       .eq("id", freelancerId)
       .eq("role", "freelancer")
-      .single(),
+      .maybeSingle(),
 
     supabase
       .from("portfolio_items")
@@ -499,6 +636,16 @@ export async function matchFreelancerToProjectRoles(
 
   const results: FreelancerRoleMatch[] = [];
 
+  type PendingSemanticReview = {
+    resultIndex: number;
+    roleName: string;
+    projectRole: BudgetBreakdownItem;
+    calculation: MatchCalculation;
+    budgetInfo: ReturnType<typeof getBudgetInfo>;
+  };
+
+  const pendingReviews: PendingSemanticReview[] = [];
+
   for (
     let index = 0;
     index < roles.length;
@@ -609,6 +756,106 @@ export async function matchFreelancerToProjectRoles(
           }
         : {}),
     });
+
+    /**
+     * SEMANTIC REVIEW ADAYI MI?
+     * ----------------------------------------------------
+     * Kelime-örtüşmeli deterministic skor "kararsız bölgede" ve rol
+     * ailesi zaten uyumluysa (tamamen alakasız bir alan değilse) bu rolü
+     * AI ile ikinci kez değerlendirmek üzere işaretle. Aşağıda TEK bir
+     * batch çağrıyla (bu freelancer'ın tüm kararsız rolleri birlikte)
+     * gönderilecek — rol/aday başına ayrı Gemini isteği YOK.
+     */
+    if (
+      calculation.score >= SEMANTIC_REVIEW_MIN_SCORE &&
+      calculation.score < SEMANTIC_REVIEW_MAX_SCORE &&
+      eligibility.familyCompatible
+    ) {
+      pendingReviews.push({
+        resultIndex: results.length - 1,
+        roleName,
+        projectRole,
+        calculation,
+        budgetInfo,
+      });
+    }
+  }
+
+  if (pendingReviews.length > 0) {
+    const pairs: SemanticPair[] = pendingReviews.map((review) => ({
+      pairId: String(review.resultIndex),
+      role: {
+        name: review.roleName,
+        responsibilities: uniqueStrings(
+          review.projectRole.responsibilities ?? []
+        ),
+        requiredSkills: uniqueStrings([
+          ...(review.projectRole.skills ?? []),
+          ...(review.projectRole.requiredSkills ?? []),
+        ]),
+        preferredSkills: uniqueStrings(
+          review.projectRole.preferredSkills ?? []
+        ),
+      },
+      freelancer: {
+        title: profile.title,
+        bio: profile.bio,
+        skills: buildFreelancerSkillPool(profile),
+        expertise: profile.expertise,
+        experience: profile.experience,
+        portfolio: portfolioItems
+          .map((item) =>
+            [item.title, item.category]
+              .filter((value): value is string => Boolean(value))
+              .join(" — ")
+          )
+          .filter((text) => text.length > 0),
+      },
+      deterministicScore: review.calculation.score,
+    }));
+
+    const verdicts = await reviewMatchPairs(
+      {
+        title: project.title,
+        description: project.description,
+        deliverables: project.deliverables ?? [],
+      },
+      pairs
+    );
+
+    if (verdicts) {
+      for (const review of pendingReviews) {
+        const verdict = verdicts.get(String(review.resultIndex));
+
+        if (!verdict) continue;
+
+        const target = results[review.resultIndex];
+
+        target.score = verdict.score;
+        target.reason = verdict.reason;
+        target.isEligibleForRole = verdict.isMatch;
+
+        if (verdict.isMatch) {
+          target.budgetPerPerson =
+            review.budgetInfo.budgetPerPerson || undefined;
+          target.budget = review.budgetInfo.budget || undefined;
+          target.duration =
+            typeof review.projectRole.duration === "string" &&
+            review.projectRole.duration.trim()
+              ? review.projectRole.duration.trim()
+              : undefined;
+          target.matchingSkills =
+            review.calculation.matchingSkills.length > 0
+              ? review.calculation.matchingSkills
+              : undefined;
+        } else {
+          target.budgetPerPerson = undefined;
+          target.budget = undefined;
+          target.duration = undefined;
+          target.matchingSkills = undefined;
+        }
+      }
+    }
   }
 
   return results.sort(
@@ -2324,6 +2571,20 @@ function normalizeProject(
       typeof project.category ===
       "string"
         ? project.category
+        : null,
+
+    deliverables:
+      Array.isArray(
+        project.deliverables
+      )
+        ? project.deliverables.filter(
+            (
+              item
+            ): item is string =>
+              typeof item ===
+                "string" &&
+              item.trim().length > 0
+          )
         : null,
 
     budget_breakdown:

@@ -105,6 +105,18 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // E-posta doğrulama zorunluluğu client/freelancer panellerine özeldir —
+  // admin hesapları ayrı bir yönetim akışıyla (Supabase dashboard'dan)
+  // oluşturulur ve bu tüketici sign-up doğrulama akışına tabi değildir.
+  // `email_confirmed_at` Supabase Auth'un kendi, sunucu tarafında
+  // doğrulanan alanıdır — client tarafından değiştirilebilecek hiçbir
+  // veriye (localStorage, cookie, query param) güvenilmez.
+  if (!pathname.startsWith("/admin") && !user.email_confirmed_at) {
+    const verifyUrl = new URL("/auth/verify-email", request.url);
+    if (user.email) verifyUrl.searchParams.set("email", user.email);
+    return NextResponse.redirect(verifyUrl);
+  }
+
   return response;
 }
 

@@ -5,11 +5,13 @@ import Link from "next/link";
 import {
   Search,
   Bell,
+  Menu,
   MessageCircle,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime } from "@/lib/utils/relativeTime";
+import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
 
 type Message = {
   id: string;
@@ -35,6 +37,7 @@ type Profile = {
 };
 
 export default function DashboardNavbar() {
+  const { setOpen: setMobileSidebarOpen } = useMobileSidebar();
   const [name, setName] = useState("Freelancer");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
@@ -280,8 +283,18 @@ export default function DashboardNavbar() {
 
   return (
     <header className="relative flex h-16 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8">
-      {/* Arama */}
-      <div className="flex h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-gray-100 bg-white px-3">
+      {/* Mobil menü butonu */}
+      <button
+        type="button"
+        onClick={() => setMobileSidebarOpen(true)}
+        aria-label="Menüyü aç"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white text-gray-700 transition hover:bg-gray-50 lg:hidden"
+      >
+        <Menu size={18} />
+      </button>
+
+      {/* Arama — dar ekranlarda diğer kontrollerle çakışmaması için gizlenir */}
+      <div className="hidden h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-gray-100 bg-white px-3 lg:flex">
         <Search
           size={16}
           className="text-gray-400"
@@ -295,7 +308,7 @@ export default function DashboardNavbar() {
       </div>
 
       {/* Sağ Alan */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
         {/* Mesajlar */}
         <button
           type="button"
@@ -345,7 +358,7 @@ export default function DashboardNavbar() {
             )}
           </div>
 
-          <div>
+          <div className="hidden sm:block">
             <p className="text-sm font-medium text-gray-900">
               {name}
             </p>
@@ -359,7 +372,7 @@ export default function DashboardNavbar() {
 
       {/* Mesajlar Dropdown */}
       {showMessages && (
-        <div className="absolute right-[170px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
+        <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden lg:right-[170px] rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">
@@ -444,7 +457,7 @@ export default function DashboardNavbar() {
 
       {/* Bildirimler Dropdown */}
       {showNotifications && (
-        <div className="absolute right-[110px] top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
+        <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden lg:right-[110px] rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-gray-900">

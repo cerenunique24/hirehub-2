@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Paperclip,
   Users,
+  ArrowLeft,
 } from "lucide-react";
 
 type Profile = {
@@ -1098,9 +1099,13 @@ function FreelancerMessagesContent() {
         </p>
       </div>
 
-      <div className="flex h-[calc(100vh-220px)] overflow-hidden rounded-2xl border border-gray-200 bg-white">
-        {/* SOL PANEL */}
-        <div className="flex w-[340px] shrink-0 flex-col border-r border-gray-200">
+      <div className="flex h-[calc(100vh-220px)] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
+        <div
+          className={`w-full shrink-0 flex-col border-gray-200 md:flex md:w-[340px] md:border-r ${
+            activeTab === "clients" && selectedUserId ? "hidden" : "flex"
+          }`}
+        >
           {/* TABLAR */}
           <div className="flex gap-2 border-b border-gray-200 p-4">
             <button
@@ -1291,7 +1296,11 @@ function FreelancerMessagesContent() {
         </div>
 
         {/* CHAT */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div
+          className={`min-w-0 flex-1 flex-col md:flex ${
+            activeTab === "clients" && selectedUserId ? "flex" : "hidden"
+          }`}
+        >
           {activeTab === "teams" ? (
             <div className="flex flex-1 items-center justify-center bg-gray-50 text-sm text-gray-400">
               Bir ekip konuşması seç.
@@ -1315,6 +1324,15 @@ function FreelancerMessagesContent() {
             <>
               {/* CHAT HEADER */}
               <div className="flex items-center gap-3 border-b border-gray-200 p-5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedUserId(null)}
+                  aria-label="Konuşma listesine dön"
+                  className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 md:hidden"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+
                 {selectedProfile.avatar_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

@@ -39,12 +39,33 @@ export default function LoginForm() {
         password,
       });
 
-      if (loginError || !data.user) {
+      if (loginError) {
+        /*
+         * Supabase Auth, e-postası doğrulanmamış bir hesapla giriş
+         * denendiğinde kendi tarafında `email_not_confirmed` hatasıyla
+         * sign-in'i zaten reddediyor (session hiç oluşturulmuyor). Bu,
+         * ham İngilizce bir hata metni olarak kullanıcıya gösterilmemeli —
+         * bunun yerine aynı doğrulama ekranına yönlendiriyoruz.
+         */
+        const code = (loginError as { code?: string }).code;
+        const isUnconfirmed =
+          code === "email_not_confirmed" || /not confirmed/i.test(loginError.message);
+
+        if (isUnconfirmed) {
+          router.push(`/auth/verify-email?email=${encodeURIComponent(email.trim())}`);
+          return;
+        }
+
         setError(
-          loginError?.message === "Invalid login credentials"
+          loginError.message === "Invalid login credentials"
             ? "E-posta veya şifre hatalı."
-            : loginError?.message || "Giriş yapılamadı."
+            : "Giriş yapılamadı. Lütfen tekrar dene."
         );
+        return;
+      }
+
+      if (!data.user) {
+        setError("Giriş yapılamadı. Lütfen tekrar dene.");
         return;
       }
 
@@ -52,6 +73,14 @@ export default function LoginForm() {
         localStorage.setItem("remember_login", "true");
       } else {
         localStorage.removeItem("remember_login");
+      }
+
+      // Supabase Auth'un kendi, sunucu tarafında doğrulanan alanı — sahte
+      // bir "verified" bayrağı değil. Doğrulanmamışsa hesabın rolüne bakmadan
+      // önce burada durur.
+      if (!data.user.email_confirmed_at) {
+        router.push(`/auth/verify-email?email=${encodeURIComponent(data.user.email ?? email.trim())}`);
+        return;
       }
 
       const { data: profile, error: profileError } = await supabase

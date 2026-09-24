@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
+  Menu,
   MessageCircle,
   Search,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatRelativeTime } from "@/lib/utils/relativeTime";
+import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
 
 type Profile = {
   first_name: string | null;
@@ -36,6 +38,7 @@ type Notification = {
 
 export default function Navbar() {
   const supabase = useMemo(() => createClient(), []);
+  const { setOpen: setMobileSidebarOpen } = useMobileSidebar();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -413,8 +416,15 @@ export default function Navbar() {
         />
       </div>
 
-      {/* Mobil boşluk */}
-      <div className="lg:hidden" />
+      {/* Mobil menü butonu */}
+      <button
+        type="button"
+        onClick={() => setMobileSidebarOpen(true)}
+        aria-label="Menüyü aç"
+        className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white text-gray-700 transition hover:bg-gray-50 lg:hidden"
+      >
+        <Menu size={18} />
+      </button>
 
       {/* Sağ alan */}
       <div className="flex items-center gap-4">
@@ -439,7 +449,7 @@ export default function Navbar() {
           </button>
 
           {showMessages && (
-            <div className="absolute right-0 top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
+            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">
@@ -550,7 +560,7 @@ export default function Navbar() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-14 z-50 w-80 overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
+            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900">

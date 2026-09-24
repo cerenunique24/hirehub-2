@@ -31,6 +31,15 @@ export async function requireSession(): Promise<AuthedSession> {
     redirect("/login");
   }
 
+  // İkinci savunma katmanı — `proxy.ts` bunu zaten erken engeller, ama bu
+  // dosyanın kendi amacı gereği (yukarıdaki not) burada da tekrarlanır.
+  // `email_confirmed_at` Supabase Auth'un kendi alanıdır, client tarafından
+  // değiştirilemez.
+  if (!user.email_confirmed_at) {
+    const params = user.email ? `?email=${encodeURIComponent(user.email)}` : "";
+    redirect(`/auth/verify-email${params}`);
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")

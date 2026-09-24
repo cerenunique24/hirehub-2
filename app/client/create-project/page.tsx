@@ -30,7 +30,31 @@ import type {
 
 const SKILL_OPTIONS: string[] = [...SKILLS];
 
+/**
+ * Ana kategori: geniş iş alanı (Bionluk'taki üst kategori mantığı
+ * referans alınmıştır). AI eşleştirme rol/beceri/açıklama üzerinden
+ * çalışır — bu liste yalnızca projenin genel iş alanını sınıflandırır,
+ * spesifik hizmet/rol seçimini daraltmaz.
+ */
 const CATEGORIES = [
+  "Tasarım",
+  "Yazılım & Teknoloji",
+  "Pazarlama",
+  "İçerik & Çeviri",
+  "Video & Animasyon",
+  "Ses & Müzik",
+  "Fotoğraf",
+  "İş & Yönetim",
+  "Senaryo & Hikâye",
+  "Diğer",
+];
+
+/**
+ * Uzmanlık alanları: projede aranan spesifik rol/beceri alanı
+ * ("Ekip İhtiyaçları" adımı). Ana kategoriden bağımsız, kasıtlı olarak
+ * daha granüler — AI bu listeden projeye uygun rolleri türetir.
+ */
+const EXPERTISE_OPTIONS = [
   "Web Tasarım",
   "Web Geliştirme",
   "Mobil Uygulama",
@@ -51,12 +75,7 @@ const CATEGORIES = [
   "Finans & Hukuk",
   "İK & Satış",
   "Eğitim & Danışmanlık",
-  "Diğer",
 ];
-
-const EXPERTISE_OPTIONS = CATEGORIES.filter(
-  (category) => category !== "Diğer"
-);
 
 const DELIVERY_FORMATS = [
   "Figma dosyası",
