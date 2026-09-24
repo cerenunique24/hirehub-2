@@ -18,6 +18,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import ProjectFiles from "@/components/projects/ProjectFiles";
+import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
 import {
   activateMilestone,
   createMilestone,
@@ -120,6 +121,7 @@ export default function ProjectWorkroom({
   messagesBasePath,
   onProjectCompleted,
   isTeamProject = false,
+  coalitionId = null,
 }: {
   project: WorkroomProject;
   teamMembers: WorkroomTeamMember[];
@@ -134,6 +136,13 @@ export default function ProjectWorkroom({
    * eskisiyle birebir aynıdır — freelancer_id hiç kullanılmaz.
    */
   isTeamProject?: boolean;
+  /**
+   * Team project'in coalition'ı. Verilirse "Mesajlar" tab'ı birebir
+   * (?user=id) linkler yerine mevcut TeamMessagesPanel + coalition_id
+   * konuşmasını gösterir — Genel Mesajlar sayfasındaki "Ekipler" ve
+   * coalition detay sayfasındaki mesaj alanıyla AYNI konuşma.
+   */
+  coalitionId?: string | null;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const isClient = viewerRole === "client";
@@ -195,6 +204,34 @@ export default function ProjectWorkroom({
       active = false;
     };
   }, [supabase]);
+
+  const [clientName, setClientName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!coalitionId) return;
+
+    let active = true;
+
+    supabase
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", project.client_id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!active || !data) return;
+        setClientName([data.first_name, data.last_name].filter(Boolean).join(" ") || "Proje sahibi");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [coalitionId, project.client_id, supabase]);
+
+  const teamMessageLabels = useMemo(() => {
+    const labels = teamMembers.map((member) => ({ id: member.id, name: getFullName(member) }));
+    if (clientName) labels.push({ id: project.client_id, name: clientName });
+    return labels;
+  }, [teamMembers, clientName, project.client_id]);
 
   /** Team project'te "aynı freelancer'ın aşamaları"; tek freelancer projede tüm liste. */
   const peerGroup = useCallback(
@@ -781,6 +818,19 @@ export default function ProjectWorkroom({
 
       {tab === "messages" && (
         <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+          {isTeamProject && coalitionId && currentUserId ? (
+            <>
+              <p className="mb-4 text-sm text-gray-500">
+                Client ve tüm aktif ekip üyeleri bu ekip konuşmasını görür.
+              </p>
+              <TeamMessagesPanel
+                coalitionId={coalitionId}
+                currentUserId={currentUserId}
+                memberLabels={teamMessageLabels}
+              />
+            </>
+          ) : (
+            <>
           <p className="mb-4 text-sm text-gray-500">
             Ekip üyeleriyle olan konuşmalarınıza buradan ulaşabilirsiniz.
           </p>
@@ -811,6 +861,8 @@ export default function ProjectWorkroom({
               Proje sahibine mesaj gönder
               <MessageCircle size={16} className="text-gray-400" />
             </Link>
+          )}
+            </>
           )}
         </section>
       )}

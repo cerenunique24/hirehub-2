@@ -29,6 +29,7 @@ function FreelancerWorkroomContent() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [teamMembers, setTeamMembers] = useState<WorkroomTeamMember[]>([]);
+  const [coalitionId, setCoalitionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -116,6 +117,16 @@ function FreelancerWorkroomContent() {
         setTeamMembers(formatted);
       }
 
+      if ((projectData as Project).team_required) {
+        const { data: coalitionData } = await supabase
+          .from("coalitions")
+          .select("id")
+          .eq("project_id", id)
+          .maybeSingle();
+
+        setCoalitionId(coalitionData?.id ?? null);
+      }
+
       setLoading(false);
     }
 
@@ -194,6 +205,7 @@ function FreelancerWorkroomContent() {
           viewerRole="freelancer"
           messagesBasePath="/freelancers/messages"
           isTeamProject={Boolean(project.team_required)}
+          coalitionId={coalitionId}
         />
       </div>
     </div>

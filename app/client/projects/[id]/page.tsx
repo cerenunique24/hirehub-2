@@ -6,16 +6,10 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  CalendarDays,
   CheckCircle2,
-  Clock3,
-  MessageCircle,
   PlayCircle,
-  Users,
-  Wallet,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import ProjectFiles from "@/components/projects/ProjectFiles";
 import ProjectWorkroom from "@/components/projects/ProjectWorkroom";
 import ProjectAnalyticsPanel from "@/components/premium/client/ProjectAnalyticsPanel";
 import AiShortlistPanel from "@/components/premium/client/AiShortlistPanel";
@@ -93,27 +87,6 @@ function formatCurrency(value: number | null) {
     currency: "TRY",
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Belirtilmedi";
-  }
-
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-function getFullName(member: TeamMember) {
-  const name = [member.first_name, member.last_name]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
-
-  return name || "Freelancer";
 }
 
 function ClientProjectDetailContent() {
@@ -434,169 +407,31 @@ function ClientProjectDetailContent() {
             </div>
           </section>
 
-          {isStarted ? (
-            <ProjectWorkroom
-              project={{
-                id: project.id,
-                client_id: project.client_id,
-                title: project.title,
-                budget: project.budget,
-                status: project.status,
-                deadline: project.deadline,
-              }}
-              teamMembers={teamMembers}
-              viewerRole="client"
-              messagesBasePath="/client/messages"
-              isTeamProject={Boolean(project.team_required)}
-              onProjectCompleted={() =>
-                setProject((current) => (current ? { ...current, status: "completed" } : current))
-              }
-            />
-          ) : (
+          {/* ÇALIŞMA ALANI — Genel Bakış / Aşamalar / Ekip / Dosyalar /
+              Mesajlar / Teslimler. Proje henüz başlamamış olsa bile burada
+              (accept edilen ekip üyeleri, coalition mesajlaşması, dosyalar
+              zaten proje başlamadan önce de kullanılabilir durumda). */}
+          <ProjectWorkroom
+            project={{
+              id: project.id,
+              client_id: project.client_id,
+              title: project.title,
+              budget: project.budget,
+              status: project.status,
+              deadline: project.deadline,
+            }}
+            teamMembers={teamMembers}
+            viewerRole="client"
+            messagesBasePath="/client/messages"
+            isTeamProject={Boolean(project.team_required)}
+            coalitionId={coalitionId}
+            onProjectCompleted={() =>
+              setProject((current) => (current ? { ...current, status: "completed" } : current))
+            }
+          />
+
+          {!isStarted && (
             <>
-          {/* ACTIVE PROJECT TEAM — proje daha başlamadan önce ekibin kim
-              olduğu, özet kartlardan daha üstte, hemen görünür olsun. */}
-          {teamMembers.length > 0 && (
-            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Proje ekibi
-                  </h2>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    Bu projede çalışan freelancerlar
-                  </p>
-                </div>
-
-                <span className="text-sm font-medium text-gray-500">
-                  {teamMembers.length} kişi
-                </span>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                {teamMembers.map((member) => (
-                  <div
-                    key={member.teamMemberId}
-                    className="flex flex-col gap-4 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex min-w-0 items-center gap-4">
-                      {member.avatar_url ? (
-                        <img
-                          src={member.avatar_url}
-                          alt={getFullName(member)}
-                          className="h-12 w-12 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
-                          {getFullName(member)
-                            .slice(0, 1)
-                            .toUpperCase()}
-                        </div>
-                      )}
-
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-gray-900">
-                          {getFullName(member)}
-                        </p>
-
-                        <p className="mt-0.5 text-sm text-gray-500">
-                          {member.memberRole ||
-                            member.title ||
-                            "Freelancer"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-5 sm:justify-end">
-                      <Link
-                        href={`/client/messages?user=${encodeURIComponent(
-                          member.id
-                        )}${
-                          member.proposalId
-                            ? `&proposal=${encodeURIComponent(
-                                member.proposalId
-                              )}`
-                            : ""
-                        }`}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-                      >
-                        <MessageCircle size={16} />
-                        Mesaj Gönder
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* PROJECT SUMMARY */}
-          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100">
-                <Wallet size={18} className="text-gray-700" />
-              </div>
-
-              <p className="text-xs font-medium text-gray-500">
-                Bütçe
-              </p>
-
-              <p className="mt-1 font-semibold text-gray-900">
-                {formatCurrency(project.budget)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100">
-                <CalendarDays
-                  size={18}
-                  className="text-gray-700"
-                />
-              </div>
-
-              <p className="text-xs font-medium text-gray-500">
-                Teslim tarihi
-              </p>
-
-              <p className="mt-1 font-semibold text-gray-900">
-                {formatDate(project.deadline)}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100">
-                <Users size={18} className="text-gray-700" />
-              </div>
-
-              <p className="text-xs font-medium text-gray-500">
-                Ekip
-              </p>
-
-              <p className="mt-1 font-semibold text-gray-900">
-                {isStarted
-                  ? `${teamMembers.length} freelancer`
-                  : project.team_required
-                    ? `${project.team_size || 1} kişi`
-                    : "Tek freelancer"}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-gray-100">
-                <Clock3 size={18} className="text-gray-700" />
-              </div>
-
-              <p className="text-xs font-medium text-gray-500">
-                Oluşturulma
-              </p>
-
-              <p className="mt-1 font-semibold text-gray-900">
-                {formatDate(project.created_at)}
-              </p>
-            </div>
-          </section>
-
           {/* PROJECT INFO */}
           <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
             <div className="flex items-center gap-3">
@@ -638,12 +473,6 @@ function ClientProjectDetailContent() {
             </section>
           )}
 
-          {/* FILES */}
-          <ProjectFiles
-            projectId={project.id}
-            canManage
-          />
-
           {/* PREMIUM: PROJECT ANALYTICS + AI SHORTLIST */}
           <ProjectAnalyticsPanel />
           <AiShortlistPanel projectId={project.id} />
@@ -678,34 +507,6 @@ function ClientProjectDetailContent() {
                   Teklifleri görüntüle ({proposalCount})
                 </Link>
               </>
-            )}
-
-            {coalitionId && (
-              <Link
-                href={`/client/coalitions/${coalitionId}`}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-              >
-                <Users size={16} />
-                Ekip Mesajları
-              </Link>
-            )}
-
-            {teamMembers.length > 0 && (
-              <Link
-                href={`/client/messages?user=${encodeURIComponent(
-                  teamMembers[0].id
-                )}${
-                  teamMembers[0].proposalId
-                    ? `&proposal=${encodeURIComponent(
-                        teamMembers[0].proposalId
-                      )}`
-                    : ""
-                }`}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-              >
-                <MessageCircle size={16} />
-                Mesajlara git
-              </Link>
             )}
 
             <Link

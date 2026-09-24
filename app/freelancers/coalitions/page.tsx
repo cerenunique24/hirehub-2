@@ -2,8 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles } from "lucide-react";
+import { Search, Sparkles, UserPlus, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { getTeamCompletion } from "@/lib/projects/teamReadiness";
+
+type OpenCoalition = {
+  id: string;
+  name: string;
+  projectId: string;
+  projectTitle: string;
+  openRoles: string[];
+  requestStatus: "none" | "pending";
+};
 
 type Coalition = {
   id: string;
@@ -268,6 +278,145 @@ export default function CoalitionsPage() {
   useEffect(() => {
     void loadCoalitions();
   }, []);
+
+  const [openCoalitions, setOpenCoalitions] = useState<OpenCoalition[]>([]);
+  const [loadingOpen, setLoadingOpen] = useState(true);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [openError, setOpenError] = useState("");
+
+  const loadOpenCoalitions = async () => {
+    const supabase = createClient();
+    setLoadingOpen(true);
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setLoadingOpen(false);
+      return;
+    }
+
+    // RLS zaten sadece: kendi üyesi olduğu VEYA projesi hâlâ "open" olan
+    // coalition'ları döndürür (bkz. private.can_view_coalition).
+    const { data: rows, error } = await supabase
+      .from("coalitions")
+      .select(
+        "id, name, project_id, projects(id, title, status, budget_breakdown)"
+      )
+      .eq("status", "active")
+      .not("project_id", "is", null);
+
+    if (error) {
+      console.error("Açık koalisyonlar yüklenemedi:", error);
+      setLoadingOpen(false);
+      return;
+    }
+
+    // Zaten aktif üye olduğum coalition'ları dışarıda bırak.
+    const { data: myMemberships } = await supabase
+      .from("coalition_members")
+      .select("coalition_id, status")
+      .eq("user_id", user.id);
+
+    const myMembershipByCoalition = new Map(
+      (myMemberships ?? []).map((row) => [row.coalition_id, row.status])
+    );
+
+    const candidates = (rows ?? []).filter((row) => {
+      const project = Array.isArray(row.projects) ? row.projects[0] : row.projects;
+      return project && project.status === "open" && myMembershipByCoalition.get(row.id) !== "active";
+    });
+
+    if (candidates.length === 0) {
+      setOpenCoalitions([]);
+      setLoadingOpen(false);
+      return;
+    }
+
+    const projectIds = candidates
+      .map((row) => {
+        const project = Array.isArray(row.projects) ? row.projects[0] : row.projects;
+        return project?.id;
+      })
+      .filter((id): id is string => Boolean(id));
+
+    const { data: teamMemberRows } = await supabase
+      .from("project_team_members")
+      .select("project_id, role")
+      .in("project_id", projectIds)
+      .eq("status", "active");
+
+    setOpenCoalitions(
+      candidates.map((row) => {
+        const project = (Array.isArray(row.projects) ? row.projects[0] : row.projects)!;
+
+        const projectActiveMembers = (teamMemberRows ?? []).filter(
+          (member) => member.project_id === project.id
+        );
+
+        const openRoles = getTeamCompletion(project.budget_breakdown, projectActiveMembers)
+          .roles.filter((role) => !role.isFull)
+          .map((role) => role.role);
+
+        return {
+          id: row.id,
+          name: row.name,
+          projectId: project.id,
+          projectTitle: project.title,
+          openRoles,
+          requestStatus:
+            myMembershipByCoalition.get(row.id) === "pending" ? "pending" : "none",
+        };
+      })
+    );
+
+    setLoadingOpen(false);
+  };
+
+  useEffect(() => {
+    void loadOpenCoalitions();
+  }, []);
+
+  const requestToJoin = async (coalitionId: string) => {
+    setRequestingId(coalitionId);
+    setOpenError("");
+
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setRequestingId(null);
+      return;
+    }
+
+    const { error } = await supabase.from("coalition_members").insert({
+      coalition_id: coalitionId,
+      user_id: user.id,
+      role: "member",
+      status: "pending",
+    });
+
+    if (error) {
+      setOpenError(
+        error.code === "23505"
+          ? "Bu koalisyona zaten bir isteğin var."
+          : "Katılma isteği gönderilemedi."
+      );
+      setRequestingId(null);
+      return;
+    }
+
+    setOpenCoalitions((current) =>
+      current.map((item) =>
+        item.id === coalitionId ? { ...item, requestStatus: "pending" } : item
+      )
+    );
+    setRequestingId(null);
+  };
 
   const filteredCoalitions = useMemo(() => {
     const normalizedSearch =
@@ -583,6 +732,93 @@ export default function CoalitionsPage() {
             ))}
           </div>
         )}
+
+      {/* Diğer Aktif Koalisyonlar — henüz üyesi olmadığın, hâlâ açık
+          (proje status="open") rolleri olan coalition'lar. */}
+      <div className="mt-10">
+        <div className="mb-4 flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Diğer Aktif Koalisyonlar
+          </h2>
+        </div>
+
+        {openError && (
+          <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            {openError}
+          </p>
+        )}
+
+        {loadingOpen ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            Yükleniyor...
+          </div>
+        ) : openCoalitions.length === 0 ? (
+          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+            Şu anda açık rolü olan başka bir koalisyon yok.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {openCoalitions.map((coalition) => (
+              <div
+                key={coalition.id}
+                className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {coalition.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {coalition.projectTitle}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {coalition.openRoles.length > 0 ? (
+                      coalition.openRoles.map((role) => (
+                        <span
+                          key={role}
+                          className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700"
+                        >
+                          Eksik: {role}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500">
+                        Açık Rol Yok
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Link
+                    href={`/freelancers/discover/${coalition.projectId}`}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  >
+                    <Send size={15} />
+                    Teklif Gönder
+                  </Link>
+
+                  {coalition.openRoles.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={
+                        coalition.requestStatus === "pending" ||
+                        requestingId === coalition.id
+                      }
+                      onClick={() => void requestToJoin(coalition.id)}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <UserPlus size={15} />
+                      {coalition.requestStatus === "pending"
+                        ? "İstek Gönderildi"
+                        : "Katılma İsteği Gönder"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </main>
   );
 }

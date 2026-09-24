@@ -10,37 +10,46 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { uniqueSkills } from "@/lib/matching";
 import { EmptyState } from "@/components/common/EmptyState";
+import { getTeamCompletion } from "@/lib/projects/teamReadiness";
 
 type Coalition = {
   id: string;
   name: string;
   description: string | null;
+  project_id: string | null;
 };
 
 type Member = {
   coalition_id: string;
   user_id: string;
+  role: "owner" | "member";
 };
 
 type Profile = {
   id: string;
-  skills: string[] | null;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
 };
 
 type Project = {
   id: string;
   title: string;
   status: string;
+  budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
+};
+
+type CoalitionCardData = Coalition & {
+  members: Array<Member & { profile: Profile | null }>;
+  project: Project | null;
+  openRoles: string[];
 };
 
 export default function ClientCoalitionsPage() {
   const supabase = useMemo(() => createClient(), []);
 
-  const [coalitions, setCoalitions] = useState<
-    Array<Coalition & { memberCount: number; skills: string[] }>
-  >([]);
+  const [coalitions, setCoalitions] = useState<CoalitionCardData[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -72,7 +81,7 @@ export default function ClientCoalitionsPage() {
 
       const { data: rows, error: coalitionError } = await supabase
         .from("coalitions")
-        .select("id, name, description")
+        .select("id, name, description, project_id")
         .eq("status", "active")
         .eq("created_by", user.id)
         .order("created_at", { ascending: false });
@@ -95,7 +104,7 @@ export default function ClientCoalitionsPage() {
 
       const { data: memberRows, error: memberError } = await supabase
         .from("coalition_members")
-        .select("coalition_id, user_id")
+        .select("coalition_id, user_id, role")
         .in(
           "coalition_id",
           base.map((coalition) => coalition.id)
@@ -117,7 +126,7 @@ export default function ClientCoalitionsPage() {
       const { data: profiles } = userIds.length
         ? await supabase
             .from("profiles")
-            .select("id, skills")
+            .select("id, first_name, last_name, avatar_url")
             .in("id", userIds)
         : { data: [] };
 
@@ -128,21 +137,64 @@ export default function ClientCoalitionsPage() {
         ])
       );
 
+      const projectIds = [
+        ...new Set(
+          base
+            .map((coalition) => coalition.project_id)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+
+      const { data: projectRows } = projectIds.length
+        ? await supabase
+            .from("projects")
+            .select("id, title, status, budget_breakdown")
+            .in("id", projectIds)
+        : { data: [] };
+
+      const projectById = new Map(
+        ((projectRows ?? []) as Project[]).map((project) => [
+          project.id,
+          project,
+        ])
+      );
+
+      const { data: teamMemberRows } = projectIds.length
+        ? await supabase
+            .from("project_team_members")
+            .select("project_id, role")
+            .in("project_id", projectIds)
+            .eq("status", "active")
+        : { data: [] };
+
       setCoalitions(
         base.map((coalition) => {
-          const activeMembers = members.filter(
-            (member) => member.coalition_id === coalition.id
+          const activeMembers = members
+            .filter((member) => member.coalition_id === coalition.id)
+            .map((member) => ({
+              ...member,
+              profile: profileById.get(member.user_id) ?? null,
+            }));
+
+          const project = coalition.project_id
+            ? projectById.get(coalition.project_id) ?? null
+            : null;
+
+          const projectActiveMembers = (teamMemberRows ?? []).filter(
+            (row) => row.project_id === coalition.project_id
           );
+
+          const openRoles = project
+            ? getTeamCompletion(project.budget_breakdown, projectActiveMembers)
+                .roles.filter((role) => !role.isFull)
+                .map((role) => role.role)
+            : [];
 
           return {
             ...coalition,
-            memberCount: activeMembers.length,
-            skills: uniqueSkills(
-              activeMembers.map(
-                (member) =>
-                  profileById.get(member.user_id)?.skills
-              )
-            ),
+            members: activeMembers,
+            project,
+            openRoles,
           };
         })
       );
@@ -294,62 +346,130 @@ export default function ClientCoalitionsPage() {
             description="Bir projeniz için ekip oluşturarak freelancer önerilerini yönetmeye başlayabilirsiniz."
           />
         ) : (
-          <div className="grid gap-[var(--rhythm-card-gap)] md:grid-cols-2 xl:grid-cols-3">
-            {coalitions.map((coalition) => (
-              <Link
-                key={coalition.id}
-                href={`/client/coalitions/${coalition.id}`}
-                className="flex h-full flex-col rounded-xl border border-neutral-200 bg-white p-5 transition hover:border-neutral-300"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="min-w-0 truncate text-base font-semibold text-neutral-900">
-                    {coalition.name}
-                  </h2>
+          <div className="space-y-5">
+            {coalitions.map((coalition) => {
+              const readyLabel =
+                coalition.project?.status === "in_progress"
+                  ? "Proje başladı"
+                  : coalition.openRoles.length === 0 && coalition.project
+                    ? "Ekip hazır"
+                    : "Ekip oluşturuluyor";
 
-                  {/* Bu sayfa zaten yalnızca status="active" koalisyonları getiriyor
-                      (bkz. yukarıdaki sorgu), bu yüzden rozet ek bir alan çekmeden
-                      güvenle "Aktif" gösterebilir. */}
-                  <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
-                    Aktif
-                  </span>
-                </div>
+              return (
+                <div
+                  key={coalition.id}
+                  className="flex w-full flex-col gap-6 rounded-xl border border-neutral-200 bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 flex flex-wrap items-center gap-3">
+                      <h2 className="text-lg font-semibold text-neutral-900">
+                        {coalition.name}
+                      </h2>
 
-                <p className="mt-[var(--rhythm-title-gap)] line-clamp-2 text-sm leading-6 text-neutral-500">
-                  {coalition.description || "Açıklama eklenmemiş."}
-                </p>
+                      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                        Aktif
+                      </span>
 
-                <div className="mt-[var(--rhythm-group-gap)] flex min-h-7 flex-wrap items-start gap-2">
-                  {coalition.skills.length > 0 ? (
-                    <>
-                      {coalition.skills.slice(0, 4).map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700"
-                        >
-                          {skill}
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-medium ${
+                          readyLabel === "Ekip hazır" || readyLabel === "Proje başladı"
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {readyLabel}
+                      </span>
+                    </div>
+
+                    <p className="mb-5 line-clamp-2 text-sm text-neutral-500">
+                      {coalition.description || "Açıklama eklenmemiş."}
+                    </p>
+
+                    <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
+                      <div>
+                        <span className="mb-1 block text-neutral-400">Ekip</span>
+
+                        <div className="flex items-center">
+                          {coalition.members.length === 0 && (
+                            <span className="font-medium text-neutral-900">Henüz üye yok</span>
+                          )}
+
+                          {coalition.members.slice(0, 4).map((member, index) => {
+                            const name =
+                              [member.profile?.first_name, member.profile?.last_name]
+                                .filter(Boolean)
+                                .join(" ") || "Üye";
+
+                            return (
+                              <div
+                                key={member.user_id}
+                                title={name}
+                                className={index > 0 ? "-ml-2" : ""}
+                              >
+                                {member.profile?.avatar_url ? (
+                                  <img
+                                    src={member.profile.avatar_url}
+                                    alt={name}
+                                    className="h-7 w-7 rounded-full border-2 border-white object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-neutral-200 text-xs font-medium text-neutral-600">
+                                    {name.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {coalition.members.length > 4 && (
+                            <span className="ml-2 text-xs text-neutral-500">
+                              +{coalition.members.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="mb-1 block text-neutral-400">Üye Sayısı</span>
+                        <span className="font-medium text-neutral-900">
+                          {coalition.members.length} kişi
                         </span>
-                      ))}
+                      </div>
 
-                      {coalition.skills.length > 4 && (
-                        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-500">
-                          +{coalition.skills.length - 4}
-                        </span>
+                      {coalition.project && (
+                        <div>
+                          <span className="mb-1 block text-neutral-400">Proje</span>
+                          <Link
+                            href={`/client/projects/${coalition.project.id}`}
+                            className="font-medium text-[var(--color-primary-600)] hover:underline"
+                          >
+                            {coalition.project.title}
+                          </Link>
+                        </div>
                       )}
-                    </>
-                  ) : (
-                    <span className="text-sm text-neutral-400">Ekip yeteneği henüz eklenmemiş.</span>
-                  )}
-                </div>
 
-                <div className="mt-auto flex items-center justify-between gap-3 pt-[var(--rhythm-group-gap)]">
-                  <span className="text-sm text-neutral-600">{coalition.memberCount} aktif üye</span>
+                      {coalition.openRoles.length > 0 && (
+                        <div>
+                          <span className="mb-1 block text-neutral-400">Açık Roller</span>
+                          <span className="font-medium text-neutral-900">
+                            {coalition.openRoles.join(", ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                  <span className="inline-flex shrink-0 items-center justify-center rounded-lg bg-[var(--color-primary-600)] px-3.5 py-2 text-sm font-medium text-white">
-                    Detayları Gör
-                  </span>
+                  <div className="flex shrink-0 gap-3">
+                    <Link
+                      href={`/client/coalitions/${coalition.id}`}
+                      className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                    >
+                      Detayları Gör
+                    </Link>
+                  </div>
                 </div>
-              </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

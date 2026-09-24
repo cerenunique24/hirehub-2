@@ -600,15 +600,19 @@ export default function ClientCoalitionDetailPage() {
                           </p>
 
                           <p className="text-sm text-neutral-500">
-                            {member.profile?.title ||
-                              member.profile?.expertise ||
-                              "Uzmanlık bilgisi eklenmemiş"}
+                            {member.role === "owner"
+                              ? "Proje Sahibi"
+                              : member.profile?.title ||
+                                member.profile?.expertise ||
+                                "Uzmanlık bilgisi eklenmemiş"}
                           </p>
                         </div>
                       </div>
 
                       <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
-                        {member.projectRole || member.role || "Üye"}
+                        {member.role === "owner"
+                          ? "Proje Sahibi"
+                          : member.projectRole || "Üye"}
                       </span>
                     </div>
                   );

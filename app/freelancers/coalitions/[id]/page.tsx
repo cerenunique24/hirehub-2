@@ -334,7 +334,12 @@ export default function CoalitionDetailPage({
     return fullName || "Kullanıcı";
   };
 
+  const isProjectOwner = (member: CoalitionMember) =>
+    member.role === "owner" ||
+    (coalition !== null && member.user_id === coalition.created_by);
+
   const getMemberTitle = (member: CoalitionMember) => {
+    if (isProjectOwner(member)) return "Proje Sahibi";
     return member.profile?.title || "Freelancer";
   };
 
@@ -723,7 +728,9 @@ export default function CoalitionDetailPage({
                 </div>
 
                 <span className="w-fit rounded-full bg-gray-50 px-3 py-1 text-xs text-gray-500">
-                  {member.projectRole || "Ekip Üyesi"}
+                  {isProjectOwner(member)
+                    ? "Proje Sahibi"
+                    : member.projectRole || "Ekip Üyesi"}
                 </span>
               </div>
             ))}
