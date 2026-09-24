@@ -15,6 +15,7 @@ type Project = {
   budget: number | null;
   status: string | null;
   deadline: string | null;
+  team_required: boolean | null;
 };
 
 function FreelancerWorkroomContent() {
@@ -69,7 +70,7 @@ function FreelancerWorkroomContent() {
 
       const { data: projectData, error: projectError } = await supabase
         .from("projects")
-        .select("id, client_id, title, description, budget, status, deadline")
+        .select("id, client_id, title, description, budget, status, deadline, team_required")
         .eq("id", id)
         .single();
 
@@ -192,6 +193,7 @@ function FreelancerWorkroomContent() {
           teamMembers={teamMembers}
           viewerRole="freelancer"
           messagesBasePath="/freelancers/messages"
+          isTeamProject={Boolean(project.team_required)}
         />
       </div>
     </div>

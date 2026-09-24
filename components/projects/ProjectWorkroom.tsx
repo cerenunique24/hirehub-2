@@ -119,6 +119,7 @@ export default function ProjectWorkroom({
   viewerRole,
   messagesBasePath,
   onProjectCompleted,
+  isTeamProject = false,
 }: {
   project: WorkroomProject;
   teamMembers: WorkroomTeamMember[];
@@ -126,11 +127,19 @@ export default function ProjectWorkroom({
   /** Ör. "/client/messages" ya da "/freelancers/messages" */
   messagesBasePath: string;
   onProjectCompleted?: () => void;
+  /**
+   * true ise (birden fazla rol/freelancer gerektiren proje) her aşama bir
+   * freelancer_id'ye bağlıdır ve her freelancer yalnızca kendi rolünün
+   * aşamalarını oluşturur/yönetir. false (tek freelancer) ise davranış
+   * eskisiyle birebir aynıdır — freelancer_id hiç kullanılmaz.
+   */
+  isTeamProject?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const isClient = viewerRole === "client";
 
   const [tab, setTab] = useState<Tab>("overview");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [events, setEvents] = useState<MilestoneEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,6 +184,47 @@ export default function ProjectWorkroom({
     void loadMilestones();
   }, [loadMilestones]);
 
+  useEffect(() => {
+    let active = true;
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (active) setCurrentUserId(data.user?.id ?? null);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
+
+  /** Team project'te "aynı freelancer'ın aşamaları"; tek freelancer projede tüm liste. */
+  const peerGroup = useCallback(
+    (milestone: Milestone) =>
+      isTeamProject
+        ? milestones.filter((m) => m.freelancer_id === milestone.freelancer_id)
+        : milestones,
+    [isTeamProject, milestones]
+  );
+
+  const myMilestones = useMemo(
+    () => (isTeamProject ? milestones.filter((m) => m.freelancer_id === currentUserId) : milestones),
+    [isTeamProject, milestones, currentUserId]
+  );
+
+  const canManageMilestone = useCallback(
+    (milestone: Milestone) => (isTeamProject ? milestone.freelancer_id === currentUserId : true),
+    [isTeamProject, currentUserId]
+  );
+
+  function ownerLabel(milestone: Milestone) {
+    if (!isTeamProject) return null;
+    if (milestone.freelancer_id === currentUserId) return isClient ? null : "Senin rolün";
+    const owner = teamMembers.find((m) => m.id === milestone.freelancer_id);
+    return owner ? `${owner.memberRole} — ${getFullName(owner)}` : null;
+  }
+
+  /** Team project'te aşamaları FREELANCER oluşturur; tek freelancer projede (eski davranış) client oluşturur. */
+  const canCreateMilestone = isTeamProject ? !isClient : isClient;
+
   const approvedCount = milestones.filter((m) => m.status === "approved").length;
   const progress = milestones.length > 0 ? Math.round((approvedCount / milestones.length) * 100) : 0;
 
@@ -193,7 +243,7 @@ export default function ProjectWorkroom({
     }
 
     setError("");
-    const isFirst = milestones.length === 0;
+    const isFirst = myMilestones.length === 0;
 
     const { error: createError } = await createMilestone(supabase, {
       projectId: project.id,
@@ -201,8 +251,9 @@ export default function ProjectWorkroom({
       description: newDescription.trim() || null,
       dueDate: newDueDate || null,
       budget: newBudget ? Number(newBudget) : null,
-      sortOrder: milestones.length,
+      sortOrder: myMilestones.length,
       status: isFirst ? "active" : "pending",
+      freelancerId: isTeamProject ? currentUserId : null,
     });
 
     if (createError) {
@@ -305,14 +356,28 @@ export default function ProjectWorkroom({
 
     if (decision === "approved") {
       const remaining = milestones.filter((m) => m.id !== milestone.id);
-      const nextPending = remaining
+      // Team project'te bir sonraki aşama SADECE aynı freelancer'ın kendi
+      // rolü içinden seçilir — bir kişinin aşaması onaylandığında başka
+      // bir ekip üyesinin aşamasını otomatik başlatmamalı.
+      const ownRemaining = isTeamProject
+        ? remaining.filter((m) => m.freelancer_id === milestone.freelancer_id)
+        : remaining;
+      const nextPending = ownRemaining
         .filter((m) => m.status === "pending")
         .sort((a, b) => a.sort_order - b.sort_order)[0];
 
       if (nextPending) {
         await activateMilestone(supabase, nextPending.id);
       } else {
-        const allOthersApproved = remaining.every((m) => m.status === "approved");
+        // Proje tamamlanma durumu HER rolün durumuna bakar. Team project'te
+        // sadece "var olan aşamalar onaylı mı" yetmez — henüz hiç aşama
+        // oluşturmamış bir ekip üyesi varsa proje tamamlanmış sayılmaz.
+        const allOthersApproved = isTeamProject
+          ? teamMembers.every((member) => {
+              const memberMilestones = remaining.filter((m) => m.freelancer_id === member.id);
+              return memberMilestones.length > 0 && memberMilestones.every((m) => m.status === "approved");
+            })
+          : remaining.every((m) => m.status === "approved");
         if (allOthersApproved) {
           await supabase.from("projects").update({ status: "completed" }).eq("id", project.id);
 
@@ -385,7 +450,15 @@ export default function ProjectWorkroom({
 
       {tab === "milestones" && (
         <section className="space-y-4">
-          {isClient && (
+          {isTeamProject && (
+            <p className="text-sm text-gray-500">
+              {isClient
+                ? "Her ekip üyesi kendi rolüne ait aşamaları oluşturur. Bir aşamayı kabul ettiğinde o freelancer'ın aşaması aktif hale gelir."
+                : "Burada yalnızca kendi rolüne ait aşamaları oluşturup yönetebilirsin. Diğer ekip üyelerinin aşamaları bilgi amaçlı görünür."}
+            </p>
+          )}
+
+          {canCreateMilestone && (
             <div className="flex justify-end">
               <button
                 type="button"
@@ -398,7 +471,7 @@ export default function ProjectWorkroom({
             </div>
           )}
 
-          {isClient && showCreate && (
+          {canCreateMilestone && showCreate && (
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
@@ -454,7 +527,7 @@ export default function ProjectWorkroom({
             </div>
           ) : milestones.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
-              {isClient ? "Henüz aşama eklenmedi." : "Bu proje için henüz aşama tanımlanmadı."}
+              {canCreateMilestone ? "Henüz aşama eklenmedi." : "Bu proje için henüz aşama tanımlanmadı."}
             </div>
           ) : (
             <div className="space-y-3">
@@ -480,6 +553,9 @@ export default function ProjectWorkroom({
                             </span>
                           )}
                         </div>
+                        {ownerLabel(milestone) && (
+                          <p className="mt-1 text-xs font-medium text-gray-400">{ownerLabel(milestone)}</p>
+                        )}
                         {milestone.description && (
                           <p className="mt-2 max-w-2xl text-sm text-gray-600">{milestone.description}</p>
                         )}
@@ -493,7 +569,8 @@ export default function ProjectWorkroom({
                         </div>
                       </div>
 
-                      {isClient && milestone.status === "pending" && (
+                      {(isClient || (isTeamProject && canManageMilestone(milestone))) &&
+                        milestone.status === "pending" && (
                         <button
                           type="button"
                           onClick={() => void handleDeleteMilestone(milestone)}
@@ -552,7 +629,9 @@ export default function ProjectWorkroom({
                     )}
 
                     {/* FREELANCER: TESLİM ET */}
-                    {!isClient && (milestone.status === "active" || milestone.status === "revision") && (
+                    {!isClient &&
+                      canManageMilestone(milestone) &&
+                      (milestone.status === "active" || milestone.status === "revision") && (
                       <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
                         <textarea
                           value={deliveryDrafts[milestone.id] ?? ""}
@@ -631,7 +710,7 @@ export default function ProjectWorkroom({
 
                     {isClient &&
                       milestone.status === "pending" &&
-                      milestones.every(
+                      peerGroup(milestone).every(
                         (m) => !["active", "submitted", "in_review", "revision"].includes(m.status)
                       ) && (
                         <div className="mt-3">

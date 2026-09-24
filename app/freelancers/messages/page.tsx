@@ -14,6 +14,13 @@ import {
   Users,
   ArrowLeft,
 } from "lucide-react";
+import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+
+type TeamConversation = {
+  coalitionId: string;
+  name: string;
+  projectTitle: string | null;
+};
 
 type Profile = {
   id: string;
@@ -110,6 +117,18 @@ function FreelancerMessagesContent() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
+  const [teamConversations, setTeamConversations] = useState<
+    TeamConversation[]
+  >([]);
+
+  const [selectedCoalitionId, setSelectedCoalitionId] = useState<
+    string | null
+  >(null);
+
+  const [teamMemberLabels, setTeamMemberLabels] = useState<
+    { id: string; name: string }[]
+  >([]);
+
   const { can: canUseMessagingFeature, loading: premiumLoading } = usePremium();
 
   /*
@@ -173,6 +192,127 @@ function FreelancerMessagesContent() {
       active = false;
     };
   }, [supabase]);
+
+  /*
+   * EKİP KONUŞMALARI — freelancer'ın aktif üyesi olduğu, projeye bağlı
+   * (project_id != null) coalition'lar. Mevcut RLS zaten sadece bu
+   * freelancer'ın üyesi olduğu coalition'ları döndürür.
+   */
+  useEffect(() => {
+    if (!currentUserId) {
+      return;
+    }
+
+    let active = true;
+
+    const loadTeamConversations = async () => {
+      const { data: memberRows, error: memberError } = await supabase
+        .from("coalition_members")
+        .select("coalition_id")
+        .eq("user_id", currentUserId)
+        .eq("status", "active");
+
+      if (!active) return;
+
+      if (memberError) {
+        console.error("Ekip üyelikleri yüklenemedi:", memberError);
+        return;
+      }
+
+      const coalitionIds = [
+        ...new Set((memberRows ?? []).map((row) => row.coalition_id)),
+      ];
+
+      if (coalitionIds.length === 0) {
+        setTeamConversations([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("coalitions")
+        .select("id, name, project_id, projects(title)")
+        .in("id", coalitionIds)
+        .not("project_id", "is", null)
+        .order("created_at", { ascending: false });
+
+      if (!active) return;
+
+      if (error) {
+        console.error("Ekip konuşmaları yüklenemedi:", error);
+        return;
+      }
+
+      setTeamConversations(
+        (data ?? []).map((row) => {
+          const project = Array.isArray(row.projects)
+            ? row.projects[0]
+            : row.projects;
+
+          return {
+            coalitionId: row.id,
+            name: row.name,
+            projectTitle: (project as { title?: string } | null)?.title ?? null,
+          };
+        })
+      );
+    };
+
+    void loadTeamConversations();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUserId, supabase]);
+
+  /*
+   * Seçilen ekip konuşmasının üyeleri (mesajlarda isim göstermek için).
+   */
+  useEffect(() => {
+    if (!selectedCoalitionId) {
+      setTeamMemberLabels([]);
+      return;
+    }
+
+    let active = true;
+
+    const loadTeamMembers = async () => {
+      const { data: memberRows } = await supabase
+        .from("coalition_members")
+        .select("user_id")
+        .eq("coalition_id", selectedCoalitionId)
+        .eq("status", "active");
+
+      const userIds = (memberRows ?? []).map((row) => row.user_id);
+
+      if (userIds.length === 0) {
+        if (active) setTeamMemberLabels([]);
+        return;
+      }
+
+      const { data: profileRows } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .in("id", userIds);
+
+      if (!active) return;
+
+      setTeamMemberLabels(
+        (profileRows ?? []).map((profile) => ({
+          id: profile.id,
+          name:
+            [profile.first_name, profile.last_name]
+              .filter(Boolean)
+              .join(" ") || "Ekip üyesi",
+        }))
+      );
+    };
+
+    void loadTeamMembers();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCoalitionId, supabase]);
 
   /*
    * MESAJLARI YÜKLE
@@ -1103,16 +1243,20 @@ function FreelancerMessagesContent() {
         {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
         <div
           className={`w-full shrink-0 flex-col border-gray-200 md:flex md:w-[340px] md:border-r ${
-            activeTab === "clients" && selectedUserId ? "hidden" : "flex"
+            (activeTab === "clients" && selectedUserId) ||
+            (activeTab === "teams" && selectedCoalitionId)
+              ? "hidden"
+              : "flex"
           }`}
         >
           {/* TABLAR */}
           <div className="flex gap-2 border-b border-gray-200 p-4">
             <button
               type="button"
-              onClick={() =>
-                setActiveTab("clients")
-              }
+              onClick={() => {
+                setActiveTab("clients");
+                setSelectedCoalitionId(null);
+              }}
               className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "clients"
                   ? "bg-[var(--color-primary-600)] text-white"
@@ -1124,9 +1268,11 @@ function FreelancerMessagesContent() {
 
             <button
               type="button"
-              onClick={() =>
-                setActiveTab("teams")
-              }
+              onClick={() => {
+                setActiveTab("teams");
+                setSelectedUserId(null);
+                setSelectedProposalId(null);
+              }}
               className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "teams"
                   ? "bg-[var(--color-primary-600)] text-white"
@@ -1278,19 +1424,52 @@ function FreelancerMessagesContent() {
 
           {/* EKİPLER */}
           {activeTab === "teams" && (
-            <div className="flex flex-1 flex-col items-center justify-center p-5 text-center">
-              <Users
-                size={32}
-                className="mb-3 text-gray-300"
-              />
+            <div className="flex-1 overflow-y-auto">
+              {teamConversations.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center p-5 text-center">
+                  <Users
+                    size={32}
+                    className="mb-3 text-gray-300"
+                  />
 
-              <p className="text-sm font-medium text-gray-700">
-                Henüz ekip konuşması yok
-              </p>
+                  <p className="text-sm font-medium text-gray-700">
+                    Henüz ekip konuşması yok
+                  </p>
 
-              <p className="mt-1 text-xs text-gray-400">
-                Coalition ve proje ekipleri burada görünecek.
-              </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Bir ekip projesine dahil edildiğinde burada görünecek.
+                  </p>
+                </div>
+              ) : (
+                teamConversations.map((conversation) => (
+                  <button
+                    type="button"
+                    key={conversation.coalitionId}
+                    onClick={() =>
+                      setSelectedCoalitionId(conversation.coalitionId)
+                    }
+                    className={`flex w-full items-center gap-3 border-b border-gray-100 p-4 text-left transition ${
+                      selectedCoalitionId === conversation.coalitionId
+                        ? "bg-gray-50"
+                        : "hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-white">
+                      <Users size={18} />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-gray-900">
+                        {conversation.name}
+                      </h3>
+
+                      <p className="mt-1 truncate text-sm text-gray-500">
+                        {conversation.projectTitle ?? "Ekip mesajlaşması"}
+                      </p>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -1298,13 +1477,46 @@ function FreelancerMessagesContent() {
         {/* CHAT */}
         <div
           className={`min-w-0 flex-1 flex-col md:flex ${
-            activeTab === "clients" && selectedUserId ? "flex" : "hidden"
+            (activeTab === "clients" && selectedUserId) ||
+            (activeTab === "teams" && selectedCoalitionId)
+              ? "flex"
+              : "hidden"
           }`}
         >
           {activeTab === "teams" ? (
-            <div className="flex flex-1 items-center justify-center bg-gray-50 text-sm text-gray-400">
-              Bir ekip konuşması seç.
-            </div>
+            selectedCoalitionId && currentUserId ? (
+              <div className="flex flex-1 flex-col">
+                <div className="flex items-center gap-3 border-b border-gray-200 p-4 md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCoalitionId(null)}
+                    className="text-gray-500"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+
+                  <span className="text-sm font-semibold text-gray-900">
+                    {
+                      teamConversations.find(
+                        (item) => item.coalitionId === selectedCoalitionId
+                      )?.name
+                    }
+                  </span>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  <TeamMessagesPanel
+                    coalitionId={selectedCoalitionId}
+                    currentUserId={currentUserId}
+                    memberLabels={teamMemberLabels}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-1 items-center justify-center bg-gray-50 text-sm text-gray-400">
+                Bir ekip konuşması seç.
+              </div>
+            )
           ) : !selectedProfile ? (
             <div className="flex flex-1 flex-col items-center justify-center bg-gray-50">
               <MessageCircle

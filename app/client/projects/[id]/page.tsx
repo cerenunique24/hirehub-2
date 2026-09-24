@@ -447,12 +447,90 @@ function ClientProjectDetailContent() {
               teamMembers={teamMembers}
               viewerRole="client"
               messagesBasePath="/client/messages"
+              isTeamProject={Boolean(project.team_required)}
               onProjectCompleted={() =>
                 setProject((current) => (current ? { ...current, status: "completed" } : current))
               }
             />
           ) : (
             <>
+          {/* ACTIVE PROJECT TEAM — proje daha başlamadan önce ekibin kim
+              olduğu, özet kartlardan daha üstte, hemen görünür olsun. */}
+          {teamMembers.length > 0 && (
+            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Proje ekibi
+                  </h2>
+
+                  <p className="mt-1 text-sm text-gray-500">
+                    Bu projede çalışan freelancerlar
+                  </p>
+                </div>
+
+                <span className="text-sm font-medium text-gray-500">
+                  {teamMembers.length} kişi
+                </span>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {teamMembers.map((member) => (
+                  <div
+                    key={member.teamMemberId}
+                    className="flex flex-col gap-4 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      {member.avatar_url ? (
+                        <img
+                          src={member.avatar_url}
+                          alt={getFullName(member)}
+                          className="h-12 w-12 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
+                          {getFullName(member)
+                            .slice(0, 1)
+                            .toUpperCase()}
+                        </div>
+                      )}
+
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-gray-900">
+                          {getFullName(member)}
+                        </p>
+
+                        <p className="mt-0.5 text-sm text-gray-500">
+                          {member.memberRole ||
+                            member.title ||
+                            "Freelancer"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-5 sm:justify-end">
+                      <Link
+                        href={`/client/messages?user=${encodeURIComponent(
+                          member.id
+                        )}${
+                          member.proposalId
+                            ? `&proposal=${encodeURIComponent(
+                                member.proposalId
+                              )}`
+                            : ""
+                        }`}
+                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                      >
+                        <MessageCircle size={16} />
+                        Mesaj Gönder
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* PROJECT SUMMARY */}
           <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
@@ -518,90 +596,6 @@ function ClientProjectDetailContent() {
               </p>
             </div>
           </section>
-
-          {/* ACTIVE PROJECT TEAM */}
-          {(teamMembers.length > 0 || isStarted) && (
-            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    Proje ekibi
-                  </h2>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    Bu projede çalışan freelancerlar
-                  </p>
-                </div>
-
-                <span className="text-sm font-medium text-gray-500">
-                  {teamMembers.length} kişi
-                </span>
-              </div>
-
-              {teamMembers.length > 0 ? (
-                <div className="mt-6 space-y-3">
-                  {teamMembers.map((member) => (
-                    <div
-                      key={member.teamMemberId}
-                      className="flex flex-col gap-4 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex min-w-0 items-center gap-4">
-                        {member.avatar_url ? (
-                          <img
-                            src={member.avatar_url}
-                            alt={getFullName(member)}
-                            className="h-12 w-12 shrink-0 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
-                            {getFullName(member)
-                              .slice(0, 1)
-                              .toUpperCase()}
-                          </div>
-                        )}
-
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-gray-900">
-                            {getFullName(member)}
-                          </p>
-
-                          <p className="mt-0.5 text-sm text-gray-500">
-                            {member.memberRole ||
-                              member.title ||
-                              "Freelancer"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-5 sm:justify-end">
-                        <Link
-                          href={`/client/messages?user=${encodeURIComponent(
-                            member.id
-                          )}${
-                            member.proposalId
-                              ? `&proposal=${encodeURIComponent(
-                                  member.proposalId
-                                )}`
-                              : ""
-                          }`}
-                          className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-                        >
-                          <MessageCircle size={16} />
-                          Mesaj Gönder
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-6 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-5 text-center">
-                  <p className="text-sm text-gray-500">
-                    Bu projeye ait kabul edilmiş freelancer bulunamadı.
-                  </p>
-                </div>
-              )}
-            </section>
-          )}
 
           {/* PROJECT INFO */}
           <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">

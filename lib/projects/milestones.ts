@@ -11,6 +11,11 @@ export type MilestoneStatus =
 export type Milestone = {
   id: string;
   project_id: string;
+  /**
+   * NULL = proje geneli aşama (tek freelancer projeleri, mevcut davranış).
+   * Dolu ise bu aşama yalnızca o freelancer'ın rolüne aittir (team project).
+   */
+  freelancer_id: string | null;
   title: string;
   description: string | null;
   due_date: string | null;
@@ -26,7 +31,7 @@ export type Milestone = {
 };
 
 const MILESTONE_COLUMNS =
-  "id, project_id, title, description, due_date, budget, sort_order, status, deliverable_description, submitted_at, approved_at, revision_notes, created_at, updated_at";
+  "id, project_id, freelancer_id, title, description, due_date, budget, sort_order, status, deliverable_description, submitted_at, approved_at, revision_notes, created_at, updated_at";
 
 export type MilestoneEventType = "submitted" | "revision_requested" | "resubmitted" | "approved";
 
@@ -76,12 +81,15 @@ export async function createMilestone(
     sortOrder: number;
     /** İlk aşama doğrudan `active`, sonrakiler `pending` başlar. */
     status?: MilestoneStatus;
+    /** Team project'te bu aşamanın ait olduğu freelancer. Tek freelancer projelerinde null bırakılır. */
+    freelancerId?: string | null;
   }
 ) {
   return supabase
     .from("project_milestones")
     .insert({
       project_id: input.projectId,
+      freelancer_id: input.freelancerId ?? null,
       title: input.title,
       description: input.description ?? null,
       due_date: input.dueDate ?? null,

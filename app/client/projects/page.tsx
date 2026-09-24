@@ -17,7 +17,7 @@ type Project = {
   created_at: string;
 };
 
-type Tab = "active" | "open" | "all";
+type Tab = "all" | "active" | "open" | "completed";
 
 function statusLabel(status: string | null) {
   return status === "open"
@@ -40,7 +40,7 @@ export default function ClientProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<Tab>("active");
+  const [tab, setTab] = useState<Tab>("all");
 
   useEffect(() => {
     async function loadProjects() {
@@ -65,13 +65,23 @@ export default function ClientProjectsPage() {
   }, [supabase]);
 
   const activeProjects = projects.filter((project) => project.status === "in_progress");
-  const openProjects = projects.filter((project) => project.status === "open");
+  const openProjects = projects.filter(
+    (project) => project.status === "open" || project.status === "ready_to_start"
+  );
+  const completedProjects = projects.filter((project) => project.status === "completed");
   const activeBudget = activeProjects.reduce((total, project) => {
     const budget = Number(project.budget_max ?? project.budget ?? 0);
     return total + (Number.isFinite(budget) ? budget : 0);
   }, 0);
 
-  const visibleProjects = tab === "active" ? activeProjects : tab === "open" ? openProjects : projects;
+  const visibleProjects =
+    tab === "active"
+      ? activeProjects
+      : tab === "open"
+        ? openProjects
+        : tab === "completed"
+          ? completedProjects
+          : projects;
 
   const emptyCopy: Record<Tab, { title: string; body: string }> = {
     active: {
@@ -81,6 +91,10 @@ export default function ClientProjectsPage() {
     open: {
       title: "Yayında bir proje yok",
       body: "Yeni bir proje yayınlayarak freelancer teklifleri almaya başlayabilirsin.",
+    },
+    completed: {
+      title: "Henüz tamamlanan bir projen yok",
+      body: "Bir proje tamamlandığında burada görünecek.",
     },
     all: {
       title: "Henüz bir projen yok",
@@ -119,24 +133,31 @@ export default function ClientProjectsPage() {
         <div className="mb-6 flex w-fit gap-1 rounded-lg bg-neutral-100 p-1">
           <button
             type="button"
+            onClick={() => setTab("all")}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "all" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
+          >
+            Tüm Projeler ({projects.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setTab("active")}
             className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "active" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
-            Aktif Projeler ({activeProjects.length})
+            Aktif ({activeProjects.length})
           </button>
           <button
             type="button"
             onClick={() => setTab("open")}
             className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "open" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
-            Yayındaki Projeler ({openProjects.length})
+            Yayında ({openProjects.length})
           </button>
           <button
             type="button"
-            onClick={() => setTab("all")}
-            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "all" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
+            onClick={() => setTab("completed")}
+            className={`rounded-md px-3.5 py-1.5 text-sm font-medium transition ${tab === "completed" ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-800"}`}
           >
-            Tüm Projeler ({projects.length})
+            Tamamlanan ({completedProjects.length})
           </button>
         </div>
 
