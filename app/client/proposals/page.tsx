@@ -751,7 +751,9 @@ export default function ClientProposalsPage() {
       // =====================================================
       // Henüz aktif başlatmıyoruz; sadece ready_to_start'a geçiriyoruz.
 
-      const { error: readinessError } = await checkAndUpdateProjectReadiness(
+      const wasOpen = proposal.project.status === "open";
+
+      const { projectReady, error: readinessError } = await checkAndUpdateProjectReadiness(
         supabase,
         proposal.project_id
       );
@@ -776,6 +778,21 @@ export default function ClientProposalsPage() {
           link: "/freelancers/projects",
         },
       ]);
+
+      // Bu kabulle birlikte tüm roller ilk defa doldu (open -> ready_to_start)
+      // ise client'a "Ekip hazır" bildirimi gönder — sonraki kabullerde
+      // (proje zaten ready_to_start ise) tekrar gönderilmez.
+      if (!readinessError && projectReady && wasOpen) {
+        await notifyUsers(supabase, [
+          {
+            userId: proposal.project.client_id,
+            type: "coalition_ready",
+            title: "Ekip hazır",
+            message: `"${proposal.project?.title ?? "Proje"}" projesi için tüm roller dolduruldu. Projeyi başlatabilirsin.`,
+            link: `/client/projects/${proposal.project_id}`,
+          },
+        ]);
+      }
 
       // UI güncelle
       setProposals((current) =>

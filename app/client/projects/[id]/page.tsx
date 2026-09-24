@@ -127,6 +127,7 @@ function ClientProjectDetailContent() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [coalitionId, setCoalitionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [proposalCount, setProposalCount] = useState(0);
@@ -253,6 +254,18 @@ function ClientProjectDetailContent() {
       }
     } else {
       setTeamMembers([]);
+    }
+
+    if (projectData.team_required) {
+      const { data: coalitionData } = await supabase
+        .from("coalitions")
+        .select("id")
+        .eq("project_id", id)
+        .maybeSingle();
+
+      setCoalitionId(coalitionData?.id ?? null);
+    } else {
+      setCoalitionId(null);
     }
 
     setLoading(false);
@@ -671,6 +684,16 @@ function ClientProjectDetailContent() {
                   Teklifleri görüntüle ({proposalCount})
                 </Link>
               </>
+            )}
+
+            {coalitionId && (
+              <Link
+                href={`/client/coalitions/${coalitionId}`}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              >
+                <Users size={16} />
+                Ekip Mesajları
+              </Link>
             )}
 
             {teamMembers.length > 0 && (

@@ -342,7 +342,15 @@ export default function OffersPage() {
 
         // Davetle katılım da tüm rolleri doldurabilir; proposal kabul
         // akışıyla aynı hazırlık kontrolünü burada da çalıştırıyoruz.
-        const { error: readinessError } = await checkAndUpdateProjectReadiness(
+        const { data: projectBefore } = await supabase
+          .from("projects")
+          .select("status")
+          .eq("id", invitation.project_id)
+          .maybeSingle();
+
+        const wasOpen = projectBefore?.status === "open";
+
+        const { projectReady, error: readinessError } = await checkAndUpdateProjectReadiness(
           supabase,
           invitation.project_id
         );
@@ -360,6 +368,18 @@ export default function OffersPage() {
             link: `/client/projects/${invitation.project_id}`,
           },
         ]);
+
+        if (!readinessError && projectReady && wasOpen) {
+          await notifyUsers(supabase, [
+            {
+              userId: invitation.client_id,
+              type: "coalition_ready",
+              title: "Ekip hazır",
+              message: `"${invitation.project?.title ?? "Proje"}" projesi için tüm roller dolduruldu. Projeyi başlatabilirsin.`,
+              link: `/client/projects/${invitation.project_id}`,
+            },
+          ]);
+        }
       }
 
       setInvitations((current) =>

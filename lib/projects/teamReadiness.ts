@@ -57,6 +57,73 @@ export function describeAcceptPlacementError(message: string): string {
   return "Ekibe katılırken bir hata oluştu.";
 }
 
+export type RoleCompletion = {
+  role: string;
+  capacity: number;
+  filled: number;
+  isFull: boolean;
+};
+
+export type TeamCompletion = {
+  isTeamProject: boolean;
+  roles: RoleCompletion[];
+  filledRoles: number;
+  totalRoles: number;
+  ready: boolean;
+};
+
+/**
+ * Ekip (coalition/proje detay) sayfalarında "2 / 3 rol tamamlandı" gibi bir
+ * özet göstermek için tek yer. checkAndUpdateProjectReadiness() ile AYNI
+ * kaynaktan (budget_breakdown + project_team_members) hesaplar, ama DB'ye
+ * yazmaz — salt okunur bir görünüm üretir.
+ */
+export function getTeamCompletion(
+  budgetBreakdown: BudgetBreakdownRole[] | null | undefined,
+  activeMembers: Array<{ role: string | null }>
+): TeamCompletion {
+  const roles = Array.isArray(budgetBreakdown) ? budgetBreakdown : [];
+  const isTeamProject = roles.length > 0;
+
+  if (!isTeamProject) {
+    const filled = activeMembers.length > 0 ? 1 : 0;
+
+    return {
+      isTeamProject: false,
+      roles: [],
+      filledRoles: filled,
+      totalRoles: 1,
+      ready: filled >= 1,
+    };
+  }
+
+  const roleCompletions: RoleCompletion[] = roles.map((role) => {
+    const roleName = role.role ?? role.name ?? "";
+    const capacity = getRoleCapacity(roles, roleName);
+
+    const filled = activeMembers.filter(
+      (member) => normalizeRoleName(member.role ?? "") === normalizeRoleName(roleName)
+    ).length;
+
+    return {
+      role: roleName,
+      capacity,
+      filled: Math.min(filled, capacity),
+      isFull: filled >= capacity,
+    };
+  });
+
+  const filledRoles = roleCompletions.filter((role) => role.isFull).length;
+
+  return {
+    isTeamProject: true,
+    roles: roleCompletions,
+    filledRoles,
+    totalRoles: roleCompletions.length,
+    ready: filledRoles === roleCompletions.length,
+  };
+}
+
 export function getRoleCapacity(
   budgetBreakdown: BudgetBreakdownRole[] | null | undefined,
   roleName: string

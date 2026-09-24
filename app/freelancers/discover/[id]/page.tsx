@@ -1165,6 +1165,11 @@ function FreelancerProjectDetailContent({
                         </span>{" "}
                         freelancer görev alacak.
                       </p>
+
+                      <p className="mt-2 text-sm text-gray-500">
+                        Bu projede birden fazla freelancer birlikte çalışacaktır.
+                        Teklifiniz kabul edildiğinde bu projenin ekip yapısına dahil edilirsiniz.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1623,6 +1628,13 @@ function FreelancerProjectDetailContent({
                     />
                   )}
                 </div>
+
+                {!isSingleProject && !alreadySubmitted && (
+                  <p className="mt-5 rounded-xl bg-gray-50 p-4 text-xs leading-5 text-gray-500">
+                    Bu proje bir ekip projesidir. Teklifiniz kabul edildiğinde
+                    bu projenin ekip yapısına dahil edilirsiniz.
+                  </p>
+                )}
 
                 {submitMessage && (
                   <div

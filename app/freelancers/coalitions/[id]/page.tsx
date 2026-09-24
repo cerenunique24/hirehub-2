@@ -6,11 +6,14 @@ import {
   ArrowLeft,
   CalendarDays,
   Loader2,
+  MessageSquare,
   Users,
   UserPlus,
   LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { getTeamCompletion, type TeamCompletion } from "@/lib/projects/teamReadiness";
+import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
 
 type Coalition = {
   id: string;
@@ -30,6 +33,7 @@ type Project = {
   created_at: string;
   deadline: string | null;
   estimated_duration: string | null;
+  budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
 };
 
 type Profile = {
@@ -47,6 +51,7 @@ type CoalitionMember = {
   role: "owner" | "member";
   status: "active" | "pending";
   joined_at: string;
+  projectRole: string | null;
   profile: Profile | null;
 };
 
@@ -57,6 +62,7 @@ export default function CoalitionDetailPage({
 }) {
   const [coalition, setCoalition] = useState<Coalition | null>(null);
   const [project, setProject] = useState<Project | null>(null);
+  const [teamCompletion, setTeamCompletion] = useState<TeamCompletion | null>(null);
   const [members, setMembers] = useState<CoalitionMember[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -149,6 +155,8 @@ export default function CoalitionDetailPage({
         // 4. Bağlı projeyi getir
         // --------------------------------------------------
 
+        let projectRoleByFreelancer = new Map<string, string>();
+
         if (coalitionData.project_id) {
           const {
             data: projectData,
@@ -156,7 +164,7 @@ export default function CoalitionDetailPage({
           } = await supabase
             .from("projects")
             .select(
-              "id, title, description, status, created_at, deadline, estimated_duration"
+              "id, title, description, status, created_at, deadline, estimated_duration, budget_breakdown"
             )
             .eq("id", coalitionData.project_id)
             .maybeSingle();
@@ -172,8 +180,28 @@ export default function CoalitionDetailPage({
           }
 
           setProject(projectData ?? null);
+
+          if (projectData) {
+            const { data: teamMemberRows } = await supabase
+              .from("project_team_members")
+              .select("freelancer_id, role")
+              .eq("project_id", projectData.id)
+              .eq("status", "active");
+
+            setTeamCompletion(
+              getTeamCompletion(
+                projectData.budget_breakdown,
+                (teamMemberRows ?? []).map((row) => ({ role: row.role }))
+              )
+            );
+
+            projectRoleByFreelancer = new Map(
+              (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.role as string])
+            );
+          }
         } else {
           setProject(null);
+          setTeamCompletion(null);
         }
 
         // --------------------------------------------------
@@ -262,6 +290,7 @@ export default function CoalitionDetailPage({
               role: member.role,
               status: member.status,
               joined_at: member.joined_at,
+              projectRole: projectRoleByFreelancer.get(member.user_id) ?? null,
               profile,
             };
           });
@@ -550,6 +579,78 @@ export default function CoalitionDetailPage({
         )}
       </section>
 
+      {/* Team Status */}
+
+      {teamCompletion && (
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Ekip Durumu
+              </h2>
+
+              <p className="mt-1 text-sm text-gray-500">
+                {teamCompletion.ready
+                  ? "Tüm ekip üyeleri projeye dahil oldu."
+                  : `${teamCompletion.filledRoles} / ${teamCompletion.totalRoles} rol tamamlandı.`}
+              </p>
+            </div>
+
+            <span
+              className={
+                teamCompletion.ready
+                  ? "w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
+                  : "w-fit rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700"
+              }
+            >
+              {teamCompletion.ready ? "Ekip hazır" : "Ekip oluşturuluyor"}
+            </span>
+          </div>
+
+          {teamCompletion.roles.length > 0 && (
+            <div className="mt-5 space-y-2">
+              {teamCompletion.roles.map((role) => (
+                <div
+                  key={role.role}
+                  className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm text-gray-700"
+                >
+                  <span>{role.role}</span>
+                  <span className="text-xs text-gray-500">
+                    {role.filled} / {role.capacity}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Team Messages */}
+
+      {currentUserId && (
+        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <MessageSquare size={18} />
+            Ekip Mesajları
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-500">
+            Proje başlamadan önce ekiple burada hazırlık yapabilirsin.
+          </p>
+
+          <div className="mt-4">
+            <TeamMessagesPanel
+              coalitionId={coalition.id}
+              currentUserId={currentUserId}
+              memberLabels={members.map((member) => ({
+                id: member.user_id,
+                name: getMemberName(member),
+              }))}
+            />
+          </div>
+        </section>
+      )}
+
       {/* Team Members */}
 
       <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -622,7 +723,7 @@ export default function CoalitionDetailPage({
                 </div>
 
                 <span className="w-fit rounded-full bg-gray-50 px-3 py-1 text-xs text-gray-500">
-                  Ekip Üyesi
+                  {member.projectRole || "Ekip Üyesi"}
                 </span>
               </div>
             ))}

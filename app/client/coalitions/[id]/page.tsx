@@ -1,22 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
   Loader2,
+  MessageSquare,
+  PlayCircle,
   Users,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { uniqueSkills } from "@/lib/matching";
+import {
+  getTeamCompletion,
+  type TeamCompletion,
+} from "@/lib/projects/teamReadiness";
+import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
 
 type Coalition = {
   id: string;
   name: string;
   description: string | null;
+  project_id: string | null;
+};
+
+type LinkedProject = {
+  id: string;
+  title: string;
+  status: string | null;
+  client_id: string;
+  budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
 };
 
 type Profile = {
@@ -33,6 +49,7 @@ type Member = {
   id: string;
   user_id: string;
   role: string | null;
+  projectRole: string | null;
   profile: Profile | null;
 };
 
@@ -47,13 +64,18 @@ type PendingMember = {
 
 export default function ClientCoalitionDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   const [coalition, setCoalition] = useState<Coalition | null>(null);
+  const [project, setProject] = useState<LinkedProject | null>(null);
+  const [teamCompletion, setTeamCompletion] = useState<TeamCompletion | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
 
   const loadCoalition = async () => {
@@ -61,11 +83,17 @@ export default function ClientCoalitionDetailPage() {
     setError("");
 
     const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    setCurrentUserId(user?.id ?? null);
+
+    const {
       data: coalitionData,
       error: coalitionError,
     } = await supabase
       .from("coalitions")
-      .select("id, name, description")
+      .select("id, name, description, project_id")
       .eq("id", id)
       .eq("status", "active")
       .single();
@@ -77,6 +105,21 @@ export default function ClientCoalitionDetailPage() {
     }
 
     setCoalition(coalitionData as Coalition);
+
+    let linkedProject: LinkedProject | null = null;
+
+    if (coalitionData.project_id) {
+      const { data: projectData } = await supabase
+        .from("projects")
+        .select("id, title, status, client_id, budget_breakdown")
+        .eq("id", coalitionData.project_id)
+        .maybeSingle();
+
+      linkedProject = (projectData as LinkedProject | null) ?? null;
+      setProject(linkedProject);
+    } else {
+      setProject(null);
+    }
 
     const {
       data: memberRows,
@@ -116,9 +159,35 @@ export default function ClientCoalitionDetailPage() {
       ])
     );
 
+    let activeTeamMembers: { role: string | null }[] = [];
+    let projectRoleByFreelancer = new Map<string, string>();
+
+    if (linkedProject) {
+      const { data: teamMemberRows } = await supabase
+        .from("project_team_members")
+        .select("freelancer_id, role")
+        .eq("project_id", linkedProject.id)
+        .eq("status", "active");
+
+      activeTeamMembers = (teamMemberRows ?? []).map((row) => ({
+        role: row.role,
+      }));
+
+      projectRoleByFreelancer = new Map(
+        (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.role as string])
+      );
+
+      setTeamCompletion(
+        getTeamCompletion(linkedProject.budget_breakdown, activeTeamMembers)
+      );
+    } else {
+      setTeamCompletion(null);
+    }
+
     setMembers(
       (memberRows ?? []).map((member) => ({
         ...member,
+        projectRole: projectRoleByFreelancer.get(member.user_id) ?? null,
         profile:
           activeProfileById.get(member.user_id) ?? null,
       })) as Member[]
@@ -251,6 +320,36 @@ export default function ClientCoalitionDetailPage() {
 
     await loadCoalition();
     setProcessingId(null);
+  };
+
+  const isProjectClient =
+    !!project && !!currentUserId && project.client_id === currentUserId;
+
+  const canStartProject =
+    isProjectClient &&
+    project?.status === "ready_to_start" &&
+    teamCompletion?.ready === true;
+
+  const handleStartProject = async () => {
+    if (!project || !canStartProject) return;
+
+    setStarting(true);
+    setError("");
+
+    const { error: updateError } = await supabase
+      .from("projects")
+      .update({ status: "in_progress" })
+      .eq("id", project.id)
+      .eq("status", "ready_to_start");
+
+    if (updateError) {
+      console.error("Proje başlatma hatası:", updateError);
+      setError("Proje başlatılırken bir hata oluştu.");
+      setStarting(false);
+      return;
+    }
+
+    router.push(`/client/projects/${project.id}`);
   };
 
   if (loading) {
@@ -509,7 +608,7 @@ export default function ClientCoalitionDetailPage() {
                       </div>
 
                       <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
-                        {member.role || "Üye"}
+                        {member.projectRole || member.role || "Üye"}
                       </span>
                     </div>
                   );
@@ -522,6 +621,115 @@ export default function ClientCoalitionDetailPage() {
             </div>
           </section>
         </section>
+
+        {teamCompletion && (
+          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-neutral-900">
+                  Ekip Durumu
+                </h2>
+
+                <p className="mt-1 text-sm text-neutral-500">
+                  {teamCompletion.ready
+                    ? "Tüm ekip üyeleri projeye dahil oldu."
+                    : `${teamCompletion.filledRoles} / ${teamCompletion.totalRoles} rol tamamlandı.`}
+                </p>
+              </div>
+
+              <span
+                className={`w-fit rounded-full px-3 py-1.5 text-xs font-medium ${
+                  teamCompletion.ready
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-amber-50 text-amber-700"
+                }`}
+              >
+                {teamCompletion.ready ? "Ekip hazır" : "Ekip oluşturuluyor"}
+              </span>
+            </div>
+
+            {teamCompletion.roles.length > 0 && (
+              <div className="mt-5 space-y-2">
+                {teamCompletion.roles.map((role) => (
+                  <div
+                    key={role.role}
+                    className="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-2.5 text-sm"
+                  >
+                    <span className="flex items-center gap-2 text-neutral-800">
+                      {role.isFull ? (
+                        <Check size={15} className="text-emerald-600" />
+                      ) : (
+                        <span className="h-3.5 w-3.5 rounded-full border border-neutral-300" />
+                      )}
+                      {role.role}
+                    </span>
+
+                    <span className="text-xs text-neutral-500">
+                      {role.filled} / {role.capacity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {project?.status === "in_progress" ? (
+              <p className="mt-5 text-sm font-medium text-emerald-700">
+                Proje başlatıldı — ekip artık çalışmaya başlayabilir.
+              </p>
+            ) : (
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                {isProjectClient && (
+                  <button
+                    type="button"
+                    disabled={!canStartProject || starting}
+                    onClick={() => void handleStartProject()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {starting ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <PlayCircle size={16} />
+                    )}
+                    Projeyi Başlat
+                  </button>
+                )}
+
+                {!teamCompletion.ready && (
+                  <p className="self-center text-xs text-neutral-500">
+                    Eksik roller için freelancer aramaya devam edebilirsin.
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {currentUserId && (
+          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+              <MessageSquare size={18} />
+              Ekip Mesajları
+            </h2>
+
+            <p className="mt-1 text-sm text-neutral-500">
+              Proje başlamadan önce ekiple burada hazırlık yapabilirsin.
+            </p>
+
+            <div className="mt-4">
+              <TeamMessagesPanel
+                coalitionId={coalition.id}
+                currentUserId={currentUserId}
+                memberLabels={members.map((member) => ({
+                  id: member.user_id,
+                  name:
+                    [member.profile?.first_name, member.profile?.last_name]
+                      .filter(Boolean)
+                      .join(" ") || "Ekip üyesi",
+                }))}
+              />
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );
