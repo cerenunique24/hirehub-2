@@ -123,23 +123,26 @@ export function buildPlusAnalysis(
     skillGapInsights.push("Belirgin bir beceri boşluğu tespit edilmedi.");
   }
 
-  const { min: budgetMin, max: budgetMax } = parseBudgetRange(brief.budget || "");
-  const hasBudget = budgetMin !== null;
-  const hasDeadline = Boolean(brief.deadline?.trim());
+  /*
+   * ÖNEMLİ: Bu analiz, client bütçe/teslim süresini GİRMEDEN ÖNCE
+   * (proje oluşturma akışının "İhtiyaçlar" adımında, "Bütçe & Yayın"
+   * adımından önce) çalışır — brief.budget/brief.deadline bu noktada
+   * yapısal olarak HER ZAMAN boştur. Bunu "eksik bilgi" uyarısı olarak
+   * göstermek client'a henüz sırası gelmemiş bir adımı "unutulmuş"
+   * gibi gösterirdi. Bu yüzden burada bütçe/süre YOKLUĞU hiç
+   * değerlendirilmez; yalnızca (nadiren) bütçe zaten biliniyorsa
+   * (ör. ileride brief'e taşınırsa) rol başına düşük bütçe uyarısı
+   * anlamlı kalmaya devam eder.
+   */
+  const { max: budgetMax } = parseBudgetRange(brief.budget || "");
 
   const budgetFlags: string[] = [];
 
-  if (!hasBudget) {
-    budgetFlags.push("Bütçe belirtilmemiş — freelancer teklifleri daha geniş bir aralıkta gelebilir.");
-  } else if (roleDetails.length > 0 && budgetMax !== null) {
+  if (budgetMax !== null && roleDetails.length > 0) {
     const perRole = budgetMax / roleDetails.length;
     if (perRole < 2000) {
       budgetFlags.push("Rol başına düşen bütçe düşük görünüyor — kapsamı veya bütçeyi gözden geçirmek isteyebilirsin.");
     }
-  }
-
-  if (!hasDeadline) {
-    budgetFlags.push("Teslim süresi belirtilmemiş — freelancer'lar süre tahminini kendileri yapmak zorunda kalabilir.");
   }
 
   return {
@@ -150,12 +153,10 @@ export function buildPlusAnalysis(
     },
     skillGapInsights,
     budgetDurationAssessment: {
-      hasBudget,
-      hasDeadline,
+      hasBudget: budgetMax !== null,
+      hasDeadline: Boolean(brief.deadline?.trim()),
       insight:
-        hasBudget && hasDeadline
-          ? "Bütçe ve süre bilgisi tam — freelancer eşleşmeleri bu verilerle daha isabetli olacak."
-          : "Bütçe ve/veya süre bilgisi eksik — tamamlaman eşleşme kalitesini artırır.",
+        "Bütçe ve teslim süresini 'Bütçe & Yayın' adımında belirleyeceksin; oradaki tutar roller arasında otomatik dağıtılır.",
       flags: budgetFlags,
     },
   };
@@ -211,7 +212,7 @@ export function buildProAnalysis(
   const advancedBudgetInsight =
     budgetMax !== null && roleDetails.length > 0
       ? `Toplam bütçenin rol başına ortalaması yaklaşık ${Math.round(budgetMax / roleDetails.length).toLocaleString("tr-TR")} — bunu piyasa koşullarıyla karşılaştırarak tekliflerin gerçekçiliğini değerlendirebilirsin.`
-      : "Bütçe kırılımı için toplam bütçe ve rol sayısının birlikte tanımlanması gerekiyor.";
+      : "Bütçeyi 'Bütçe & Yayın' adımında girdiğinde, rol başına dağılımını burada değerlendirebileceksin.";
 
   const advancedRecommendations = [...analysis.recommendations ?? []];
 

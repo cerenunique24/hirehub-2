@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  Plus,
   RotateCcw,
   Sparkles,
   Trash2,
@@ -20,15 +21,12 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import AnalyzingState from "@/components/ai/AnalyzingState";
 import type { ProjectAnalysis } from "@/types/ai";
-import { SKILLS } from "@/lib/constants/skills";
 import { usePremium } from "@/lib/hooks/usePremium";
 import PremiumGate from "@/components/premium/PremiumGate";
 import type {
   PlusProjectAnalysis,
   ProProjectAnalysis,
 } from "@/lib/ai/projectAnalysisEnrichment";
-
-const SKILL_OPTIONS: string[] = [...SKILLS];
 
 /**
  * Ana kategori: geniş iş alanı (Bionluk'taki üst kategori mantığı
@@ -47,34 +45,6 @@ const CATEGORIES = [
   "İş & Yönetim",
   "Senaryo & Hikâye",
   "Diğer",
-];
-
-/**
- * Uzmanlık alanları: projede aranan spesifik rol/beceri alanı
- * ("Ekip İhtiyaçları" adımı). Ana kategoriden bağımsız, kasıtlı olarak
- * daha granüler — AI bu listeden projeye uygun rolleri türetir.
- */
-const EXPERTISE_OPTIONS = [
-  "Web Tasarım",
-  "Web Geliştirme",
-  "Mobil Uygulama",
-  "UI/UX Tasarım",
-  "Marka Tasarımı",
-  "Grafik Tasarım",
-  "E-Ticaret",
-  "Yazılım Geliştirme",
-  "Veri Bilimi & Yapay Zeka",
-  "Dijital Pazarlama",
-  "İçerik Üretimi",
-  "Metin & Çeviri",
-  "3D Tasarım & Animasyon",
-  "Video & Ses Prodüksiyon",
-  "Mimari & İç Mekân",
-  "Mühendislik",
-  "Proje & Ürün Yönetimi",
-  "Finans & Hukuk",
-  "İK & Satış",
-  "Eğitim & Danışmanlık",
 ];
 
 const DELIVERY_FORMATS = [
@@ -370,8 +340,8 @@ export default function CreateProjectPage() {
   const [analyzing, setAnalyzing] =
     useState(false);
 
-  const [analyzingPhase, setAnalyzingPhase] =
-    useState<"analysis" | "matching">("analysis");
+  const [matchingInProgress, setMatchingInProgress] =
+    useState(false);
 
   /**
    * Analiz durumu:
@@ -477,6 +447,76 @@ export default function CreateProjectPage() {
     );
   }
 
+  function addRole() {
+    setRoles((current) => [
+      ...current,
+      {
+        id: `role-${Date.now()}-${current.length}`,
+        name: "",
+        memberCount: 1,
+        budgetPerPerson: 0,
+        budget: 0,
+        duration: "",
+        responsibilities: [],
+        skills: [],
+        preferredSkills: [],
+      },
+    ]);
+  }
+
+  function removeRole(id: string) {
+    setRoles((current) =>
+      current.filter((role) => role.id !== id)
+    );
+  }
+
+  function addRoleListItem(
+    id: string,
+    field: "skills" | "preferredSkills" | "responsibilities",
+    value: string
+  ) {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    setRoles((current) =>
+      current.map((role) => {
+        if (role.id !== id) return role;
+
+        const exists = role[field].some(
+          (item) =>
+            item.toLocaleLowerCase("tr-TR") ===
+            trimmed.toLocaleLowerCase("tr-TR")
+        );
+
+        if (exists) return role;
+
+        return {
+          ...role,
+          [field]: [...role[field], trimmed],
+        };
+      })
+    );
+  }
+
+  function removeRoleListItem(
+    id: string,
+    field: "skills" | "preferredSkills" | "responsibilities",
+    index: number
+  ) {
+    setRoles((current) =>
+      current.map((role) =>
+        role.id === id
+          ? {
+              ...role,
+              [field]: role[field].filter(
+                (_, i) => i !== index
+              ),
+            }
+          : role
+      )
+    );
+  }
+
   const teamTotalBudget = roles.reduce(
     (sum, role) =>
       sum +
@@ -528,36 +568,47 @@ export default function CreateProjectPage() {
     setStep("needs");
   }
 
+  /**
+   * "İhtiyaçlar" adımına geçmeden önce ek bir zorunluluk yok — AI
+   * analizi yalnızca başlık/açıklama/kategoriye dayanır (bkz.
+   * runAiAnalysis). Beceri/uzmanlık artık client'ın AI'dan ÖNCE
+   * seçtiği bir şey değil; AI'nın önerdiği ve client'ın "İhtiyaçlar"
+   * adımında düzenlediği bir çıktı.
+   */
   function continueToAnalysis() {
     setError("");
 
-    if (
-      brief.skills.length === 0 &&
-      brief.expertiseAreas.length === 0
-    ) {
+    if (roles.length === 0) {
       setError(
-        "En az bir beceri veya uzmanlık alanı seçin."
+        "Devam etmeden önce en az bir rol olmalı."
+      );
+      return;
+    }
+
+    if (roles.some((role) => !role.name.trim())) {
+      setError(
+        "Her rolün bir adı olmalı."
       );
       return;
     }
 
     setStep("analysis");
+    void runMatching();
   }
 
-  async function runAnalysis() {
+  /**
+   * ADIM 1 → 2: AI, proje başlığı/açıklaması/kategorisinden yola
+   * çıkarak gerekli rolleri ve her rolün ihtiyaçlarını çıkarır. Bu,
+   * client'ın düzenleyeceği İLK öneridir — kesinleşmiş bir sonuç
+   * değildir (bkz. NeedsStep).
+   */
+  async function runAiAnalysis() {
     setError("");
     setAnalysisFailed(false);
     setAnalyzing(true);
-    setAnalyzingPhase("analysis");
 
     try {
       const requirementLines = [
-        brief.deliveryFormats.length > 0
-          ? `Teslim formatı: ${brief.deliveryFormats.join(
-              ", "
-            )}`
-          : undefined,
-
         files.length > 0
           ? `Eklenen dosyalar: ${files
               .map((file) => file.name)
@@ -583,8 +634,6 @@ export default function CreateProjectPage() {
               requirementLines.length > 0
                 ? requirementLines.join("\n")
                 : undefined,
-            expertise: brief.expertiseAreas,
-            skills: brief.skills,
           }),
         }
       );
@@ -671,13 +720,41 @@ export default function CreateProjectPage() {
           );
 
       setRoles(normalizedRoles);
+    } catch (err) {
+      console.error(
+        "Proje analiz hatası:",
+        err
+      );
 
-      if (normalizedRoles.length === 0) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Proje analizi tamamlanamadı."
+      );
+
+      setAnalysisFailed(true);
+      // Kullanıcı "needs" ekranında kalır; girdiği proje bilgileri
+      // (brief/files) korunur, baştan yazmak zorunda kalmaz.
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  /**
+   * ADIM 2 → 3: Matching, client'ın "İhtiyaçlar" adımında düzenlediği
+   * SON `roles` durumunu kullanır — AI'nın ilk önerisini değil. Her
+   * "İhtiyaçlar" adımına dönüp tekrar devam edildiğinde, o anki
+   * (güncel) roller ile yeniden eşleştirme yapılır.
+   */
+  async function runMatching() {
+    setError("");
+    setMatchingInProgress(true);
+
+    try {
+      if (roles.length === 0 || !analysis) {
         setMatching([]);
         return;
       }
-
-      setAnalyzingPhase("matching");
 
       const matchResponse = await fetch(
         "/api/ai/match-talent",
@@ -687,8 +764,8 @@ export default function CreateProjectPage() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            analysis: nextAnalysis,
-            roles: normalizedRoles.map(
+            analysis,
+            roles: roles.map(
               (role) => ({
                 name: role.name,
                 memberCount:
@@ -723,31 +800,23 @@ export default function CreateProjectPage() {
       );
     } catch (err) {
       console.error(
-        "Proje analiz hatası:",
+        "Freelancer eşleştirme hatası:",
         err
       );
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Proje analizi tamamlanamadı."
-      );
-
-      setAnalysisFailed(true);
-      // Kullanıcı "analysis" ekranında kalır; girdiği proje bilgileri
-      // (brief/files) korunur, baştan yazmak zorunda kalmaz.
+      setMatching([]);
     } finally {
-      setAnalyzing(false);
+      setMatchingInProgress(false);
     }
   }
 
   useEffect(() => {
     if (
-      step === "analysis" &&
+      step === "needs" &&
       !analysis &&
       !analyzing
     ) {
-      void runAnalysis();
+      void runAiAnalysis();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
@@ -1003,11 +1072,12 @@ export default function CreateProjectPage() {
 
         skills: uniqueStrings([
           ...brief.skills,
-          ...(selectionMode === "team"
-            ? roles.flatMap(
-                (role) => role.skills
-              )
-            : []),
+          // roles her zaman AI analizinden (ve client düzenlemesinden) gelir —
+          // selectionMode (team/freelancer/none) sadece kimin işe alınacağını
+          // belirler, projenin gerekli becerilerini değil.
+          ...roles.flatMap(
+            (role) => role.skills
+          ),
         ]),
       };
 
@@ -1102,6 +1172,22 @@ export default function CreateProjectPage() {
           <NeedsStep
             brief={brief}
             updateBrief={updateBrief}
+            analyzing={analyzing}
+            analysis={analysis}
+            advancedAnalysis={advancedAnalysis}
+            proAnalysis={proAnalysis}
+            aiUsage={aiUsage}
+            canUseDeepAnalysis={canUseAiFeature("advanced_matching_client")}
+            analysisFailed={analysisFailed}
+            analysisRetryable={analysisRetryable}
+            analysisError={error}
+            onRetryAnalysis={() => void runAiAnalysis()}
+            roles={roles}
+            onAddRole={addRole}
+            onRemoveRole={removeRole}
+            onUpdateRole={updateRole}
+            onAddRoleListItem={addRoleListItem}
+            onRemoveRoleListItem={removeRoleListItem}
             onBack={goBack}
             onContinue={
               continueToAnalysis
@@ -1111,19 +1197,7 @@ export default function CreateProjectPage() {
 
         {step === "analysis" && (
           <AnalysisStep
-            analyzing={analyzing}
-            analyzingPhase={
-              analyzingPhase
-            }
-            analysis={analysis}
-            advancedAnalysis={advancedAnalysis}
-            proAnalysis={proAnalysis}
-            aiUsage={aiUsage}
-            canUseDeepAnalysis={canUseAiFeature("advanced_matching_client")}
-            analysisFailed={analysisFailed}
-            analysisRetryable={analysisRetryable}
-            analysisError={error}
-            onRetryAnalysis={() => void runAnalysis()}
+            matchingInProgress={matchingInProgress}
             roles={roles}
             matching={matching}
             teamAverageScore={
@@ -1367,6 +1441,22 @@ function ProjectStep({
 function NeedsStep({
   brief,
   updateBrief,
+  analyzing,
+  analysis,
+  advancedAnalysis,
+  proAnalysis,
+  aiUsage,
+  canUseDeepAnalysis,
+  analysisFailed,
+  analysisRetryable,
+  analysisError,
+  onRetryAnalysis,
+  roles,
+  onAddRole,
+  onRemoveRole,
+  onUpdateRole,
+  onAddRoleListItem,
+  onRemoveRoleListItem,
   onBack,
   onContinue,
 }: {
@@ -1376,6 +1466,30 @@ function NeedsStep({
   >(
     key: K,
     value: Brief[K]
+  ) => void;
+  analyzing: boolean;
+  analysis: ProjectAnalysis | null;
+  advancedAnalysis: PlusProjectAnalysis | null;
+  proAnalysis: ProProjectAnalysis | null;
+  aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null;
+  canUseDeepAnalysis: boolean;
+  analysisFailed: boolean;
+  analysisRetryable: boolean;
+  analysisError: string;
+  onRetryAnalysis: () => void;
+  roles: Role[];
+  onAddRole: () => void;
+  onRemoveRole: (id: string) => void;
+  onUpdateRole: (id: string, updates: Partial<Role>) => void;
+  onAddRoleListItem: (
+    id: string,
+    field: "skills" | "preferredSkills" | "responsibilities",
+    value: string
+  ) => void;
+  onRemoveRoleListItem: (
+    id: string,
+    field: "skills" | "preferredSkills" | "responsibilities",
+    index: number
   ) => void;
   onBack: () => void;
   onContinue: () => void;
@@ -1388,107 +1502,375 @@ function NeedsStep({
         </p>
 
         <h1 className={HEADING}>
-          Projenizde neye ihtiyacınız var?
+          {analyzing
+            ? "Projenizi inceliyoruz..."
+            : "Ekip ihtiyaçlarınız"}
         </h1>
 
         <p className={SUBTEXT}>
-          Gerekli beceri ve uzmanlık
-          alanlarını, teslim formatını
-          belirtin. AI bunları projenizin
-          açıklamasıyla birlikte
-          değerlendirecek.
+          {analyzing
+            ? "AI, proje açıklamanızı okuyarak hangi uzmanlıklara ihtiyacınız olduğunu çıkarıyor."
+            : analysis?.summary ||
+              "AI'nın önerdiği rolleri ve ihtiyaçları inceleyip dilediğiniz gibi düzenleyebilirsiniz."}
         </p>
       </div>
 
-      <div
-        className={`${CARD} space-y-8 p-6 sm:p-8`}
-      >
-        <MultiSelect
-          label="Projede gerekli beceriler"
-          values={brief.skills}
-          options={SKILL_OPTIONS}
-          onChange={(values) =>
-            updateBrief(
-              "skills",
-              values
-            )
-          }
-          placeholder="Beceri ekle"
-          searchPlaceholder="Beceri ara..."
-        />
+      {analyzing ? (
+        <div className={`${CARD} p-10 text-center`}>
+          <AnalyzingState />
 
-        <MultiSelect
-          label="Projede gerekli uzmanlıklar"
-          values={
-            brief.expertiseAreas
-          }
-          options={
-            EXPERTISE_OPTIONS
-          }
-          onChange={(values) =>
-            updateBrief(
-              "expertiseAreas",
-              values
-            )
-          }
-          placeholder="Uzmanlık alanı ekle"
-          searchPlaceholder="Uzmanlık ara..."
-        />
-
-        <MultiSelect
-          label="Proje teslim formatı"
-          values={
-            brief.deliveryFormats
-          }
-          options={
-            DELIVERY_FORMATS
-          }
-          onChange={(values) =>
-            updateBrief(
-              "deliveryFormats",
-              values
-            )
-          }
-          placeholder="Teslim formatı ekle"
-          searchPlaceholder="Format ara..."
-        />
-
-        <div className="flex items-center justify-between border-t border-gray-100 pt-6">
+          <p className="mt-4 text-sm text-gray-500">
+            Proje ihtiyaçlarınız çıkarılıyor...
+          </p>
+        </div>
+      ) : analysisFailed ? (
+        <div className={`${CARD} p-10 text-center`}>
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <AlertTriangle size={22} />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold text-gray-900">
+            {analysisRetryable
+              ? "AI analizi şu anda kullanılamıyor"
+              : "Proje analizi tamamlanamadı"}
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+            {analysisError ||
+              (analysisRetryable
+                ? "AI servisi geçici olarak yoğun. Lütfen birkaç dakika sonra tekrar deneyin."
+                : "Analiz sırasında bir sorun oluştu.")}
+          </p>
           <button
             type="button"
-            onClick={onBack}
-            className={BTN_GHOST}
+            onClick={onRetryAnalysis}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
           >
-            <ChevronLeft className="h-4 w-4" />
-            Geri
-          </button>
-
-          <button
-            type="button"
-            onClick={onContinue}
-            className={BTN_PRIMARY}
-          >
-            <Sparkles className="h-4 w-4" />
-            Projeyi analiz et
+            <RotateCcw size={16} />
+            Tekrar Dene
           </button>
         </div>
-      </div>
+      ) : (
+        <>
+          {analysis && (
+            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary-600)]" />
+              <p className="text-sm leading-6 text-gray-700">
+                Projenizi inceledik. Bu proje için{" "}
+                <span className="font-semibold text-gray-900">
+                  {roles.length} farklı uzmanlık alanına
+                </span>{" "}
+                ihtiyaç olduğunu düşünüyoruz. Aşağıdaki rolleri ve
+                ihtiyaçları dilediğiniz gibi düzenleyebilirsiniz.
+              </p>
+            </div>
+          )}
+
+          {analysis && (
+            <AdvancedAnalysisSection
+              advancedAnalysis={advancedAnalysis}
+              proAnalysis={proAnalysis}
+              aiUsage={aiUsage}
+              canUseDeepAnalysis={canUseDeepAnalysis}
+            />
+          )}
+
+          <div className="space-y-5">
+            {roles.map((role) => (
+              <RoleNeedsCard
+                key={role.id}
+                role={role}
+                onUpdate={(updates) =>
+                  onUpdateRole(role.id, updates)
+                }
+                onRemove={() => onRemoveRole(role.id)}
+                onAddListItem={(field, value) =>
+                  onAddRoleListItem(role.id, field, value)
+                }
+                onRemoveListItem={(field, index) =>
+                  onRemoveRoleListItem(role.id, field, index)
+                }
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={onAddRole}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:text-gray-900"
+          >
+            <Plus className="h-4 w-4" />
+            Rol ekle
+          </button>
+
+          <div
+            className={`${CARD} mt-6 space-y-6 p-6 sm:p-8`}
+          >
+            <MultiSelect
+              label="Proje teslim formatı"
+              values={
+                brief.deliveryFormats
+              }
+              options={
+                DELIVERY_FORMATS
+              }
+              onChange={(values) =>
+                updateBrief(
+                  "deliveryFormats",
+                  values
+                )
+              }
+              placeholder="Teslim formatı ekle"
+              searchPlaceholder="Format ara..."
+            />
+          </div>
+
+          <div className="mt-6 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={onBack}
+              className={BTN_GHOST}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Geri
+            </button>
+
+            <button
+              type="button"
+              onClick={onContinue}
+              className={BTN_PRIMARY}
+            >
+              Devam et
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
+function RoleNeedsCard({
+  role,
+  onUpdate,
+  onRemove,
+  onAddListItem,
+  onRemoveListItem,
+}: {
+  role: Role;
+  onUpdate: (updates: Partial<Role>) => void;
+  onRemove: () => void;
+  onAddListItem: (
+    field: "skills" | "preferredSkills" | "responsibilities",
+    value: string
+  ) => void;
+  onRemoveListItem: (
+    field: "skills" | "preferredSkills" | "responsibilities",
+    index: number
+  ) => void;
+}) {
+  const [skillDraft, setSkillDraft] = useState("");
+  const [preferredDraft, setPreferredDraft] = useState("");
+  const [responsibilityDraft, setResponsibilityDraft] = useState("");
+
+  return (
+    <div className={`${CARD} p-6 sm:p-8`}>
+      <div className="flex items-start justify-between gap-4">
+        <input
+          value={role.name}
+          onChange={(event) =>
+            onUpdate({ name: event.target.value })
+          }
+          placeholder="Rol adı (ör. UI/UX Designer)"
+          className="w-full max-w-sm border-0 border-b border-transparent bg-transparent p-0 text-lg font-semibold text-[var(--color-text-primary)] outline-none focus:border-gray-300"
+        />
+
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+          aria-label="Rolü sil"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      {role.reason && (
+        <p className="mt-2 text-sm leading-6 text-gray-500">
+          {role.reason}
+        </p>
+      )}
+
+      <div className="mt-5 grid gap-6 sm:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Zorunlu beceriler
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {role.skills.map((skill, index) => (
+              <span key={skill} className={TAG}>
+                {skill}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onRemoveListItem("skills", index)
+                  }
+                  aria-label={`${skill} becerisini kaldır`}
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-2 flex gap-2">
+            <input
+              value={skillDraft}
+              onChange={(event) =>
+                setSkillDraft(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onAddListItem("skills", skillDraft);
+                  setSkillDraft("");
+                }
+              }}
+              placeholder="Beceri ekle..."
+              className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 text-sm outline-none focus:border-gray-400"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onAddListItem("skills", skillDraft);
+                setSkillDraft("");
+              }}
+              className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Ekle
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+            Tercih edilen beceriler
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {role.preferredSkills.map((skill, index) => (
+              <span key={skill} className={TAG}>
+                {skill}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onRemoveListItem("preferredSkills", index)
+                  }
+                  aria-label={`${skill} becerisini kaldır`}
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-2 flex gap-2">
+            <input
+              value={preferredDraft}
+              onChange={(event) =>
+                setPreferredDraft(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onAddListItem("preferredSkills", preferredDraft);
+                  setPreferredDraft("");
+                }
+              }}
+              placeholder="Beceri ekle..."
+              className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 text-sm outline-none focus:border-gray-400"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onAddListItem("preferredSkills", preferredDraft);
+                setPreferredDraft("");
+              }}
+              className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Ekle
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Bu rolden beklenen ihtiyaçlar
+        </p>
+
+        <ul className="space-y-2">
+          {role.responsibilities.map((item, index) => (
+            <li
+              key={item}
+              className="flex items-start justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700"
+            >
+              <span>{item}</span>
+              <button
+                type="button"
+                onClick={() =>
+                  onRemoveListItem("responsibilities", index)
+                }
+                aria-label="Sorumluluğu kaldır"
+                className="shrink-0 text-gray-400 hover:text-gray-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-2 flex gap-2">
+          <input
+            value={responsibilityDraft}
+            onChange={(event) =>
+              setResponsibilityDraft(event.target.value)
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                onAddListItem(
+                  "responsibilities",
+                  responsibilityDraft
+                );
+                setResponsibilityDraft("");
+              }
+            }}
+            placeholder="Sorumluluk ekle..."
+            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              onAddListItem(
+                "responsibilities",
+                responsibilityDraft
+              );
+              setResponsibilityDraft("");
+            }}
+            className="rounded-lg border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Ekle
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AnalysisStep({
-  analyzing,
-  analyzingPhase,
-  analysis,
-  advancedAnalysis,
-  proAnalysis,
-  aiUsage,
-  canUseDeepAnalysis,
-  analysisFailed,
-  analysisRetryable,
-  analysisError,
-  onRetryAnalysis,
+  matchingInProgress,
   roles,
   matching,
   teamAverageScore,
@@ -1502,21 +1884,7 @@ function AnalysisStep({
   onBack,
   onContinue,
 }: {
-  analyzing: boolean;
-  analyzingPhase:
-    | "analysis"
-    | "matching";
-  analysis:
-    | ProjectAnalysis
-    | null;
-  advancedAnalysis: PlusProjectAnalysis | null;
-  proAnalysis: ProProjectAnalysis | null;
-  aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null;
-  canUseDeepAnalysis: boolean;
-  analysisFailed: boolean;
-  analysisRetryable: boolean;
-  analysisError: string;
-  onRetryAnalysis: () => void;
+  matchingInProgress: boolean;
   roles: Role[];
   matching: RoleMatchGroup[];
   teamAverageScore: number;
@@ -1544,75 +1912,34 @@ function AnalysisStep({
     <section className="pt-10">
       <div className="mb-10">
         <p className={EYEBROW}>
-          03 / AI analizi & eşleşme
+          03 / AI eşleştirme
         </p>
 
         <h1 className={HEADING}>
-          {analyzing
-            ? "Projenizi analiz ediyoruz..."
+          {matchingInProgress
+            ? "Uygun freelancerlar aranıyor..."
             : "Projeniz için önerilerimiz"}
         </h1>
 
-        {!analyzing &&
-          analysis?.summary && (
-            <p className={SUBTEXT}>
-              {analysis.summary}
-            </p>
-          )}
+        <p className={SUBTEXT}>
+          {matchingInProgress
+            ? "Onayladığınız roller ve ihtiyaçlar üzerinden eşleştirme yapılıyor."
+            : "Onayladığınız ihtiyaçlara göre önerilen ekip ve freelancerlar."}
+        </p>
       </div>
 
-      {analyzing ? (
+      {matchingInProgress ? (
         <div
           className={`${CARD} p-10 text-center`}
         >
           <AnalyzingState />
 
           <p className="mt-4 text-sm text-gray-500">
-            {analyzingPhase ===
-            "analysis"
-              ? "Proje ihtiyaçlarınız değerlendiriliyor..."
-              : "Uygun ekip ve freelancerlar aranıyor..."}
+            Uygun ekip ve freelancerlar aranıyor...
           </p>
-        </div>
-      ) : analysisFailed ? (
-        <div className={`${CARD} p-10 text-center`}>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-            <AlertTriangle size={22} />
-          </div>
-          <h3 className="mt-4 text-lg font-semibold text-gray-900">
-            {analysisRetryable
-              ? "AI analizi şu anda kullanılamıyor"
-              : "Proje analizi tamamlanamadı"}
-          </h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
-            {analysisError ||
-              (analysisRetryable
-                ? "AI servisi geçici olarak yoğun. Lütfen birkaç dakika sonra tekrar deneyin."
-                : "Analiz sırasında bir sorun oluştu.")}
-          </p>
-          <p className="mx-auto mt-1 max-w-md text-xs text-gray-400">
-            Girdiğin proje bilgileri ve dosyalar korunuyor, baştan yazmana gerek yok.
-          </p>
-          <button
-            type="button"
-            onClick={onRetryAnalysis}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-          >
-            <RotateCcw size={16} />
-            Tekrar Dene
-          </button>
         </div>
       ) : (
         <>
-          {analysis && (
-            <AdvancedAnalysisSection
-              advancedAnalysis={advancedAnalysis}
-              proAnalysis={proAnalysis}
-              aiUsage={aiUsage}
-              canUseDeepAnalysis={canUseDeepAnalysis}
-            />
-          )}
-
           <div className="grid gap-5 lg:grid-cols-2">
             <MatchOptionCard
               eyebrow="AI önerisi"
@@ -1965,9 +2292,7 @@ function AnalysisStep({
 
         <button
           type="button"
-          disabled={
-            analyzing || !analysis
-          }
+          disabled={matchingInProgress}
           onClick={onContinue}
           className={BTN_PRIMARY}
         >
@@ -2278,6 +2603,51 @@ function BudgetPublishStep({
       ? getLongestDuration(roles)
       : projectDuration;
 
+  /**
+   * Platform hizmet bedeli oranı hard-code edilmez — mevcut, merkezi
+   * plan-bazlı komisyon sisteminden (bkz. supabase/migrations/
+   * 202609230002_plan_based_client_commission.sql:
+   * private.client_commission_rate() / public.my_commission_rate())
+   * okunur. RPC'ye erişilemezse (ör. geçici ağ hatası) mevcut sistemin
+   * halihazırdaki standart oranı olan %15 varsayılan olarak kullanılır —
+   * bu, oranı burada SABİTLEMEK değil, tek seferlik bir düşüş (fallback)
+   * güvenliğidir.
+   */
+  const [commissionRate, setCommissionRate] = useState<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const supabase = createClient();
+
+    supabase
+      .rpc("my_commission_rate")
+      .then(({ data, error }) => {
+        if (!active || error) return;
+
+        // PostgREST bir `numeric` skaler dönüşünü JSON number ya da
+        // (hassasiyeti korumak için) string olarak döndürebilir —
+        // ikisini de kabul et.
+        const rate = Number(data);
+
+        if (Number.isFinite(rate) && rate > 0 && rate < 1) {
+          setCommissionRate(rate);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const effectiveCommissionRate = commissionRate ?? 0.15;
+  const platformFee = Math.round(totalBudget * effectiveCommissionRate);
+  const totalWithFee = totalBudget + platformFee;
+
+  const roleSkillSummary = uniqueStrings(
+    roles.flatMap((role) => [...role.skills, ...role.preferredSkills])
+  );
+
   return (
     <section className="pt-10">
       <div className="mb-10">
@@ -2438,22 +2808,22 @@ function BudgetPublishStep({
           />
 
           <SummaryRow
-            label="Beceriler"
+            label="Roller"
             value={
-              brief.skills.length > 0
-                ? brief.skills.join(
-                    ", "
-                  )
+              roles.length > 0
+                ? roles
+                    .map((role) => role.name)
+                    .filter(Boolean)
+                    .join(", ")
                 : "—"
             }
           />
 
           <SummaryRow
-            label="Uzmanlıklar"
+            label="Beceriler"
             value={
-              brief.expertiseAreas
-                .length > 0
-                ? brief.expertiseAreas.join(
+              roleSkillSummary.length > 0
+                ? roleSkillSummary.join(
                     ", "
                   )
                 : "—"
@@ -2481,6 +2851,57 @@ function BudgetPublishStep({
           />
         </div>
       </div>
+
+      {totalBudget > 0 && (
+        <div
+          className={`${CARD} mt-6 overflow-hidden`}
+        >
+          <div className="border-b border-gray-100 px-6 py-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              Yayınlamadan önce ödeme özetini kontrol et
+            </p>
+          </div>
+
+          <div className="space-y-3 px-6 py-5">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">
+                Proje bütçesi
+              </span>
+              <span className="font-medium text-[#222]">
+                ₺{formatTL(totalBudget)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500">
+                CollaCrew hizmet bedeli (%
+                {Math.round(
+                  effectiveCommissionRate * 100
+                )}
+                )
+              </span>
+              <span className="font-medium text-[#222]">
+                +₺{formatTL(platformFee)}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+              <span className="text-sm font-semibold text-[#222]">
+                Tahmini toplam ödeme
+              </span>
+              <span className="text-xl font-semibold text-[var(--color-primary-600)]">
+                ₺{formatTL(totalWithFee)}
+              </span>
+            </div>
+
+            <p className="text-xs leading-5 text-gray-400">
+              Bu bir tahsilat değildir. CollaCrew'da ödeme
+              altyapısı devreye girdiğinde gerçek tahsilat ayrı
+              bir adımda onayınıza sunulacaktır.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-6">
         <button
