@@ -161,11 +161,15 @@ type Talent = {
   availability?: string;
   reason?: string;
   isEligibleForRole: boolean;
+  bio?: string;
+  experience?: string;
 };
 
 type RoleMatchGroup = {
   role: string;
   freelancers: Talent[];
+  /** Candidate pool değil — gerçekten eşiği geçen toplam aday sayısı. */
+  totalEligibleCount: number;
 };
 
 function uniqueStrings(values: unknown[]): string[] {
@@ -222,6 +226,30 @@ function parseDurationToDate(duration: string) {
   return date.toISOString();
 }
 
+/**
+ * Rol kartında "AI rapor yazmamalı" kuralı: reason gibi AI metinleri
+ * varsayılan olarak tek kısa cümleye indirilir. Ham veri (role.reason)
+ * hiçbir zaman değiştirilmez — sadece GÖSTERİM kısaltılır.
+ */
+function truncateToSentence(
+  text: string,
+  maxLength = 140
+): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+
+  const sentenceEndMatch = trimmed.match(/^.*?[.!?](\s|$)/);
+  let sentence = sentenceEndMatch
+    ? sentenceEndMatch[0].trim()
+    : trimmed;
+
+  if (sentence.length > maxLength) {
+    sentence = `${sentence.slice(0, maxLength - 1).trimEnd()}…`;
+  }
+
+  return sentence;
+}
+
 function getLongestDuration(roles: Role[]) {
   if (roles.length === 0) return "";
 
@@ -242,8 +270,10 @@ function getLongestDuration(roles: Role[]) {
 
 function normalizeMatchingResult(
   data: unknown
-): RoleMatchGroup[] {
-  if (!data || typeof data !== "object") return [];
+): { groups: RoleMatchGroup[]; canViewCandidates: boolean } {
+  if (!data || typeof data !== "object") {
+    return { groups: [], canViewCandidates: true };
+  }
 
   const response = data as Record<string, unknown>;
 
@@ -251,7 +281,9 @@ function normalizeMatchingResult(
     ? response.matching
     : [];
 
-  return matching
+  const canViewCandidates = response.canViewCandidates !== false;
+
+  const groups = matching
     .filter(
       (item): item is Record<string, unknown> =>
         typeof item === "object" && item !== null
@@ -310,11 +342,25 @@ function normalizeMatchingResult(
                 : undefined,
             isEligibleForRole:
               candidate.isEligibleForRole === true,
+            bio:
+              typeof candidate.bio === "string"
+                ? candidate.bio
+                : undefined,
+            experience:
+              typeof candidate.experience === "string"
+                ? candidate.experience
+                : undefined,
           }))
           .filter((talent) => talent.id),
+        totalEligibleCount:
+          typeof item.totalEligibleCount === "number"
+            ? item.totalEligibleCount
+            : 0,
       };
     })
     .filter((group) => group.role);
+
+  return { groups, canViewCandidates };
 }
 
 export default function CreateProjectPage() {
@@ -378,6 +424,15 @@ export default function CreateProjectPage() {
 
   const [matching, setMatching] =
     useState<RoleMatchGroup[]>([]);
+
+  /**
+   * Server'ın gerçek erişim kararı (lib/premium.ts →
+   * view_match_candidates). `usePremium().can(...)` sadece UI'da CTA
+   * metnini önceden doğru göstermek için kullanılır — asıl gizleme
+   * server tarafında zaten yapılmış olur (freelancers[] boş gelir).
+   */
+  const [canViewMatchCandidates, setCanViewMatchCandidates] =
+    useState(true);
 
   const [selectionMode, setSelectionMode] =
     useState<SelectionMode>("none");
@@ -795,9 +850,11 @@ export default function CreateProjectPage() {
         return;
       }
 
-      setMatching(
-        normalizeMatchingResult(matchData)
-      );
+      const { groups, canViewCandidates } =
+        normalizeMatchingResult(matchData);
+
+      setMatching(groups);
+      setCanViewMatchCandidates(canViewCandidates);
     } catch (err) {
       console.error(
         "Freelancer eşleştirme hatası:",
@@ -1200,6 +1257,9 @@ export default function CreateProjectPage() {
             matchingInProgress={matchingInProgress}
             roles={roles}
             matching={matching}
+            canViewMatchCandidates={
+              canViewMatchCandidates
+            }
             teamAverageScore={
               teamAverageScore
             }
@@ -1671,6 +1731,33 @@ function RoleNeedsCard({
   const [preferredDraft, setPreferredDraft] = useState("");
   const [responsibilityDraft, setResponsibilityDraft] = useState("");
 
+  /**
+   * Rol kartı ilk bakışta rapor gibi görünmemeli: her liste varsayılan
+   * olarak kısıtlı sayıda madde gösterir, "+N daha" ile tamamı
+   * (düzenleme dahil) açılır. Bu sadece GÖRÜNÜM sınırı — role.skills
+   * / preferredSkills / responsibilities verisi hiç kısaltılmaz.
+   */
+  const [showAllSkills, setShowAllSkills] = useState(false);
+  const [showAllPreferred, setShowAllPreferred] = useState(false);
+  const [showAllResponsibilities, setShowAllResponsibilities] =
+    useState(false);
+
+  const MAX_SKILLS = 5;
+  const MAX_PREFERRED = 3;
+  const MAX_RESPONSIBILITIES = 4;
+
+  const visibleSkills = showAllSkills
+    ? role.skills
+    : role.skills.slice(0, MAX_SKILLS);
+
+  const visiblePreferred = showAllPreferred
+    ? role.preferredSkills
+    : role.preferredSkills.slice(0, MAX_PREFERRED);
+
+  const visibleResponsibilities = showAllResponsibilities
+    ? role.responsibilities
+    : role.responsibilities.slice(0, MAX_RESPONSIBILITIES);
+
   return (
     <div className={`${CARD} p-6 sm:p-8`}>
       <div className="flex items-start justify-between gap-4">
@@ -1695,18 +1782,18 @@ function RoleNeedsCard({
 
       {role.reason && (
         <p className="mt-2 text-sm leading-6 text-gray-500">
-          {role.reason}
+          {truncateToSentence(role.reason)}
         </p>
       )}
 
       <div className="mt-5 grid gap-6 sm:grid-cols-2">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Zorunlu beceriler
+            Gerekli beceriler
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            {role.skills.map((skill, index) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {visibleSkills.map((skill, index) => (
               <span key={skill} className={TAG}>
                 {skill}
                 <button
@@ -1721,6 +1808,17 @@ function RoleNeedsCard({
                 </button>
               </span>
             ))}
+
+            {!showAllSkills &&
+              role.skills.length > MAX_SKILLS && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSkills(true)}
+                  className="text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+                >
+                  + {role.skills.length - MAX_SKILLS} daha
+                </button>
+              )}
           </div>
 
           <div className="mt-2 flex gap-2">
@@ -1734,6 +1832,7 @@ function RoleNeedsCard({
                   event.preventDefault();
                   onAddListItem("skills", skillDraft);
                   setSkillDraft("");
+                  setShowAllSkills(true);
                 }
               }}
               placeholder="Beceri ekle..."
@@ -1744,6 +1843,7 @@ function RoleNeedsCard({
               onClick={() => {
                 onAddListItem("skills", skillDraft);
                 setSkillDraft("");
+                setShowAllSkills(true);
               }}
               className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
             >
@@ -1754,11 +1854,11 @@ function RoleNeedsCard({
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-            Tercih edilen beceriler
+            Tercih edilen
           </p>
 
-          <div className="flex flex-wrap gap-2">
-            {role.preferredSkills.map((skill, index) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {visiblePreferred.map((skill, index) => (
               <span key={skill} className={TAG}>
                 {skill}
                 <button
@@ -1773,6 +1873,19 @@ function RoleNeedsCard({
                 </button>
               </span>
             ))}
+
+            {!showAllPreferred &&
+              role.preferredSkills.length > MAX_PREFERRED && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPreferred(true)}
+                  className="text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+                >
+                  +{" "}
+                  {role.preferredSkills.length - MAX_PREFERRED}{" "}
+                  daha
+                </button>
+              )}
           </div>
 
           <div className="mt-2 flex gap-2">
@@ -1786,6 +1899,7 @@ function RoleNeedsCard({
                   event.preventDefault();
                   onAddListItem("preferredSkills", preferredDraft);
                   setPreferredDraft("");
+                  setShowAllPreferred(true);
                 }
               }}
               placeholder="Beceri ekle..."
@@ -1796,6 +1910,7 @@ function RoleNeedsCard({
               onClick={() => {
                 onAddListItem("preferredSkills", preferredDraft);
                 setPreferredDraft("");
+                setShowAllPreferred(true);
               }}
               className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
             >
@@ -1807,11 +1922,11 @@ function RoleNeedsCard({
 
       <div className="mt-6">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
-          Bu rolden beklenen ihtiyaçlar
+          Beklentiler
         </p>
 
         <ul className="space-y-2">
-          {role.responsibilities.map((item, index) => (
+          {visibleResponsibilities.map((item, index) => (
             <li
               key={item}
               className="flex items-start justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700"
@@ -1831,6 +1946,23 @@ function RoleNeedsCard({
           ))}
         </ul>
 
+        {!showAllResponsibilities &&
+          role.responsibilities.length >
+            MAX_RESPONSIBILITIES && (
+            <button
+              type="button"
+              onClick={() =>
+                setShowAllResponsibilities(true)
+              }
+              className="mt-2 text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+            >
+              +{" "}
+              {role.responsibilities.length -
+                MAX_RESPONSIBILITIES}{" "}
+              daha
+            </button>
+          )}
+
         <div className="mt-2 flex gap-2">
           <input
             value={responsibilityDraft}
@@ -1845,6 +1977,7 @@ function RoleNeedsCard({
                   responsibilityDraft
                 );
                 setResponsibilityDraft("");
+                setShowAllResponsibilities(true);
               }
             }}
             placeholder="Sorumluluk ekle..."
@@ -1858,6 +1991,7 @@ function RoleNeedsCard({
                 responsibilityDraft
               );
               setResponsibilityDraft("");
+              setShowAllResponsibilities(true);
             }}
             className="rounded-lg border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50"
           >
@@ -1873,6 +2007,7 @@ function AnalysisStep({
   matchingInProgress,
   roles,
   matching,
+  canViewMatchCandidates,
   teamAverageScore,
   bestOverallFreelancer,
   selectionMode,
@@ -1887,6 +2022,7 @@ function AnalysisStep({
   matchingInProgress: boolean;
   roles: Role[];
   matching: RoleMatchGroup[];
+  canViewMatchCandidates: boolean;
   teamAverageScore: number;
   bestOverallFreelancer:
     | Talent
@@ -1912,19 +2048,19 @@ function AnalysisStep({
     <section className="pt-10">
       <div className="mb-10">
         <p className={EYEBROW}>
-          03 / AI eşleştirme
+          03 / Eşleşmeler
         </p>
 
         <h1 className={HEADING}>
           {matchingInProgress
-            ? "Uygun freelancerlar aranıyor..."
-            : "Projeniz için önerilerimiz"}
+            ? "Uygun freelancerları buluyoruz..."
+            : "Eşleşmeler hazır"}
         </h1>
 
         <p className={SUBTEXT}>
           {matchingInProgress
-            ? "Onayladığınız roller ve ihtiyaçlar üzerinden eşleştirme yapılıyor."
-            : "Onayladığınız ihtiyaçlara göre önerilen ekip ve freelancerlar."}
+            ? "İhtiyaçlarınıza uygun freelancerları buluyoruz."
+            : "İhtiyaçlarınıza uygun freelancerları bulduk."}
         </p>
       </div>
 
@@ -1935,9 +2071,11 @@ function AnalysisStep({
           <AnalyzingState />
 
           <p className="mt-4 text-sm text-gray-500">
-            Uygun ekip ve freelancerlar aranıyor...
+            İhtiyaçlarınıza uygun freelancerları buluyoruz...
           </p>
         </div>
+      ) : !canViewMatchCandidates ? (
+        <MatchPaywallCard matching={matching} />
       ) : (
         <>
           <div className="grid gap-5 lg:grid-cols-2">
@@ -2025,145 +2163,29 @@ function AnalysisStep({
                     </p>
                   </div>
 
-                  {roles.map((role) => {
-                    const candidates = (
-                      matching.find(
-                        (group) =>
-                          group.role ===
-                          role.name
-                      )?.freelancers ?? []
-                    ).slice(0, 3);
-
-                    if (
-                      candidates.length ===
-                      0
-                    ) {
-                      return null;
-                    }
-
-                    return (
-                      <div
-                        key={role.id}
-                      >
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium text-[#222]">
-                            {role.name}
-                          </p>
-
-                          <span className="text-xs text-gray-400">
-                            {(
-                              selectedTeamMatches[
-                                role.id
-                              ] ?? []
-                            ).length}
-                            /
-                            {
-                              role.memberCount
-                            }
-                          </span>
-                        </div>
-
-                        <div className="mt-2 space-y-2">
-                          {candidates.map(
-                            (candidate) => {
-                              const picked =
-                                (
-                                  selectedTeamMatches[
-                                    role.id
-                                  ] ?? []
-                                ).some(
-                                  (item) =>
-                                    item.id ===
-                                    candidate.id
-                                );
-
-                              const disabled =
-                                !picked &&
-                                (
-                                  selectedTeamMatches[
-                                    role.id
-                                  ] ?? []
-                                ).length >=
-                                  role.memberCount;
-
-                              return (
-                                <button
-                                  key={
-                                    candidate.id
-                                  }
-                                  type="button"
-                                  onClick={(
-                                    event
-                                  ) => {
-                                    event.stopPropagation();
-
-                                    if (
-                                      disabled
-                                    ) {
-                                      return;
-                                    }
-
-                                    onToggleRoleCandidate(
-                                      role,
-                                      candidate
-                                    );
-                                  }}
-                                  className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
-                                    picked
-                                      ? "border-[#222] bg-gray-50"
-                                      : "border-gray-200 bg-white hover:border-gray-300"
-                                  } ${
-                                    disabled
-                                      ? "cursor-not-allowed opacity-40"
-                                      : ""
-                                  }`}
-                                >
-                                  <span className="flex min-w-0 items-center gap-3">
-                                    <RadioDot
-                                      checked={
-                                        picked
-                                      }
-                                    />
-
-                                    <span className="min-w-0">
-                                      <span className="block truncate text-sm font-medium text-[#222]">
-                                        {
-                                          candidate.name
-                                        }
-                                      </span>
-
-                                      {candidate.title && (
-                                        <span className="block truncate text-xs text-gray-500">
-                                          {
-                                            candidate.title
-                                          }
-                                        </span>
-                                      )}
-                                    </span>
-                                  </span>
-
-                                  <span className="flex shrink-0 flex-col items-end gap-0.5">
-                                    <span className="text-xs font-semibold text-[#222]">
-                                      %
-                                      {Math.round(
-                                        candidate.score
-                                      )}
-                                    </span>
-
-                                    {!candidate.isEligibleForRole && (
-                                      <span className="text-xs font-medium text-gray-400">
-                                        Rolle uyumlu değil
-                                      </span>
-                                    )}
-                                  </span>
-                                </button>
-                              );
-                            }
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {roles.map((role) => (
+                    <RoleCandidatePicker
+                      key={role.id}
+                      role={role}
+                      freelancers={
+                        matching.find(
+                          (group) =>
+                            group.role === role.name
+                        )?.freelancers ?? []
+                      }
+                      selected={
+                        selectedTeamMatches[
+                          role.id
+                        ] ?? []
+                      }
+                      onToggle={(candidate) =>
+                        onToggleRoleCandidate(
+                          role,
+                          candidate
+                        )
+                      }
+                    />
+                  ))}
                 </div>
               )}
             </MatchOptionCard>
@@ -2198,11 +2220,12 @@ function AnalysisStep({
                     </div>
 
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-[#222]">
-                        {
-                          bestOverallFreelancer.name
+                      <FreelancerHoverCard
+                        talent={
+                          bestOverallFreelancer
                         }
-                      </p>
+                        nameClassName="block truncate text-sm font-semibold text-[#222]"
+                      />
 
                       {bestOverallFreelancer.title && (
                         <p className="truncate text-xs text-gray-500">
@@ -2552,8 +2575,253 @@ function MatchBadge({
       </span>
 
       <span className="text-xs text-gray-500">
-        Match
+        uyum
       </span>
+    </span>
+  );
+}
+
+/**
+ * Free plan client için: eşleşme çalıştı ve gerçek aday sayısı gerçek
+ * (uydurma değil, matchTalent()'ın totalEligibleCount'undan gelir) —
+ * ama isim/profil kartları Plus'a özel. Spec: "cezalandırıcı" bir
+ * boş ekran yerine, çalıştığını gösteren + net CTA'lı bir kart.
+ */
+function MatchPaywallCard({
+  matching,
+}: {
+  matching: RoleMatchGroup[];
+}) {
+  const rolesWithMatches = matching.filter(
+    (group) => group.totalEligibleCount > 0
+  );
+
+  if (rolesWithMatches.length === 0) {
+    return (
+      <div className={`${CARD} p-8 text-center`}>
+        <p className="text-sm text-gray-500">
+          Bu proje için henüz uygun freelancer bulamadık.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${CARD} p-8`}>
+      <p className="text-sm font-semibold text-[#222]">
+        Eşleşmeler hazır
+      </p>
+
+      <div className="mt-3 space-y-1.5">
+        {rolesWithMatches.map((group) => (
+          <p
+            key={group.role}
+            className="text-sm text-gray-600"
+          >
+            <span className="font-medium text-[#222]">
+              {group.role}
+            </span>{" "}
+            için {group.totalEligibleCount} uygun
+            freelancer bulduk.
+          </p>
+        ))}
+      </div>
+
+      <p className="mt-4 text-sm text-gray-500">
+        Uygun freelancerları görmek için Plus&apos;a
+        geçin.
+      </p>
+
+      <a
+        href="/premium"
+        className={`${BTN_PRIMARY} mt-4 inline-flex`}
+      >
+        Plus&apos;ı keşfet
+      </a>
+    </div>
+  );
+}
+
+/**
+ * Bir rol için aday listesi. Sunucu zaten en fazla 20 uygun aday
+ * gönderir (bkz. MAX_RETURNED_CANDIDATES_PER_ROLE, lib/ai/match-talent.ts)
+ * — burada da ilk bakışta sadece ilk 3 gösterilir, "Tümünü gör" ile
+ * geri kalanı (aynı, zaten çekilmiş listeden) açılır. Ayrı bir
+ * pagination isteği YOK; ölçek büyüdükçe bu sınır API tarafında
+ * korunur.
+ */
+function RoleCandidatePicker({
+  role,
+  freelancers,
+  selected,
+  onToggle,
+}: {
+  role: Role;
+  freelancers: Talent[];
+  selected: Talent[];
+  onToggle: (talent: Talent) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const DEFAULT_VISIBLE = 3;
+
+  if (freelancers.length === 0) {
+    return null;
+  }
+
+  const visible = showAll
+    ? freelancers
+    : freelancers.slice(0, DEFAULT_VISIBLE);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-[#222]">
+          {role.name}
+        </p>
+
+        <span className="text-xs text-gray-400">
+          {selected.length}/{role.memberCount}
+        </span>
+      </div>
+
+      <div className="mt-2 space-y-2">
+        {visible.map((candidate) => {
+          const picked = selected.some(
+            (item) => item.id === candidate.id
+          );
+
+          const disabled =
+            !picked && selected.length >= role.memberCount;
+
+          return (
+            <button
+              key={candidate.id}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+
+                if (disabled) {
+                  return;
+                }
+
+                onToggle(candidate);
+              }}
+              className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                picked
+                  ? "border-[#222] bg-gray-50"
+                  : "border-gray-200 bg-white hover:border-gray-300"
+              } ${
+                disabled
+                  ? "cursor-not-allowed opacity-40"
+                  : ""
+              }`}
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <RadioDot checked={picked} />
+
+                <span className="min-w-0">
+                  <FreelancerHoverCard talent={candidate} />
+
+                  {candidate.title && (
+                    <span className="block truncate text-xs text-gray-500">
+                      {candidate.title}
+                    </span>
+                  )}
+                </span>
+              </span>
+
+              <span className="shrink-0 text-xs font-semibold text-[#222]">
+                %{Math.round(candidate.score)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!showAll && freelancers.length > DEFAULT_VISIBLE && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setShowAll(true);
+          }}
+          className="mt-2 text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+        >
+          Tümünü gör ({freelancers.length})
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * İsme hover/tap ile açılan küçük bilgi kartı. SADECE Supabase'te
+ * gerçekten var olan alanlar gösterilir (title/experience/bio) —
+ * tamamlanan proje sayısı, puan, deneyim yılı gibi alanlar şemada
+ * yok, bu yüzden burada da UYDURULMAZ.
+ */
+function FreelancerHoverCard({
+  talent,
+  nameClassName,
+}: {
+  talent: Talent;
+  nameClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const hasInfo = Boolean(
+    talent.title || talent.experience || talent.bio
+  );
+
+  return (
+    <span
+      className="relative inline-block max-w-full"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <span
+        role={hasInfo ? "button" : undefined}
+        tabIndex={hasInfo ? 0 : undefined}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (hasInfo) setOpen((prev) => !prev);
+        }}
+        className={
+          nameClassName ??
+          "block truncate text-sm font-medium text-[#222]"
+        }
+      >
+        {talent.name}
+      </span>
+
+      {open && hasInfo && (
+        <div
+          onClick={(event) => event.stopPropagation()}
+          className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-lg"
+        >
+          <p className="text-sm font-semibold text-[#222]">
+            {talent.name}
+          </p>
+
+          {talent.title && (
+            <p className="mt-0.5 text-xs text-gray-500">
+              {talent.title}
+            </p>
+          )}
+
+          {talent.experience && (
+            <p className="mt-2 text-xs text-gray-600">
+              Deneyim: {talent.experience}
+            </p>
+          )}
+
+          {talent.bio && (
+            <p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-600">
+              {talent.bio}
+            </p>
+          )}
+        </div>
+      )}
     </span>
   );
 }
@@ -3230,7 +3498,7 @@ function StepIndicator({
     },
     {
       id: "analysis",
-      label: "AI & Eşleşme",
+      label: "Eşleşmeler",
     },
     {
       id: "budget",

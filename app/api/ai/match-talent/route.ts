@@ -9,6 +9,7 @@ import {
 import type { ProjectAnalysis } from "@/types/ai";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, rateLimitKey, RATE_LIMIT_MESSAGE } from "@/lib/rateLimit";
+import { getUserAccessContext, canUseFeature } from "@/lib/premium";
 
 export async function POST(request: Request) {
   try {
@@ -191,8 +192,34 @@ export async function POST(request: Request) {
       body.roles
     );
 
+    /*
+     * FREE / PLUS / PRO ERİŞİMİ
+     * ----------------------------------------------------
+     * Free client eşleşmenin gerçekten çalıştığını ve gerçek uygun
+     * aday sayısını (totalEligibleCount) her zaman görür — sadece
+     * aday isim/profil detayları (freelancers[]) Plus/Pro'ya özeldir.
+     * Free kullanıcıya gereksiz freelancer detayı göndermemek için
+     * (performans + gizlilik) freelancers burada, response
+     * oluşturulmadan önce sunucu tarafında boşaltılır.
+     */
+    const access = await getUserAccessContext(supabase);
+    const canViewCandidates = canUseFeature(
+      access,
+      "view_match_candidates"
+    );
+
+    const responseMatching = matching.map((roleMatching) => ({
+      role: roleMatching.role,
+      totalEligibleCount: roleMatching.totalEligibleCount,
+      memberCount: roleMatching.memberCount,
+      budgetPerPerson: roleMatching.budgetPerPerson,
+      budget: roleMatching.budget,
+      freelancers: canViewCandidates ? roleMatching.freelancers : [],
+    }));
+
     return NextResponse.json({
-      matching,
+      matching: responseMatching,
+      canViewCandidates,
     });
   } catch (error) {
     /*

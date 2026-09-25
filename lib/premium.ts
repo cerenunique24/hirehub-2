@@ -188,6 +188,7 @@ export type FeatureKey =
   | "project_analytics"
   | "advanced_project_analysis"
   | "ai_analysis_extra_quota"
+  | "view_match_candidates"
   // Client — Pro
   | "advanced_ai_shortlist"
   | "backup_talent_suggestions"
@@ -244,6 +245,14 @@ export const FEATURE_MATRIX: Record<FeatureKey, FeatureRule> = {
   project_analytics: { role: "client", minPlan: "plus", label: "Project Analytics" },
   advanced_project_analysis: { role: "client", minPlan: "plus", label: "Kapsamlı Proje/Rol/Skill Analizi" },
   ai_analysis_extra_quota: { role: "client", minPlan: "plus", label: "Aylık Ek AI Analiz Hakkı" },
+  /**
+   * Client_basic_matching (yukarıda, free) eşleşmenin ÇALIŞTIĞINI ve
+   * gerçek eşleşme SAYISINI görmeyi asla kısıtlamaz. Bu ayrı feature
+   * ise eşleşen freelancerların isim/profil/kart DETAYLARINI görmeyi
+   * kısıtlar — proje oluşturma akışının "Eşleşmeler" adımında
+   * kullanılır (bkz. app/api/ai/match-talent/route.ts).
+   */
+  view_match_candidates: { role: "client", minPlan: "plus", label: "Eşleşen Freelancer Profilleri" },
 
   advanced_ai_shortlist: { role: "client", minPlan: "pro", label: "Gelişmiş AI Shortlist" },
   backup_talent_suggestions: { role: "client", minPlan: "pro", label: "Backup Talent Suggestions" },

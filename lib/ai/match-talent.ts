@@ -16,6 +16,15 @@ import { reviewMatchPairs, type SemanticPair } from "@/lib/ai/semanticMatch";
 const SEMANTIC_REVIEW_MIN_SCORE = 15;
 const SEMANTIC_REVIEW_MAX_SCORE = 65;
 
+/**
+ * Candidate pool (getFreelancerProfiles ile çekilen TÜM freelancerlar)
+ * ile client'a döndürülen "final" liste ayrı kavramlardır. Binlerce
+ * freelancer olsa bile response'a rol başına en fazla bu kadar aday
+ * (zaten skora göre sıralanmış, sadece isEligibleForRole===true olanlar
+ * arasından) gönderilir — bkz. matchTalent() sonundaki filtre adımı.
+ */
+const MAX_RETURNED_CANDIDATES_PER_ROLE = 20;
+
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -93,6 +102,15 @@ export type TalentMatch = {
   memberCount?: number;
   budgetPerPerson?: number;
   budget?: number;
+  /**
+   * Hover info card için — sadece Supabase'te GERÇEKTEN var olan
+   * profil alanları. Uydurma/örnek sayı (tamamlanan proje, puan vb.)
+   * YOK çünkü şemada böyle bir alan yok; eksikse card o satırı hiç
+   * göstermemeli (bkz. app/client/create-project/page.tsx FreelancerHoverCard).
+   */
+  bio?: string;
+  /** profiles.experience — serbest metin deneyim aralığı (ör. "3-5 yıl"). */
+  experience?: string;
 
   /**
    * Freelancer → project matching ile AYNI deterministic helper
@@ -120,6 +138,14 @@ export type RoleMatchInput = {
 export type RoleMatching = {
   role: string;
   freelancers: TalentMatch[];
+  /**
+   * Bu rol için isEligibleForRole===true olan (candidate pool DEĞİL,
+   * gerçek eşiği geçen) toplam aday sayısı. `freelancers` bu sayının
+   * ilk MAX_RETURNED_CANDIDATES_PER_ROLE kadarını içerir — client
+   * "X uygun freelancer" derken candidate pool boyutunu değil bu
+   * sayıyı kullanmalı.
+   */
+  totalEligibleCount: number;
   memberCount?: number;
   budgetPerPerson?: number;
   budget?: number;
@@ -337,6 +363,12 @@ export async function matchTalent(
         budget,
         isEligibleForRole:
           eligibility.isEligibleForRole,
+        bio: profile.bio || undefined,
+        experience:
+          typeof profile.experience === "string" &&
+          profile.experience.trim()
+            ? profile.experience.trim()
+            : undefined,
       };
 
       freelancers.push(talentMatch);
@@ -402,6 +434,8 @@ export async function matchTalent(
         deduplicateMatches(
           freelancers
         ),
+      // Semantic review sonrası aşağıda yeniden hesaplanır.
+      totalEligibleCount: 0,
       memberCount,
       budgetPerPerson,
       budget,
@@ -512,12 +546,34 @@ export async function matchTalent(
     }
   }
 
+  /**
+   * FINAL THRESHOLD
+   * ----------------------------------------------------
+   * Candidate pool'da olmak (score > 0) önerilecek kişi olmak
+   * anlamına gelmez. Role uygun olmayan (family uyumsuz veya skor
+   * ELIGIBILITY_MATCH_THRESHOLD altında) adaylar burada elenir —
+   * "X uygun freelancer" client'a gösterilen sayı ve liste artık bu
+   * elemeden SONRAKİ haldir, ham candidate pool boyutu değil.
+   */
+  for (const roleMatching of roleMatchings) {
+    const eligible = roleMatching.freelancers.filter(
+      (freelancer) => freelancer.isEligibleForRole
+    );
+
+    roleMatching.totalEligibleCount = eligible.length;
+    roleMatching.freelancers = eligible.slice(
+      0,
+      MAX_RETURNED_CANDIDATES_PER_ROLE
+    );
+  }
+
   if (process.env.NODE_ENV === "development") {
     console.log(
       "[MATCH DEBUG] finalMatches per role:",
       roleMatchings.map((role) => ({
         role: role.role,
-        count: role.freelancers.length,
+        totalEligibleCount: role.totalEligibleCount,
+        returned: role.freelancers.length,
       }))
     );
   }
@@ -2416,7 +2472,11 @@ function buildRolesToMatch(
 
       budget: 0,
 
-      responsibilities: [],
+      responsibilities:
+        uniqueStrings(
+          role.responsibilities ??
+            []
+        ),
 
       skills:
         uniqueStrings(
@@ -2429,6 +2489,11 @@ function buildRolesToMatch(
           role.preferredSkills ??
             []
         ),
+
+      reason:
+        typeof role.reason === "string"
+          ? role.reason
+          : undefined,
     }));
 }
 
