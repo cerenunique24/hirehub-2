@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# release hygiene
+*.backup
+supabase/.temp/
+.tmp_audit/
+.tmp_build.log

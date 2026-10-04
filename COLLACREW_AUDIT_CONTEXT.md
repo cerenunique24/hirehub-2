@@ -1,4 +1,4 @@
-# HireHub / CollaCrew — Technical Audit Context
+# CollaCrew — Technical Audit Context
 
 **Purpose**: a factual snapshot of the current implementation, for another developer/AI to read before making changes. Read-only audit — no application code was modified to produce this document. Severity tags used throughout: **CRITICAL / HIGH / MEDIUM / LOW / INCOMPLETE / INCONSISTENT**.
 
