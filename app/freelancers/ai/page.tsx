@@ -40,6 +40,11 @@ export default function FreelancerAIPage() {
           return;
         }
         setWorkspace(data as FreelancerWorkspace);
+      } catch (err) {
+        console.error("CollaCrew AI workspace fetch error:", err);
+        if (!cancelled) {
+          setError("CollaCrew AI yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

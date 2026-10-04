@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock3,
+  Download,
   FileText,
   Loader2,
   MessageCircle,
@@ -23,20 +25,33 @@ import {
   activateMilestone,
   createMilestone,
   deleteMilestone,
+  fetchDeliveryFiles,
+  fetchMilestoneDeliveries,
   fetchMilestoneEvents,
   fetchMilestones,
   reviewMilestone,
   submitMilestone,
+  type DeliveryFile,
   type Milestone,
+  type MilestoneDelivery,
   type MilestoneEvent,
 } from "@/lib/projects/milestones";
-import { notifyUsers } from "@/lib/notifications";
+import {
+  notifyDeliveryApproved,
+  notifyDeliverySubmitted,
+  notifyProjectCompleted,
+  notifyRevisionDeliverySubmitted,
+  notifyRevisionRequested,
+} from "@/lib/notifications";
+import ProjectOperationsPanel from "@/components/projects/ProjectOperationsPanel";
+import { DEADLINE_STATUS_LABEL, getDeadlineStatus, type DeadlineStatus } from "@/lib/utils/deadline";
+import { paymentStatusLabel } from "@/lib/payments/status";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 export type WorkroomTeamMember = {
   teamMemberId: string;
   id: string;
   first_name: string | null;
-  last_name: string | null;
   avatar_url: string | null;
   memberRole: string;
   proposalId: string | null;
@@ -49,9 +64,12 @@ export type WorkroomProject = {
   budget: number | null;
   status: string | null;
   deadline: string | null;
+  /** Client'ın projeyi başlatırken onayladığı "gereksinimler hazır" bilgisi. */
+  requirements_confirmed_at?: string | null;
+  requirements_note?: string | null;
 };
 
-type Tab = "overview" | "milestones" | "team" | "files" | "messages" | "deliveries";
+type Tab = "overview" | "milestones" | "team" | "files" | "messages" | "deliveries" | "operations";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "overview", label: "Genel Bakış" },
@@ -60,7 +78,20 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "files", label: "Dosyalar" },
   { id: "messages", label: "Mesajlar" },
   { id: "deliveries", label: "Teslimler" },
+  { id: "operations", label: "Yönetim" },
 ];
+
+const DEADLINE_STATUS_CLASS: Record<DeadlineStatus, string> = {
+  on_track: "bg-green-50 text-green-700",
+  due_soon: "bg-amber-50 text-amber-700",
+  overdue: "bg-red-50 text-red-700",
+};
+
+const DELIVERY_STATUS_LABEL: Record<MilestoneDelivery["status"], string> = {
+  submitted: "İncelemede",
+  revision_requested: "Revizyon istendi",
+  approved: "Onaylandı",
+};
 
 const MILESTONE_STATUS_LABEL: Record<Milestone["status"], string> = {
   pending: "Bekliyor",
@@ -104,7 +135,7 @@ function formatDateTime(value: string) {
 }
 
 function getFullName(member: WorkroomTeamMember) {
-  const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim();
+  const name = publicDisplayName(member, "");
   return name || "Freelancer";
 }
 
@@ -120,6 +151,7 @@ export default function ProjectWorkroom({
   viewerRole,
   messagesBasePath,
   onProjectCompleted,
+  onProjectChanged,
   isTeamProject = false,
   coalitionId = null,
 }: {
@@ -129,6 +161,8 @@ export default function ProjectWorkroom({
   /** Ör. "/client/messages" ya da "/freelancers/messages" */
   messagesBasePath: string;
   onProjectCompleted?: () => void;
+  /** İptal / uyuşmazlık / değerlendirme gibi proje durumunu etkileyebilecek işlemlerden sonra sayfayı yenilemek için. */
+  onProjectChanged?: () => void;
   /**
    * true ise (birden fazla rol/freelancer gerektiren proje) her aşama bir
    * freelancer_id'ye bağlıdır ve her freelancer yalnızca kendi rolünün
@@ -151,6 +185,8 @@ export default function ProjectWorkroom({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [events, setEvents] = useState<MilestoneEvent[]>([]);
+  const [deliveries, setDeliveries] = useState<MilestoneDelivery[]>([]);
+  const [deliveryFiles, setDeliveryFiles] = useState<DeliveryFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -186,8 +222,46 @@ export default function ProjectWorkroom({
       setEvents((eventData ?? []) as MilestoneEvent[]);
     }
 
+    const { data: deliveryData } = await fetchMilestoneDeliveries(supabase, project.id);
+    const loadedDeliveries = (deliveryData ?? []) as MilestoneDelivery[];
+    setDeliveries(loadedDeliveries);
+
+    const { data: fileData } = await fetchDeliveryFiles(
+      supabase,
+      loadedDeliveries.map((d) => d.id)
+    );
+    setDeliveryFiles((fileData ?? []) as DeliveryFile[]);
+
     setLoading(false);
   }, [supabase, project.id]);
+
+  // Yaklaşan / geciken aşamalar için bildirim üretir; sunucu tarafında
+  // dedupe_key ile mükerrer bildirim engellenir.
+  useEffect(() => {
+    if (project.status !== "in_progress") return;
+    void supabase.rpc("sync_deadline_notifications", { p_project_id: project.id });
+  }, [supabase, project.id, project.status]);
+
+  async function downloadDeliveryFile(file: DeliveryFile) {
+    const { data, error: urlError } = await supabase.storage
+      .from("project-files")
+      .createSignedUrl(file.file_path, 60 * 10);
+
+    if (urlError || !data?.signedUrl) {
+      setError("Dosya açılamadı. Lütfen tekrar dene.");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  }
+
+  const projectActive = project.status === "in_progress";
+  const projectClosedMessage =
+    project.status === "cancelled"
+      ? "Bu proje iptal edildi; yeni teslim veya işlem yapılamaz."
+      : project.status === "completed"
+        ? "Bu proje tamamlandı; aşamalar artık değiştirilemez."
+        : null;
 
   useEffect(() => {
     void loadMilestones();
@@ -214,12 +288,12 @@ export default function ProjectWorkroom({
 
     supabase
       .from("profiles")
-      .select("first_name, last_name")
+      .select("first_name")
       .eq("id", project.client_id)
       .maybeSingle()
       .then(({ data }) => {
         if (!active || !data) return;
-        setClientName([data.first_name, data.last_name].filter(Boolean).join(" ") || "Proje sahibi");
+        setClientName(publicDisplayName(data, "Proje sahibi"));
       });
 
     return () => {
@@ -265,12 +339,70 @@ export default function ProjectWorkroom({
   const approvedCount = milestones.filter((m) => m.status === "approved").length;
   const progress = milestones.length > 0 ? Math.round((approvedCount / milestones.length) * 100) : 0;
 
+  // "Tüm aşamalar tamamlandı" — "Proje tamamlandı" değildir. Team project'te
+  // her ekip üyesinin EN AZ bir aşaması olmalı ve hepsi onaylanmış olmalı;
+  // tek freelancer projede basitçe tüm liste onaylı olmalı. Hiç aşama yoksa
+  // (proje henüz başlamamış/aşama tanımlanmamış) asla tamamlanamaz.
+  const allMilestonesApproved =
+    milestones.length > 0 &&
+    (isTeamProject
+      ? teamMembers.length > 0 &&
+        teamMembers.every((member) => {
+          const memberMilestones = milestones.filter((m) => m.freelancer_id === member.id);
+          return memberMilestones.length > 0 && memberMilestones.every((m) => m.status === "approved");
+        })
+      : milestones.every((m) => m.status === "approved"));
+
+  async function handleCompleteProject() {
+    if (!window.confirm("Tüm aşamalar onaylandı. Projeyi tamamlamak istediğine emin misin? Bu işlem geri alınamaz.")) {
+      return;
+    }
+
+    setBusyId("complete-project");
+    setError("");
+
+    const { data: completedRow, error: completeError } = await supabase
+      .from("projects")
+      .update({ status: "completed" })
+      .eq("id", project.id)
+      .eq("status", "in_progress")
+      .select("id")
+      .maybeSingle();
+
+    setBusyId(null);
+
+    if (completeError) {
+      setError(
+        completeError.code === "P0001" ? completeError.message : "Proje tamamlanırken bir hata oluştu."
+      );
+      return;
+    }
+
+    // completedRow yoksa proje zaten tamamlanmıştı (ör. ikinci tıklama,
+    // bayat sekme) — güvenli no-op: tekrar bildirim göndermeye kalkışma.
+    if (!completedRow) {
+      onProjectCompleted?.();
+      return;
+    }
+
+    await notifyProjectCompleted(supabase, {
+      freelancerIds: teamMembers.map((member) => member.id),
+      projectId: project.id,
+      projectTitle: project.title,
+    });
+
+    onProjectCompleted?.();
+  }
+
   function eventsFor(milestoneId: string) {
     return events.filter((e) => e.milestone_id === milestoneId);
   }
 
-  function revisionCountFor(milestoneId: string) {
-    return eventsFor(milestoneId).filter((e) => e.event_type === "revision_requested").length;
+  function revisionCountFor(milestone: Milestone) {
+    return Math.max(
+      milestone.revision_count ?? 0,
+      eventsFor(milestone.id).filter((e) => e.event_type === "revision_requested").length
+    );
   }
 
   async function handleCreateMilestone() {
@@ -344,15 +476,25 @@ export default function ProjectWorkroom({
       return;
     }
 
-    await notifyUsers(supabase, [
-      {
-        userId: project.client_id,
-        type: "milestone_submitted",
-        title: "Yeni teslim var",
-        message: `"${milestone.title}" aşaması teslim edildi.`,
-        link: `/client/projects/${project.id}`,
-      },
-    ]);
+    const attemptNo = deliveries.filter((d) => d.milestone_id === milestone.id).length + 1;
+
+    if (fromStatus === "revision") {
+      await notifyRevisionDeliverySubmitted(supabase, {
+        clientId: project.client_id,
+        projectId: project.id,
+        milestoneId: milestone.id,
+        milestoneTitle: milestone.title,
+        attemptNo,
+      });
+    } else {
+      await notifyDeliverySubmitted(supabase, {
+        clientId: project.client_id,
+        projectId: project.id,
+        milestoneId: milestone.id,
+        milestoneTitle: milestone.title,
+        attemptNo,
+      });
+    }
 
     setDeliveryDrafts((current) => ({ ...current, [milestone.id]: "" }));
     setBusyId(null);
@@ -377,19 +519,29 @@ export default function ProjectWorkroom({
       return;
     }
 
-    await notifyUsers(
-      supabase,
-      teamMembers.map((member) => ({
-        userId: member.id,
-        type: decision === "approved" ? "milestone_approved" : "milestone_revision",
-        title: decision === "approved" ? "Aşama onaylandı" : "Revizyon istendi",
-        message:
-          decision === "approved"
-            ? `"${milestone.title}" aşaması onaylandı.`
-            : `"${milestone.title}" aşaması için revizyon istendi.`,
-        link: `/freelancers/projects/${project.id}`,
-      }))
-    );
+    // Team project'te yalnızca aşamanın sahibi (freelancer_id) bilgilendirilir.
+    const recipientIds = (
+      milestone.freelancer_id
+        ? teamMembers.filter((member) => member.id === milestone.freelancer_id)
+        : teamMembers
+    ).map((member) => member.id);
+
+    if (decision === "approved") {
+      await notifyDeliveryApproved(supabase, {
+        freelancerIds: recipientIds,
+        projectId: project.id,
+        milestoneId: milestone.id,
+        milestoneTitle: milestone.title,
+      });
+    } else {
+      await notifyRevisionRequested(supabase, {
+        freelancerIds: recipientIds,
+        projectId: project.id,
+        milestoneId: milestone.id,
+        milestoneTitle: milestone.title,
+        revisionNo: (milestone.revision_count ?? 0) + 1,
+      });
+    }
 
     if (decision === "approved") {
       const remaining = milestones.filter((m) => m.id !== milestone.id);
@@ -405,33 +557,12 @@ export default function ProjectWorkroom({
 
       if (nextPending) {
         await activateMilestone(supabase, nextPending.id);
-      } else {
-        // Proje tamamlanma durumu HER rolün durumuna bakar. Team project'te
-        // sadece "var olan aşamalar onaylı mı" yetmez — henüz hiç aşama
-        // oluşturmamış bir ekip üyesi varsa proje tamamlanmış sayılmaz.
-        const allOthersApproved = isTeamProject
-          ? teamMembers.every((member) => {
-              const memberMilestones = remaining.filter((m) => m.freelancer_id === member.id);
-              return memberMilestones.length > 0 && memberMilestones.every((m) => m.status === "approved");
-            })
-          : remaining.every((m) => m.status === "approved");
-        if (allOthersApproved) {
-          await supabase.from("projects").update({ status: "completed" }).eq("id", project.id);
-
-          await notifyUsers(
-            supabase,
-            teamMembers.map((member) => ({
-              userId: member.id,
-              type: "project_completed",
-              title: "Proje tamamlandı",
-              message: `"${project.title}" projesi tamamlandı.`,
-              link: `/freelancers/projects/${project.id}`,
-            }))
-          );
-
-          onProjectCompleted?.();
-        }
       }
+      // NOT: Tüm aşamalar onaylandığında proje OTOMATİK "tamamlandı" olmaz.
+      // "Tüm aşamalar tamamlandı" ile "Proje tamamlandı" ayrı durumlardır —
+      // client, aşağıdaki "Projeyi Tamamla" aksiyonuyla bilinçli olarak
+      // onaylamalı (bkz. handleCompleteProject). Bu, review'ların da
+      // yalnızca GERÇEKTEN tamamlanmış bir projede açılmasını sağlar.
     } else {
       setRevisionDrafts((current) => ({ ...current, [milestone.id]: "" }));
     }
@@ -458,6 +589,49 @@ export default function ProjectWorkroom({
       </div>
 
       {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
+      {projectClosedMessage && (
+        <div className="rounded-xl bg-gray-100 p-4 text-sm text-gray-700">{projectClosedMessage}</div>
+      )}
+
+      {tab === "overview" && project.requirements_confirmed_at && (
+        <section className="rounded-2xl border border-green-100 bg-green-50 p-5 text-sm text-green-800">
+          <p className="font-medium">Gereksinimler hazır</p>
+          <p className="mt-1">
+            Client, işe başlanması için gerekli dosya ve bilgilerin hazır olduğunu {formatDate(project.requirements_confirmed_at)} tarihinde onayladı.
+          </p>
+          {project.requirements_note && (
+            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-3 text-gray-700">{project.requirements_note}</p>
+          )}
+        </section>
+      )}
+
+      {tab === "overview" && !isClient && allMilestonesApproved && project.status === "in_progress" && (
+        <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-800">
+          Tüm aşamaların onaylandı. Client projeyi tamamladığında proje &quot;Tamamlandı&quot; durumuna
+          geçecek ve değerlendirme yapabileceksin.
+        </section>
+      )}
+
+      {tab === "overview" && isClient && allMilestonesApproved && project.status === "in_progress" && (
+        <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-green-100 bg-green-50 p-5">
+          <div>
+            <p className="font-medium text-green-900">Tüm aşamalar onaylandı</p>
+            <p className="mt-1 text-sm text-green-700">
+              İşi tamamlandı olarak işaretlemek ve değerlendirme aşamasına geçmek için projeyi tamamla.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleCompleteProject()}
+            disabled={busyId === "complete-project"}
+            className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+          >
+            {busyId === "complete-project" && <Loader2 size={16} className="animate-spin" />}
+            Projeyi Tamamla
+          </button>
+        </section>
+      )}
 
       {tab === "overview" && (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -570,7 +744,8 @@ export default function ProjectWorkroom({
             <div className="space-y-3">
               {milestones.map((milestone) => {
                 const history = eventsFor(milestone.id);
-                const revisionCount = revisionCountFor(milestone.id);
+                const revisionCount = revisionCountFor(milestone);
+                const deadlineStatus = getDeadlineStatus({ dueDate: milestone.due_date, status: milestone.status });
                 const isExpanded = expandedMilestoneId === milestone.id;
 
                 return (
@@ -589,6 +764,14 @@ export default function ProjectWorkroom({
                               {revisionCount} revizyon
                             </span>
                           )}
+                          {deadlineStatus && deadlineStatus !== "on_track" && (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${DEADLINE_STATUS_CLASS[deadlineStatus]}`}
+                            >
+                              {deadlineStatus === "overdue" && <AlertTriangle size={12} />}
+                              {DEADLINE_STATUS_LABEL[deadlineStatus]}
+                            </span>
+                          )}
                         </div>
                         {ownerLabel(milestone) && (
                           <p className="mt-1 text-xs font-medium text-gray-400">{ownerLabel(milestone)}</p>
@@ -602,7 +785,14 @@ export default function ProjectWorkroom({
                               <Clock3 size={13} /> {formatDate(milestone.due_date)}
                             </span>
                           )}
-                          {milestone.budget !== null && <span>{formatCurrency(Number(milestone.budget))}</span>}
+                          {milestone.budget !== null && (
+                            <span>
+                              {isClient && milestone.client_total_amount !== null
+                                ? `Toplam ödeme: ${formatCurrency(Number(milestone.client_total_amount))} (bütçe ${formatCurrency(Number(milestone.budget))} + platform ücreti ${formatCurrency(Number(milestone.platform_fee_amount ?? 0))})`
+                                : `Net kazanç: ${formatCurrency(Number(milestone.freelancer_payout_amount ?? milestone.budget))}`}
+                            </span>
+                          )}
+                          {milestone.budget !== null && <span>{paymentStatusLabel(milestone.payment_status)}</span>}
                         </div>
                       </div>
 
@@ -667,6 +857,7 @@ export default function ProjectWorkroom({
 
                     {/* FREELANCER: TESLİM ET */}
                     {!isClient &&
+                      projectActive &&
                       canManageMilestone(milestone) &&
                       (milestone.status === "active" || milestone.status === "revision") && (
                       <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
@@ -710,7 +901,7 @@ export default function ProjectWorkroom({
                     )}
 
                     {/* CLIENT: KABUL ET / REVİZYON İSTE */}
-                    {isClient && (milestone.status === "submitted" || milestone.status === "in_review") && (
+                    {isClient && projectActive && (milestone.status === "submitted" || milestone.status === "in_review") && (
                       <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
                         <ProjectFiles projectId={project.id} milestoneId={milestone.id} canManage={false} />
                         <textarea
@@ -746,6 +937,7 @@ export default function ProjectWorkroom({
                     )}
 
                     {isClient &&
+                      projectActive &&
                       milestone.status === "pending" &&
                       peerGroup(milestone).every(
                         (m) => !["active", "submitted", "in_review", "revision"].includes(m.status)
@@ -869,33 +1061,99 @@ export default function ProjectWorkroom({
 
       {tab === "deliveries" && (
         <section className="space-y-3">
-          {milestones.filter((m) => m.submitted_at).length === 0 ? (
+          {/*
+           * Teslimler artık normal proje dosyalarından ayrı bir kayıttır
+           * (project_milestone_deliveries). Her teslim denemesi — ilk teslim
+           * ve her yeniden teslim — kendi mesajı, dosyaları ve inceleme
+           * sonucuyla listelenir; revizyon geçmişi kaybolmaz.
+           */}
+          {deliveries.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
               Henüz teslim edilmiş bir aşama yok.
             </div>
           ) : (
             milestones
-              .filter((m) => m.submitted_at)
-              .map((milestone) => (
-                <div key={milestone.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={16} className="text-gray-400" />
-                      <h3 className="font-semibold text-gray-900">{milestone.title}</h3>
+              .filter((m) => deliveries.some((d) => d.milestone_id === m.id))
+              .map((milestone) => {
+                const attempts = deliveries
+                  .filter((d) => d.milestone_id === milestone.id)
+                  .sort((a, b) => b.attempt_no - a.attempt_no);
+
+                return (
+                  <div key={milestone.id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <FileText size={16} className="text-gray-400" />
+                        <h3 className="font-semibold text-gray-900">{milestone.title}</h3>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${MILESTONE_STATUS_CLASS[milestone.status]}`}>
+                        {MILESTONE_STATUS_LABEL[milestone.status]}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-medium ${MILESTONE_STATUS_CLASS[milestone.status]}`}>
-                      {MILESTONE_STATUS_LABEL[milestone.status]}
-                    </span>
+
+                    <ol className="mt-4 space-y-3">
+                      {attempts.map((delivery) => {
+                        const files = deliveryFiles.filter((f) => f.delivery_id === delivery.id);
+                        return (
+                          <li key={delivery.id} className="rounded-xl bg-gray-50 p-4 text-sm">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium text-gray-900">
+                                {delivery.attempt_no}. teslim · {formatDateTime(delivery.submitted_at)}
+                              </span>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600">
+                                {DELIVERY_STATUS_LABEL[delivery.status]}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-gray-700">{delivery.message || "Açıklama eklenmedi."}</p>
+
+                            {files.length > 0 ? (
+                              <ul className="mt-3 space-y-1.5">
+                                {files.map((file) => (
+                                  <li key={file.id}>
+                                    <button
+                                      type="button"
+                                      onClick={() => void downloadDeliveryFile(file)}
+                                      className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                                    >
+                                      <Download size={14} />
+                                      {file.file_name}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <p className="mt-3 text-xs text-gray-400">Bu teslimle birlikte dosya gönderilmedi.</p>
+                            )}
+
+                            {delivery.status === "revision_requested" && delivery.review_feedback && (
+                              <div className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+                                <p className="mb-1 font-medium">Revizyon geri bildirimi</p>
+                                {delivery.review_feedback}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
                   </div>
-                  <p className="mt-2 text-sm text-gray-600">{milestone.deliverable_description}</p>
-                  <p className="mt-1 text-xs text-gray-400">Son teslim: {formatDate(milestone.submitted_at)}</p>
-                  <div className="mt-3">
-                    <ProjectFiles projectId={project.id} milestoneId={milestone.id} canManage={false} />
-                  </div>
-                </div>
-              ))
+                );
+              })
           )}
         </section>
+      )}
+
+      {tab === "operations" && currentUserId && (
+        <ProjectOperationsPanel
+          project={project}
+          teamMembers={teamMembers}
+          milestones={milestones}
+          viewerRole={viewerRole}
+          currentUserId={currentUserId}
+          onChanged={() => {
+            void loadMilestones();
+            onProjectChanged?.();
+          }}
+        />
       )}
     </div>
   );

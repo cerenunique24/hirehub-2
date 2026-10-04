@@ -236,7 +236,15 @@ export default function NotificationsPage() {
   };
 
   /*
-   * Bildirim tipini Türkçeleştir
+   * Bildirim tipini Türkçeleştir.
+   *
+   * `type`, notifications.type kolonundaki internal event adıdır
+   * (ör. "coalition_member_added", "milestone_submitted") — hiçbir
+   * durumda kullanıcıya ham haliyle gösterilmemeli. Önceki switch
+   * sadece birkaç genel kategoriyi tanıyor, gerçekte kullanılan
+   * event type'ların çoğu (proposal_accepted, invitation_rejected,
+   * project_file_uploaded, vb.) `default: return type` dalına düşüp
+   * ham snake_case string olarak badge'de görünüyordu.
    */
   const getNotificationType = (type: string) => {
     const normalizedType = type.toLowerCase();
@@ -244,13 +252,30 @@ export default function NotificationsPage() {
     switch (normalizedType) {
       case "project":
       case "proje":
+      case "project_started":
+      case "project_completed":
+      case "project_file_uploaded":
+      case "milestone_submitted":
+      case "milestone_approved":
+      case "milestone_revision":
         return "Proje";
 
       case "team":
       case "ekip":
       case "coalition":
       case "koalisyon":
+      case "coalition_ready":
+      case "coalition_member_added":
         return "Ekip";
+
+      case "proposal":
+      case "teklif":
+      case "proposal_received":
+      case "proposal_accepted":
+      case "proposal_rejected":
+      case "invitation_accepted":
+      case "invitation_rejected":
+        return "Teklif";
 
       case "finance":
       case "finans":
@@ -264,14 +289,18 @@ export default function NotificationsPage() {
 
       case "message":
       case "mesaj":
+      case "message_received":
         return "Mesaj";
 
       case "support_reply":
       case "support_status_update":
+      case "support_ticket_status_changed":
         return "Destek";
 
       default:
-        return type;
+        // Tanınmayan bir internal event type'ı olsa bile ham string
+        // asla kullanıcıya gösterilmez.
+        return "Bildirim";
     }
   };
 
@@ -412,6 +441,9 @@ export default function NotificationsPage() {
 
       case "Proje":
         return "bg-blue-100 text-blue-700";
+
+      case "Teklif":
+        return "bg-amber-50 text-amber-700";
 
       case "Mesaj":
         return "bg-orange-100 text-orange-700";

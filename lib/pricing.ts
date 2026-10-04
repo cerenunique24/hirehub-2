@@ -56,6 +56,40 @@ export function getProjectCommissionRate(project: { commission_rate?: number | s
   return Number.isFinite(rate) && rate > 0 && rate < 1 ? rate : STANDARD_COMMISSION_RATE;
 }
 
+/**
+ * Komisyon MODELİ (tek doğruluk kaynağı). Mevcut iş kararı: platform ücreti
+ * yalnızca CLIENT'a, proje bedelinin ÜZERİNE eklenir; freelancer kesinti
+ * ödemez ve teklif ettiği/aşama bütçesindeki tutarın tamamını alır. Oranı
+ * değiştirmeden model burada isimlendirilmiştir; ileride freelancer tarafı
+ * ücret eklenirse yalnızca `freelancerFeeRate` ve `calculateFreelancerNet`
+ * değişir.
+ */
+export const PLATFORM_FEE_MODEL = {
+  feePayer: "client",
+  freelancerFeeRate: 0,
+} as const;
+
+/** Freelancer'ın eline geçecek net tutar (mevcut modelde kesinti yok). */
+export function calculateFreelancerNet(baseAmount: number): number {
+  const amount = Number.isFinite(baseAmount) && baseAmount > 0 ? baseAmount : 0;
+  return Math.round(amount * (1 - PLATFORM_FEE_MODEL.freelancerFeeRate) * 100) / 100;
+}
+
+/**
+ * Marketplace tutar sözlüğü — sayfalar bu dört adı kullanır:
+ *   BASE_AMOUNT     proje/aşama bütçesi (client'ın belirlediği tutar)
+ *   PLATFORM_FEE    CollaCrew hizmet bedeli
+ *   CLIENT_TOTAL    client'ın toplam ödeyeceği tutar
+ *   FREELANCER_NET  freelancer'ın net kazancı
+ */
+export type MarketplaceAmounts = {
+  BASE_AMOUNT: number;
+  PLATFORM_FEE: number;
+  CLIENT_TOTAL: number;
+  FREELANCER_NET: number;
+  RATE: number;
+};
+
 export type ClientPricing = {
   freelancerAmount: number;
   platformFee: number;
@@ -73,6 +107,18 @@ export function calculateClientPricing(freelancerAmount: number, rate: number): 
     platformFee,
     clientTotal: amount + platformFee,
     rate,
+  };
+}
+
+export function calculateMarketplaceAmounts(baseAmount: number, rate: number): MarketplaceAmounts {
+  const pricing = calculateClientPricing(baseAmount, rate);
+
+  return {
+    BASE_AMOUNT: pricing.freelancerAmount,
+    PLATFORM_FEE: pricing.platformFee,
+    CLIENT_TOTAL: pricing.clientTotal,
+    FREELANCER_NET: calculateFreelancerNet(pricing.freelancerAmount),
+    RATE: pricing.rate,
   };
 }
 

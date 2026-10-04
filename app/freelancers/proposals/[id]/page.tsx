@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { Avatar } from "@/components/ui/Avatar";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Project = {
   id: string;
@@ -23,6 +25,13 @@ type Project = {
   project_type: string | null;
   description: string | null;
   budget: number | null;
+};
+
+type ClientProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
 };
 
 type Proposal = {
@@ -50,6 +59,7 @@ export default function ProposalDetailPage({
 
   const [proposalId, setProposalId] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [clientProfile, setClientProfile] = useState<ClientProfile | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
@@ -218,6 +228,26 @@ export default function ProposalDetailPage({
         };
 
         setProposal(normalizedProposal);
+
+        if (projectData.client_id) {
+          const {
+            data: clientData,
+            error: clientError,
+          } = await supabase
+            .from("profiles")
+            .select("id, first_name, avatar_url")
+            .eq("id", projectData.client_id)
+            .maybeSingle();
+
+          if (clientError) {
+            console.error(
+              "Proje sahibi profili yüklenemedi:",
+              clientError
+            );
+          } else {
+            setClientProfile(clientData as ClientProfile | null);
+          }
+        }
       } catch (error) {
         console.error(
           "Unexpected proposal detail error:",
@@ -644,22 +674,38 @@ export default function ProposalDetailPage({
 
           {/* MESSAGE */}
 
-          <section className="rounded-xl bg-[var(--color-primary-600)] p-5 text-white">
+          <section className="rounded-xl border border-[var(--color-primary-600)]/20 bg-[var(--color-primary-50)]/40 p-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary-50)] text-[var(--color-primary-600)]">
                 <MessageCircle size={19} />
               </div>
 
               <div>
-                <h2 className="font-semibold">
+                <h2 className="font-semibold text-[var(--color-text-primary)]">
                   Proje Sahibiyle İletişim
                 </h2>
 
-                <p className="mt-1 text-xs text-white/60">
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                   Bu teklif hakkında mesajlaş
                 </p>
               </div>
             </div>
+
+            {clientProfile && (
+              <div className="mt-4 flex items-center gap-2.5 rounded-xl bg-white px-3 py-2.5">
+                <Avatar
+                  src={clientProfile.avatar_url}
+                  name={publicDisplayName(clientProfile)}
+                  size="sm"
+                />
+                <div className="leading-tight">
+                  <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                    {publicDisplayName(clientProfile, "Proje sahibi")}
+                  </p>
+                  <p className="text-xs text-[var(--color-text-secondary)]">Proje sahibi</p>
+                </div>
+              </div>
+            )}
 
             {project?.client_id ? (
               <Link
@@ -668,13 +714,13 @@ export default function ProposalDetailPage({
                 )}&proposal=${encodeURIComponent(
                   proposal.id
                 )}`}
-                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-medium text-[var(--color-text-primary)] transition hover:bg-gray-100"
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
               >
                 Mesaj Gönder
                 <MessageCircle size={16} />
               </Link>
             ) : (
-              <div className="mt-5 rounded-xl bg-white/10 px-4 py-3 text-center text-sm text-white/60">
+              <div className="mt-5 rounded-xl bg-white px-4 py-3 text-center text-sm text-[var(--color-text-secondary)]">
                 Proje sahibi bilgisi bulunamadı.
               </div>
             )}

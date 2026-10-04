@@ -15,10 +15,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { uniqueSkills } from "@/lib/matching";
 import {
+  fetchBudgetBreakdown,
   getTeamCompletion,
   type TeamCompletion,
 } from "@/lib/projects/teamReadiness";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+import RequirementsConfirmation from "@/components/projects/RequirementsConfirmation";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Coalition = {
   id: string;
@@ -50,6 +53,7 @@ type Member = {
   user_id: string;
   role: string | null;
   projectRole: string | null;
+  teamMemberId: string | null;
   profile: Profile | null;
 };
 
@@ -76,7 +80,10 @@ export default function ClientCoalitionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [requirementsReady, setRequirementsReady] = useState(false);
+  const [requirementsNote, setRequirementsNote] = useState("");
   const [error, setError] = useState("");
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
 
   const loadCoalition = async () => {
     setLoading(true);
@@ -111,11 +118,16 @@ export default function ClientCoalitionDetailPage() {
     if (coalitionData.project_id) {
       const { data: projectData } = await supabase
         .from("projects")
-        .select("id, title, status, client_id, budget_breakdown")
+        .select("id, title, status, client_id")
         .eq("id", coalitionData.project_id)
         .maybeSingle();
 
-      linkedProject = (projectData as LinkedProject | null) ?? null;
+      if (projectData) {
+        // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+        // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+        const budgetBreakdown = await fetchBudgetBreakdown(supabase, projectData.id);
+        linkedProject = { ...projectData, budget_breakdown: budgetBreakdown } as LinkedProject;
+      }
       setProject(linkedProject);
     } else {
       setProject(null);
@@ -147,7 +159,7 @@ export default function ClientCoalitionDetailPage() {
       ? await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, title, expertise, skills"
+            "id, first_name, avatar_url, title, expertise, skills"
           )
           .in("id", activeUserIds)
       : { data: [] };
@@ -161,11 +173,12 @@ export default function ClientCoalitionDetailPage() {
 
     let activeTeamMembers: { role: string | null }[] = [];
     let projectRoleByFreelancer = new Map<string, string>();
+    let teamMemberIdByFreelancer = new Map<string, string>();
 
     if (linkedProject) {
       const { data: teamMemberRows } = await supabase
         .from("project_team_members")
-        .select("freelancer_id, role")
+        .select("id, freelancer_id, role")
         .eq("project_id", linkedProject.id)
         .eq("status", "active");
 
@@ -175,6 +188,10 @@ export default function ClientCoalitionDetailPage() {
 
       projectRoleByFreelancer = new Map(
         (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.role as string])
+      );
+
+      teamMemberIdByFreelancer = new Map(
+        (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.id as string])
       );
 
       setTeamCompletion(
@@ -188,6 +205,7 @@ export default function ClientCoalitionDetailPage() {
       (memberRows ?? []).map((member) => ({
         ...member,
         projectRole: projectRoleByFreelancer.get(member.user_id) ?? null,
+        teamMemberId: teamMemberIdByFreelancer.get(member.user_id) ?? null,
         profile:
           activeProfileById.get(member.user_id) ?? null,
       })) as Member[]
@@ -235,7 +253,7 @@ export default function ClientCoalitionDetailPage() {
       ? await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, title, expertise, skills"
+            "id, first_name, avatar_url, title, expertise, skills"
           )
           .in("id", allProfileIds)
       : { data: [] };
@@ -322,6 +340,31 @@ export default function ClientCoalitionDetailPage() {
     setProcessingId(null);
   };
 
+  const handleRemoveMember = async (teamMemberId: string) => {
+    if (!window.confirm("Bu ekip üyesini projeden çıkarmak istediğine emin misin?")) {
+      return;
+    }
+
+    setRemovingMemberId(teamMemberId);
+    setError("");
+
+    const { error: rpcError } = await supabase.rpc("leave_or_remove_team_member", {
+      p_member_id: teamMemberId,
+    });
+
+    if (rpcError) {
+      console.error("Ekip üyesi çıkarma hatası:", rpcError);
+      setError(
+        rpcError.code === "P0001" ? rpcError.message : "Ekip üyesi çıkarılırken bir hata oluştu."
+      );
+      setRemovingMemberId(null);
+      return;
+    }
+
+    await loadCoalition();
+    setRemovingMemberId(null);
+  };
+
   const isProjectClient =
     !!project && !!currentUserId && project.client_id === currentUserId;
 
@@ -336,15 +379,29 @@ export default function ClientCoalitionDetailPage() {
     setStarting(true);
     setError("");
 
+    if (!requirementsReady) {
+      setError("Projeyi başlatmadan önce gereksinimlerin hazır olduğunu onaylamalısın.");
+      setStarting(false);
+      return;
+    }
+
     const { error: updateError } = await supabase
       .from("projects")
-      .update({ status: "in_progress" })
+      .update({
+        status: "in_progress",
+        requirements_confirmed_at: new Date().toISOString(),
+        requirements_note: requirementsNote.trim() || null,
+      })
       .eq("id", project.id)
       .eq("status", "ready_to_start");
 
     if (updateError) {
       console.error("Proje başlatma hatası:", updateError);
-      setError("Proje başlatılırken bir hata oluştu.");
+      setError(
+        updateError.code === "P0001"
+          ? updateError.message
+          : "Proje başlatılırken bir hata oluştu."
+      );
       setStarting(false);
       return;
     }
@@ -460,21 +517,9 @@ export default function ClientCoalitionDetailPage() {
 
               <div className="mt-4 space-y-3">
                 {pendingMembers.map((member) => {
-                  const name =
-                    [
-                      member.profile?.first_name,
-                      member.profile?.last_name,
-                    ]
-                      .filter(Boolean)
-                      .join(" ") || "Profil bilgisi yok";
+                  const name = publicDisplayName(member.profile, "Profil bilgisi yok");
 
-                  const inviterName =
-                    [
-                      member.inviter?.first_name,
-                      member.inviter?.last_name,
-                    ]
-                      .filter(Boolean)
-                      .join(" ") || "Bir ekip üyesi";
+                  const inviterName = publicDisplayName(member.inviter, "Bir ekip üyesi");
 
                   const isProcessing =
                     processingId === member.id;
@@ -568,13 +613,7 @@ export default function ClientCoalitionDetailPage() {
             <div className="mt-4 space-y-3">
               {members.length ? (
                 members.map((member) => {
-                  const name =
-                    [
-                      member.profile?.first_name,
-                      member.profile?.last_name,
-                    ]
-                      .filter(Boolean)
-                      .join(" ") || "Profil bilgisi yok";
+                  const name = publicDisplayName(member.profile, "Profil bilgisi yok");
 
                   return (
                     <div
@@ -609,11 +648,27 @@ export default function ClientCoalitionDetailPage() {
                         </div>
                       </div>
 
-                      <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
-                        {member.role === "owner"
-                          ? "Proje Sahibi"
-                          : member.projectRole || "Üye"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
+                          {member.role === "owner"
+                            ? "Proje Sahibi"
+                            : member.projectRole || "Üye"}
+                        </span>
+
+                        {isProjectClient && member.role !== "owner" && member.teamMemberId && (
+                          <button
+                            type="button"
+                            disabled={removingMemberId === member.teamMemberId}
+                            onClick={() => void handleRemoveMember(member.teamMemberId!)}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {removingMemberId === member.teamMemberId ? (
+                              <Loader2 size={13} className="animate-spin" />
+                            ) : null}
+                            Ekipten Çıkar
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })
@@ -682,10 +737,19 @@ export default function ClientCoalitionDetailPage() {
               </p>
             ) : (
               <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                {isProjectClient && canStartProject && (
+                  <RequirementsConfirmation
+                    ready={requirementsReady}
+                    note={requirementsNote}
+                    onReadyChange={setRequirementsReady}
+                    onNoteChange={setRequirementsNote}
+                  />
+                )}
+
                 {isProjectClient && (
                   <button
                     type="button"
-                    disabled={!canStartProject || starting}
+                    disabled={!canStartProject || starting || !requirementsReady}
                     onClick={() => void handleStartProject()}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -725,10 +789,7 @@ export default function ClientCoalitionDetailPage() {
                 currentUserId={currentUserId}
                 memberLabels={members.map((member) => ({
                   id: member.user_id,
-                  name:
-                    [member.profile?.first_name, member.profile?.last_name]
-                      .filter(Boolean)
-                      .join(" ") || "Ekip üyesi",
+                  name: publicDisplayName(member.profile, "Ekip üyesi"),
                 }))}
               />
             </div>

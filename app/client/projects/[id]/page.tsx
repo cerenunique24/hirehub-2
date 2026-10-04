@@ -13,7 +13,8 @@ import { createClient } from "@/lib/supabase/client";
 import ProjectWorkroom from "@/components/projects/ProjectWorkroom";
 import ProjectAnalyticsPanel from "@/components/premium/client/ProjectAnalyticsPanel";
 import AiShortlistPanel from "@/components/premium/client/AiShortlistPanel";
-import { notifyUsers } from "@/lib/notifications";
+import { notifyProjectStarted } from "@/lib/notifications";
+import RequirementsConfirmation from "@/components/projects/RequirementsConfirmation";
 
 type Project = {
   id: string;
@@ -28,6 +29,8 @@ type Project = {
   created_at: string;
   team_required: boolean | null;
   team_size: number | null;
+  requirements_confirmed_at: string | null;
+  requirements_note: string | null;
 };
 
 type TeamMember = {
@@ -60,16 +63,19 @@ function getStatusLabel(status: string | null) {
   }
 }
 
+// Semantik renk sistemi: aktif/devam eden/yayında → primary blue,
+// tamamlanan/kabul edilen → yeşil, bekleyen → amber, iptal/reddedilen →
+// kırmızı-nötr.
 function getStatusClass(status: string | null) {
   switch (status) {
     case "open":
-      return "border-green-200 bg-green-50 text-green-700";
+      return "border-[var(--color-primary-600)]/20 bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
     case "ready_to_start":
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "in_progress":
-      return "border-blue-200 bg-blue-50 text-blue-700";
+      return "border-[var(--color-primary-600)]/20 bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
     case "completed":
-      return "border-[var(--color-border-strong)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]";
+      return "border-green-200 bg-green-50 text-green-700";
     case "cancelled":
       return "border-red-200 bg-red-50 text-red-700";
     default:
@@ -105,6 +111,8 @@ function ClientProjectDetailContent() {
   const [error, setError] = useState("");
   const [proposalCount, setProposalCount] = useState(0);
   const [starting, setStarting] = useState(false);
+  const [requirementsReady, setRequirementsReady] = useState(false);
+  const [requirementsNote, setRequirementsNote] = useState("");
 
   async function loadProject() {
     if (!id) {
@@ -129,7 +137,7 @@ function ClientProjectDetailContent() {
     const { data, error: projectError } = await supabase
       .from("projects")
       .select(
-        "id, client_id, title, description, budget, status, project_type, skills, deadline, created_at, team_required, team_size"
+        "id, client_id, title, description, budget, status, project_type, skills, deadline, created_at, team_required, team_size, requirements_confirmed_at, requirements_note"
       )
       .eq("id", id)
       .eq("client_id", user.id)
@@ -185,7 +193,7 @@ function ClientProjectDetailContent() {
 
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, avatar_url, role, title, hourly_rate")
+        .select("id, first_name, avatar_url, role, title, hourly_rate")
         .in("id", freelancerIds);
 
       if (profilesError) {
@@ -212,7 +220,6 @@ function ClientProjectDetailContent() {
               teamMemberId: member.id,
               id: profile.id,
               first_name: profile.first_name,
-              last_name: profile.last_name,
               avatar_url: profile.avatar_url,
               role: profile.role,
               title: profile.title,
@@ -257,34 +264,53 @@ function ClientProjectDetailContent() {
 
     const supabase = createClient();
 
+    if (!requirementsReady) {
+      setError("Projeyi başlatmadan önce gereksinimlerin hazır olduğunu onaylamalısın.");
+      setStarting(false);
+      return;
+    }
+
+    const confirmedAt = new Date().toISOString();
+    const note = requirementsNote.trim();
+
     const { error: startError } = await supabase
       .from("projects")
-      .update({ status: "in_progress" })
+      .update({
+        status: "in_progress",
+        requirements_confirmed_at: confirmedAt,
+        requirements_note: note || null,
+      })
       .eq("id", project.id)
       .eq("status", "ready_to_start");
 
     if (startError) {
       console.error("Proje başlatılamadı:", startError);
-      setError("Proje başlatılırken bir hata oluştu.");
+      setError(
+        startError.code === "P0001"
+          ? startError.message
+          : "Proje başlatılırken bir hata oluştu."
+      );
       setStarting(false);
       return;
     }
 
     if (teamMembers.length > 0) {
-      await notifyUsers(
-        supabase,
-        teamMembers.map((member) => ({
-          userId: member.id,
-          type: "project_started",
-          title: "Proje başladı",
-          message: `"${project.title}" projesi başladı. Çalışma alanına gidebilirsin.`,
-          link: `/freelancers/projects/${project.id}`,
-        }))
-      );
+      await notifyProjectStarted(supabase, {
+        freelancerIds: teamMembers.map((member) => member.id),
+        projectId: project.id,
+        projectTitle: project.title,
+      });
     }
 
     setProject((current) =>
-      current ? { ...current, status: "in_progress" } : current
+      current
+        ? {
+            ...current,
+            status: "in_progress",
+            requirements_confirmed_at: confirmedAt,
+            requirements_note: note || null,
+          }
+        : current
     );
     setStarting(false);
   }
@@ -419,7 +445,10 @@ function ClientProjectDetailContent() {
               budget: project.budget,
               status: project.status,
               deadline: project.deadline,
+              requirements_confirmed_at: project.requirements_confirmed_at,
+              requirements_note: project.requirements_note,
             }}
+            onProjectChanged={() => void loadProject()}
             teamMembers={teamMembers}
             viewerRole="client"
             messagesBasePath="/client/messages"
@@ -477,13 +506,22 @@ function ClientProjectDetailContent() {
           <ProjectAnalyticsPanel />
           <AiShortlistPanel projectId={project.id} />
 
+          {canStart && (
+            <RequirementsConfirmation
+              ready={requirementsReady}
+              note={requirementsNote}
+              onReadyChange={setRequirementsReady}
+              onNoteChange={setRequirementsNote}
+            />
+          )}
+
           {/* ACTIONS */}
           <div className="flex flex-wrap gap-3">
             {canStart && (
               <button
                 type="button"
                 onClick={() => void handleStartProject()}
-                disabled={starting}
+                disabled={starting || !requirementsReady}
                 className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <PlayCircle size={16} />

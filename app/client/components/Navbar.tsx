@@ -22,7 +22,7 @@ type Profile = {
 type Message = {
   id: string;
   content: string;
-  is_read: boolean;
+  read_at: string | null;
   created_at: string;
   sender_id: string;
 };
@@ -77,16 +77,18 @@ export default function Navbar() {
         messagesResult,
         notificationsResult,
       ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("first_name, last_name, avatar_url")
-          .eq("id", user.id)
-          .maybeSingle(),
+        // `last_name` artık genel SELECT grant'inden çıkarıldığı için
+        // (bkz. 202609300012_surname_privacy.sql) kendi profilimiz bile
+        // doğrudan select ile okunamaz — get_my_full_profile() kullanılır.
+        supabase.rpc("get_my_full_profile").then(({ data, error }) => ({
+          data: Array.isArray(data) ? data[0] ?? null : null,
+          error,
+        })),
 
         supabase
           .from("messages")
           .select(
-            "id, content, is_read, created_at, sender_id"
+            "id, content, read_at, created_at, sender_id"
           )
           .eq("receiver_id", user.id)
           .order("created_at", {
@@ -326,7 +328,7 @@ export default function Navbar() {
   }, []);
 
   const unreadMessages = messages.filter(
-    (message) => !message.is_read
+    (message) => !message.read_at
   ).length;
 
   const unreadNotifications = notifications.filter(
@@ -506,7 +508,7 @@ export default function Navbar() {
                               Yeni mesaj
                             </p>
 
-                            {!message.is_read && (
+                            {!message.read_at && (
                               <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-primary-600)]" />
                             )}
                           </div>

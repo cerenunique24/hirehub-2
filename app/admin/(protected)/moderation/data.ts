@@ -38,16 +38,12 @@ export async function listModerationFlags(
   let namesById = new Map<string, string>();
 
   if (userIds.length > 0) {
-    // `moderation_flags.user_id` görüldüğü kadarıyla farklı kullanıcılara
-    // ait olabilir — email gerekmediği için burada dar-kapsamlı
-    // (id/first_name/last_name) genel grant yeterli, admin RPC'sine
-    // gerek yok.
-    const { data: profileRows } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", userIds);
+    // `moderation_flags.user_id` farklı kullanıcılara ait olabilir;
+    // `last_name` artık genel SELECT grant'inden çıkarıldığı için
+    // (bkz. 202609300012_surname_privacy.sql) isim admin RPC'si ile okunur.
+    const { data: profileRows } = await supabase.rpc("admin_get_profile_names", { p_ids: userIds });
 
-    namesById = new Map((profileRows ?? []).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)]));
+    namesById = new Map((((profileRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)])));
   }
 
   return {

@@ -16,6 +16,8 @@ type Project = {
   status: string | null;
   deadline: string | null;
   team_required: boolean | null;
+  requirements_confirmed_at: string | null;
+  requirements_note: string | null;
 };
 
 function FreelancerWorkroomContent() {
@@ -32,6 +34,7 @@ function FreelancerWorkroomContent() {
   const [coalitionId, setCoalitionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     async function load() {
@@ -71,7 +74,7 @@ function FreelancerWorkroomContent() {
 
       const { data: projectData, error: projectError } = await supabase
         .from("projects")
-        .select("id, client_id, title, description, budget, status, deadline, team_required")
+        .select("id, client_id, title, description, budget, status, deadline, team_required, requirements_confirmed_at, requirements_note")
         .eq("id", id)
         .single();
 
@@ -93,7 +96,7 @@ function FreelancerWorkroomContent() {
         const freelancerIds = members.map((member) => member.freelancer_id);
         const { data: profiles } = await supabase
           .from("profiles")
-          .select("id, first_name, last_name, avatar_url")
+          .select("id, first_name, avatar_url")
           .in("id", freelancerIds);
 
         const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
@@ -106,7 +109,6 @@ function FreelancerWorkroomContent() {
               teamMemberId: member.id,
               id: profile.id,
               first_name: profile.first_name,
-              last_name: profile.last_name,
               avatar_url: profile.avatar_url,
               memberRole: member.role,
               proposalId: member.proposal_id,
@@ -131,7 +133,7 @@ function FreelancerWorkroomContent() {
     }
 
     void load();
-  }, [id]);
+  }, [id, reloadKey]);
 
   if (loading) {
     return (
@@ -203,6 +205,7 @@ function FreelancerWorkroomContent() {
           project={project}
           teamMembers={teamMembers}
           viewerRole="freelancer"
+          onProjectChanged={() => setReloadKey((key) => key + 1)}
           messagesBasePath="/freelancers/messages"
           isTeamProject={Boolean(project.team_required)}
           coalitionId={coalitionId}

@@ -70,9 +70,14 @@ export interface ProjectAnalysis {
   summary: string;
 
   /**
-   * Projenin ana kategorisi.
+   * Projenin ana kategorisi. Canlı /api/ai/analyze-project akışı bu
+   * alanı üretmiyor — client zaten kendi kategori seçimini (bkz.
+   * lib/categories.ts) proje oluşturma formunda yapıyor ve
+   * `projects.category`'ye doğrudan o yazılıyor. Bu alan sadece
+   * lib/ai/analyze-project.ts'in (kullanılmayan) eski şeması ve geriye
+   * dönük uyumluluk için opsiyonel olarak duruyor.
    */
-  category: string;
+  category?: string;
 
   /**
    * Projenin genel karmaşıklığı.

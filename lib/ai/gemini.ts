@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+﻿import { GoogleGenAI } from "@google/genai";
 
 /**
  * CollaCrew — merkezi Gemini istemcisi.
@@ -9,8 +9,8 @@ import { GoogleGenAI } from "@google/genai";
  *
  * Environment:
  *   GEMINI_API_KEY=...
- *   GEMINI_PRIMARY_MODEL=gemini-3.8-flash
- *   GEMINI_FALLBACK_MODEL=gemini-3.6-flash
+ *   GEMINI_PRIMARY_MODEL=...
+ *   GEMINI_FALLBACK_MODEL=...
  */
 
 const DEFAULT_PRIMARY_MODEL = "gemini-3.8-flash";
@@ -28,6 +28,7 @@ const FALLBACK_MODEL =
  * 1 = ilk istek
  * 2 = ilk retry
  * 3 = ikinci retry
+ * 4 = üçüncü retry
  */
 const MAX_ATTEMPTS_PER_MODEL = 4;
 
@@ -111,15 +112,6 @@ function getErrorDetails(error: unknown): string {
 /**
  * Geçici olarak tekrar denenmesi mantıklı hatalar.
  *
- * Örnek:
- * - 503
- * - service unavailable
- * - overloaded
- * - geçici network hataları
- * - timeout
- * - deadline exceeded
- *
- * Not:
  * 429 burada otomatik olarak retryable kabul edilmiyor.
  * Çünkü 429 hem geçici rate-limit hem de kalıcı quota olabilir.
  */
@@ -215,9 +207,6 @@ function wait(ms: number) {
 
 /**
  * Merkezi Gemini client.
- *
- * Yeni @google/genai SDK'sında timeout httpOptions üzerinden
- * yapılandırılır.
  */
 function getGenAI(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -241,7 +230,7 @@ function getGenAI(): GoogleGenAI {
  * Gemini'nin markdown JSON response döndürmesi ihtimaline karşı
  * ```json ... ``` wrapper'ını temizler.
  */
-export function cleanJsonOutput(output: string) {
+export function cleanJsonOutput(output: string): string {
   let cleaned = output.trim();
 
   if (cleaned.startsWith("```json")) {
@@ -366,7 +355,7 @@ export async function generateJson(
         /**
          * Kalıcı quota / billing problemi.
          *
-         * Aynı modeli üç kez denemek gereksiz.
+         * Aynı modeli tekrar tekrar denemek gereksiz.
          */
         if (isQuotaExceededError(error)) {
           console.warn(

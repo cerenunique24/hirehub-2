@@ -427,6 +427,11 @@ export default function DiscoverPage() {
   const [favorites, setFavorites] = useState<Set<string>>(
     new Set()
   );
+  const [pendingFavoriteIds, setPendingFavoriteIds] = useState<
+    Set<string>
+  >(new Set());
+  const [favoriteError, setFavoriteError] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------------- */
   /* Load projects                                                           */
@@ -457,18 +462,77 @@ export default function DiscoverPage() {
           return;
         }
 
+        if (!cancelled) {
+          setUserId(user.id);
+        }
+
         /* ---------------------------------------------------------------- */
-        /* Freelancer profile                                                */
+        /* Favorites / profile / proposals / open projects                   */
+        /*                                                                    */
+        /* Dördü de sadece user.id'ye bağlı, birbirine bağlı değil — art arda */
+        /* 4 round trip yerine paralel çekiliyor.                            */
         /* ---------------------------------------------------------------- */
 
-        const {
-          data: profile,
-          error: profileError,
-        } = await supabase
-          .from("profiles")
-          .select("skills, role")
-          .eq("id", user.id)
-          .maybeSingle();
+        const [
+          favoritesResult,
+          profileResult,
+          proposalsResult,
+          projectsResult,
+        ] = await Promise.all([
+          supabase
+            .from("favorites")
+            .select("target_id")
+            .eq("user_id", user.id)
+            .eq("target_type", "project"),
+          supabase
+            .from("profiles")
+            .select("skills, role")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("proposals")
+            .select("project_id")
+            .eq("freelancer_id", user.id),
+          supabase
+            .from("projects")
+            .select(
+              `
+                id,
+                title,
+                description,
+                budget,
+                category,
+                location,
+                created_at,
+                deadline,
+                skills,
+                team_required,
+                team_size,
+                estimated_duration
+              `
+            )
+            .eq("status", "open")
+            .order("created_at", {
+              ascending: false,
+            }),
+        ]);
+
+        const { data: favoriteRows, error: favoritesError } = favoritesResult;
+
+        if (favoritesError) {
+          console.error(
+            "Favoriler yüklenemedi:",
+            favoritesError
+          );
+        } else if (!cancelled) {
+          setFavorites(
+            new Set(
+              (favoriteRows ?? []).map((row) => row.target_id)
+            )
+          );
+        }
+
+        const { data: profile, error: profileError } = profileResult;
 
         if (profileError) {
           throw profileError;
@@ -485,17 +549,7 @@ export default function DiscoverPage() {
           return;
         }
 
-        /* ---------------------------------------------------------------- */
-        /* Existing proposals                                                */
-        /* ---------------------------------------------------------------- */
-
-        const {
-          data: proposals,
-          error: proposalsError,
-        } = await supabase
-          .from("proposals")
-          .select("project_id")
-          .eq("freelancer_id", user.id);
+        const { data: proposals, error: proposalsError } = proposalsResult;
 
         if (proposalsError) {
           throw proposalsError;
@@ -507,35 +561,7 @@ export default function DiscoverPage() {
             .filter(Boolean)
         );
 
-        /* ---------------------------------------------------------------- */
-        /* Open projects                                                     */
-        /* ---------------------------------------------------------------- */
-
-        const {
-          data: projectRows,
-          error: projectsError,
-        } = await supabase
-          .from("projects")
-          .select(
-            `
-              id,
-              title,
-              description,
-              budget,
-              category,
-              location,
-              created_at,
-              deadline,
-              skills,
-              team_required,
-              team_size,
-              estimated_duration
-            `
-          )
-          .eq("status", "open")
-          .order("created_at", {
-            ascending: false,
-          });
+        const { data: projectRows, error: projectsError } = projectsResult;
 
         if (projectsError) {
           throw projectsError;
@@ -563,39 +589,87 @@ export default function DiscoverPage() {
          */
         const matchingByProject: Record<string, FreelancerRoleMatch[]> = {};
 
-        if ((projectRows ?? []).length > 0) {
-          try {
-            const matchResponse = await fetch(
-              "/api/ai/match-talent",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  projectIds: (projectRows ?? []).map((row) => row.id),
-                }),
-              }
-            );
+        const openProjectIds = (projectRows ?? []).map((row) => row.id);
 
-            if (matchResponse.ok) {
-              const matchData = (await matchResponse.json()) as {
-                matching?: Record<string, FreelancerRoleMatch[]>;
+        if (openProjectIds.length > 0) {
+          // Aynı freelancer + aynı açık proje seti için kısa süreli
+          // sessionStorage cache'i: sayfa yenilendiğinde/tekrar
+          // girildiğinde AI eşleşmesi gereksiz yere tekrar hesaplanmasın.
+          // Profil/skill değişikliği yeni bir tarayıcı sekmesi/oturumu
+          // gerektirmeden yansısın diye süre kısa (10 dk) tutuluyor.
+          const matchCacheKey = `discover-match:${user.id}:${[...openProjectIds]
+            .sort()
+            .join(",")}`;
+          const MATCH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+          let cachedMatching: Record<string, FreelancerRoleMatch[]> | null =
+            null;
+
+          try {
+            const cachedRaw = sessionStorage.getItem(matchCacheKey);
+
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw) as {
+                matching: Record<string, FreelancerRoleMatch[]>;
+                cachedAt: number;
               };
 
-              Object.assign(
-                matchingByProject,
-                matchData.matching ?? {}
+              if (Date.now() - cached.cachedAt < MATCH_CACHE_TTL_MS) {
+                cachedMatching = cached.matching;
+              }
+            }
+          } catch {
+            // sessionStorage kullanılamıyorsa (gizli sekme vb.) sessizce
+            // cache'siz devam edilir.
+          }
+
+          if (cachedMatching) {
+            Object.assign(matchingByProject, cachedMatching);
+          } else {
+            try {
+              const matchResponse = await fetch(
+                "/api/ai/match-talent",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    projectIds: openProjectIds,
+                  }),
+                }
               );
-            } else {
+
+              if (matchResponse.ok) {
+                const matchData = (await matchResponse.json()) as {
+                  matching?: Record<string, FreelancerRoleMatch[]>;
+                };
+
+                const matching = matchData.matching ?? {};
+
+                Object.assign(matchingByProject, matching);
+
+                try {
+                  sessionStorage.setItem(
+                    matchCacheKey,
+                    JSON.stringify({
+                      matching,
+                      cachedAt: Date.now(),
+                    })
+                  );
+                } catch {
+                  // Depolama kotası/gizli sekme — cache yazılamazsa sorun değil.
+                }
+              } else {
+                console.error(
+                  "Toplu proje eşleşmesi alınamadı:",
+                  await matchResponse.text()
+                );
+              }
+            } catch (matchError) {
               console.error(
-                "Toplu proje eşleşmesi alınamadı:",
-                await matchResponse.text()
+                "Toplu proje eşleşmesi hesaplanamadı:",
+                matchError
               );
             }
-          } catch (matchError) {
-            console.error(
-              "Toplu proje eşleşmesi hesaplanamadı:",
-              matchError
-            );
           }
         }
 
@@ -838,11 +912,22 @@ export default function DiscoverPage() {
   /* Favorites                                                               */
   /* ---------------------------------------------------------------------- */
 
-  function toggleFavorite(projectId: string) {
+  async function toggleFavorite(projectId: string) {
+    if (!userId || pendingFavoriteIds.has(projectId)) return;
+
+    const wasFavorite = favorites.has(projectId);
+
+    setPendingFavoriteIds((previous) =>
+      new Set(previous).add(projectId)
+    );
+    setFavoriteError("");
+
+    // Optimistic update — UI reflects the new state immediately;
+    // reverted below if the write fails.
     setFavorites((previous) => {
       const next = new Set(previous);
 
-      if (next.has(projectId)) {
+      if (wasFavorite) {
         next.delete(projectId);
       } else {
         next.add(projectId);
@@ -850,6 +935,57 @@ export default function DiscoverPage() {
 
       return next;
     });
+
+    try {
+      if (wasFavorite) {
+        const { error: deleteError } = await supabase
+          .from("favorites")
+          .delete()
+          .eq("user_id", userId)
+          .eq("target_type", "project")
+          .eq("target_id", projectId);
+
+        if (deleteError) throw deleteError;
+      } else {
+        const { error: insertError } = await supabase
+          .from("favorites")
+          .insert({
+            user_id: userId,
+            target_type: "project",
+            target_id: projectId,
+          });
+
+        // 23505 = unique_violation: already favorited (e.g. a fast
+        // double-click racing two inserts) — treat as success, not an error.
+        if (insertError && insertError.code !== "23505") {
+          throw insertError;
+        }
+      }
+    } catch (err) {
+      console.error("Favori güncellenemedi:", err);
+
+      setFavorites((previous) => {
+        const next = new Set(previous);
+
+        if (wasFavorite) {
+          next.add(projectId);
+        } else {
+          next.delete(projectId);
+        }
+
+        return next;
+      });
+
+      setFavoriteError(
+        "Favori güncellenemedi. Lütfen tekrar deneyin."
+      );
+    } finally {
+      setPendingFavoriteIds((previous) => {
+        const next = new Set(previous);
+        next.delete(projectId);
+        return next;
+      });
+    }
   }
 
   function clearFilters() {
@@ -1102,6 +1238,18 @@ export default function DiscoverPage() {
         </section>
 
         {/* ---------------------------------------------------------------- */}
+        {/* Favorite error                                                    */}
+        {/* ---------------------------------------------------------------- */}
+
+        {favoriteError && (
+          <div className="mb-6 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4">
+            <p className="cc-body-sm text-[var(--color-text-secondary)]">
+              {favoriteError}
+            </p>
+          </div>
+        )}
+
+        {/* ---------------------------------------------------------------- */}
         {/* Error                                                             */}
         {/* ---------------------------------------------------------------- */}
 
@@ -1215,6 +1363,9 @@ export default function DiscoverPage() {
               {filteredProjects.map((project) => {
                 const daysLeft = getDaysRemaining(project.deadline);
                 const isFavorite = favorites.has(project.id);
+                const isFavoritePending = pendingFavoriteIds.has(
+                  project.id
+                );
 
                 return (
                   <article
@@ -1252,9 +1403,10 @@ export default function DiscoverPage() {
 
                         <button
                           type="button"
-                          onClick={() => toggleFavorite(project.id)}
+                          onClick={() => void toggleFavorite(project.id)}
+                          disabled={isFavoritePending}
                           aria-label={isFavorite ? "Favorilerden çıkar" : "Favorilere ekle"}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)]"
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
                         >
                           <Heart className={`h-4 w-4 ${isFavorite ? "fill-current text-[var(--color-text-primary)]" : ""}`} />
                         </button>

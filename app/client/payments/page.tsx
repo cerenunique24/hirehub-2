@@ -132,6 +132,14 @@ export default function ClientPaymentsPage() {
               </div>
             </div>
 
+            {summary.totalDueWithFee > 0 && (
+              <p className="mb-8 -mt-4 text-sm text-neutral-500">
+                Aşama bütçelerin ve platform hizmet bedeli dahil toplam ödeme tutarın:{" "}
+                <strong className="font-semibold text-neutral-800">{formatCurrency(summary.totalDueWithFee)}</strong>.
+                Proje bütçesi, platform ücreti ve toplam ödeme her aşama kartında ayrı ayrı gösterilir.
+              </p>
+            )}
+
             <h2 className="mb-4 text-lg font-semibold text-neutral-900">Proje bazında bütçe / harcama</h2>
 
             {summary.projects.length === 0 ? (

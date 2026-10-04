@@ -17,6 +17,9 @@ type Profile = {
   skills: string[] | null;
   profile_completion: number | null;
   availability_status: string | null;
+  availability_note: string | null;
+  available_from: string | null;
+  availability_updated_at: string | null;
 };
 
 type Proposal = {
@@ -72,7 +75,13 @@ export default function FreelancerDashboard() {
       }
 
       const [profileResult, proposalResult, messageResult, membershipResult] = await Promise.all([
-        supabase.from("profiles").select("first_name, last_name, avatar_url, expertise, skills, profile_completion, availability_status").eq("id", user.id).maybeSingle(),
+        // `last_name` artık genel SELECT grant'inden çıkarıldığı için (bkz.
+        // 202609300012_surname_privacy.sql) kendi profilimiz bile doğrudan
+        // select ile okunamaz — get_my_full_profile() kullanılır.
+        supabase.rpc("get_my_full_profile").then(({ data, error }) => ({
+          data: Array.isArray(data) ? data[0] ?? null : null,
+          error,
+        })),
         supabase.from("proposals").select("id, project_id, status, created_at").eq("freelancer_id", user.id).order("created_at", { ascending: false }),
         supabase.from("messages").select("id", { count: "exact", head: true }).eq("receiver_id", user.id).is("read_at", null),
         supabase.from("project_team_members").select("project_id, role").eq("freelancer_id", user.id).eq("status", "active"),
@@ -86,7 +95,7 @@ export default function FreelancerDashboard() {
       const proposals = (proposalResult.data ?? []) as Proposal[];
       const projectIds = [...new Set(proposals.map((proposal) => proposal.project_id))];
       const projectResult = projectIds.length
-        ? await supabase.from("projects").select("id, title, status").in("id", projectIds)
+        ? await supabase.from("projects").select("id, title, status, deadline").in("id", projectIds)
         : { data: [], error: null };
 
       if (projectResult.error) {
@@ -94,7 +103,11 @@ export default function FreelancerDashboard() {
         return;
       }
 
-      const projectById = new Map(((projectResult.data ?? []) as Project[]).map((project) => [project.id, project]));
+      type ProjectWithDeadline = Project & { deadline: string | null };
+
+      const projectById = new Map(
+        ((projectResult.data ?? []) as ProjectWithDeadline[]).map((project) => [project.id, project]),
+      );
 
       // Ekip üyeliği (project_team_members), hem proposal hem invitation ile
       // katılan freelancer'ları kapsar. "Aktif proje" burada ürün kuralına
@@ -111,17 +124,10 @@ export default function FreelancerDashboard() {
         : { data: [] as Array<Project & { deadline: string | null }> };
 
       for (const extra of extraProjects.data ?? []) {
-        projectById.set(extra.id, extra as Project);
+        projectById.set(extra.id, extra as ProjectWithDeadline);
       }
 
       const activeProjectIds = membershipProjectIds.filter((pid) => projectById.get(pid)?.status === "in_progress");
-
-      // Kalan deadline projects.deadline'da yoksa fetch edilmemiş olabilir
-      // (ilk sorgu deadline seçmiyordu) — aktif projeler için ayrıca çekilir.
-      const deadlineResult = activeProjectIds.length
-        ? await supabase.from("projects").select("id, deadline").in("id", activeProjectIds)
-        : { data: [] as Array<{ id: string; deadline: string | null }> };
-      const deadlineByProjectId = new Map((deadlineResult.data ?? []).map((row) => [row.id, row.deadline]));
 
       const milestoneResult = activeProjectIds.length
         ? await supabase
@@ -159,7 +165,7 @@ export default function FreelancerDashboard() {
           return {
             ...project,
             role: roleByProjectId.get(pid) ?? null,
-            deadline: deadlineByProjectId.get(pid) ?? null,
+            deadline: project.deadline ?? null,
             currentMilestone: pickCurrentMilestone(pid),
           };
         })
@@ -311,6 +317,9 @@ export default function FreelancerDashboard() {
         <AvailabilityCard
           status={profile?.availability_status ?? null}
           activeProjectCount={data?.activeProjects.length ?? 0}
+          availableFrom={profile?.available_from ?? null}
+          availabilityNote={profile?.availability_note ?? null}
+          availabilityUpdatedAt={profile?.availability_updated_at ?? null}
         />
         <PerformanceTeaserCard />
       </section>

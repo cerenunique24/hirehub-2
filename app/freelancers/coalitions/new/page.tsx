@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Freelancer = {
   id: string;
@@ -77,7 +78,7 @@ export default function NewCoalitionPage() {
         } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, title, expertise"
+            "id, first_name, avatar_url, title, expertise"
           )
           .eq("role", "freelancer")
           .neq("id", user.id)
@@ -117,17 +118,7 @@ export default function NewCoalitionPage() {
     void loadFreelancers();
   }, [supabase]);
 
-  const getName = (freelancer: Freelancer) => {
-    const fullName = [
-      freelancer.first_name,
-      freelancer.last_name,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-    return fullName || "İsimsiz Freelancer";
-  };
+  const getName = (freelancer: Freelancer) => publicDisplayName(freelancer, "İsimsiz Freelancer");
 
   const getInitial = (
     freelancer: Freelancer

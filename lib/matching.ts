@@ -15,6 +15,9 @@ function normalize(skill: string) {
     .replace(/ş/g, "s")
     .replace(/ö/g, "o")
     .replace(/ç/g, "c")
+    // "/" ve genel noktalama işaretleri ayraç sayılır — "UI/UX" ile
+    // "UI UX" aynı normalize sonucu vermeli (bkz. matching audit).
+    .replace(/[/\\,;:!?.()[\]{}"'_+&|-]+/g, " ")
     .replace(/\s+/g, " ");
 }
 
@@ -40,6 +43,10 @@ const GENERIC_WORDS = new Set([
   "yonetimi",
   "uzmani",
   "specialist",
+  // "Content Strategy" bir "Content Writing" değil — ikisi de "content"
+  // paylaşıyor ama farklı işler (bkz. matching audit negatif testi).
+  "content",
+  "icerik",
 ]);
 
 function getWords(value: string) {
@@ -48,6 +55,63 @@ function getWords(value: string) {
     .map((word) => word.trim())
     // 2-letter tokens like "ui", "ux", "3d", "ai" are meaningful skills.
     .filter((word) => word.length >= 2 && !STOP_WORDS.has(word));
+}
+
+/**
+ * Kontrollü skill-alias grupları. Bunlar substring/kelime örtüşmesiyle
+ * YAKALANAMAYAN ama gerçekten aynı/çok yakın beceriyi ifade eden
+ * çiftler içindir — en yaygın olarak TR/EN çeviri karşılıkları (ör.
+ * "Hikaye Anlatımı" ile "Screenwriting" hiçbir ortak kelime paylaşmaz,
+ * ama ikisi de anlatı kurma becerisidir — bkz. matching audit, "Bir
+ * Şehrin Hikâyesi" + Leyla Afet vakası).
+ *
+ * Bu, mevcut exact/substring/word-overlap davranışını DEĞİŞTİRMEZ —
+ * sadece isSameSkill() üçü de başarısız olduğunda kontrol edilen,
+ * açıkça listelenmiş, dar kapsamlı bir dördüncü yol ekler. Genel bir
+ * "geniş fuzzy eşleşme" DEĞİLDİR; kontrol SUBSTRING bazlıdır (bileşik
+ * Türkçe ifadeler içindeki tek bir üyeyi de yakalar, ör. "Türkçe Dil
+ * Bilgisi ve Editörlük" ⊃ "editörlük"), ama sadece burada sayılan grup
+ * üyeleri birbiriyle eşleşir — rastgele/genel fuzzy matching yok.
+ */
+const SKILL_ALIAS_GROUPS: string[][] = [
+  // Yaratıcı/anlatı yazarlığı — TR + EN.
+  [
+    "hikaye anlatimi",
+    "hikaye yazarligi",
+    "senaryo yazimi",
+    "yaratici yazarlik",
+    "metin yazarligi",
+    "creative writing",
+    "screenwriting",
+    "script writing",
+  ],
+  // Story Development ↔ Hikâye Geliştirme
+  ["hikaye gelistirme", "story development"],
+  // Editing ↔ Editörlük
+  ["editorluk", "editing"],
+  // Content Writing ↔ İçerik Yazarlığı
+  ["icerik yazarligi", "content writing"],
+  // Copywriting ↔ Metin Yazarlığı
+  ["metin yazarligi", "copywriting"],
+  // Translation ↔ Çeviri
+  ["ceviri", "translation"],
+  // Localization ↔ Yerelleştirme / Lokalizasyon
+  ["lokalizasyon", "localization", "yerellestirme"],
+  // Content Strategy ↔ İçerik Stratejisi
+  ["icerik stratejisi", "content strategy"],
+];
+
+/**
+ * İki normalize edilmiş metin, aynı grubun birer üyesini SUBSTRING
+ * olarak içeriyorsa true döner. Simetriktir — hangi tarafın "left"
+ * hangisinin "right" olduğu sonucu değiştirmez.
+ */
+function hasSkillAliasMatch(left: string, right: string): boolean {
+  return SKILL_ALIAS_GROUPS.some((group) => {
+    const leftHit = group.some((member) => left.includes(member));
+    const rightHit = group.some((member) => right.includes(member));
+    return leftHit && rightHit;
+  });
 }
 
 /**
@@ -66,9 +130,15 @@ function isSameSkill(a: string, b: string) {
   const leftWords = getWords(left);
   const rightWords = getWords(right);
 
-  if (leftWords.length === 0 || rightWords.length === 0) return false;
+  if (
+    leftWords.length > 0 &&
+    rightWords.length > 0 &&
+    leftWords.some((word) => !GENERIC_WORDS.has(word) && rightWords.includes(word))
+  ) {
+    return true;
+  }
 
-  return leftWords.some((word) => !GENERIC_WORDS.has(word) && rightWords.includes(word));
+  return hasSkillAliasMatch(left, right);
 }
 
 /**

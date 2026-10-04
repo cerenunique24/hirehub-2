@@ -4,12 +4,14 @@ import {
   Suspense,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { notifyUsers } from "@/lib/notifications";
+import { CONTACT_INFO_MESSAGE, containsContactInfo } from "@/lib/moderation/contactInfoFilter";
 import {
   Send,
   Search,
@@ -17,8 +19,20 @@ import {
   Paperclip,
   Users,
   ArrowLeft,
+  FileText,
+  X,
 } from "lucide-react";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+import ReportButton from "@/components/safety/ReportButton";
+import BlockUserButton from "@/components/safety/BlockUserButton";
+import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
+import MessageAttachmentView from "@/components/messaging/MessageAttachmentView";
+import {
+  ATTACHMENT_ACCEPT,
+  deleteMessageAttachment,
+  uploadMessageAttachment,
+  validateAttachment,
+} from "@/lib/messaging/attachments";
 
 type TeamConversation = {
   coalitionId: string;
@@ -109,6 +123,11 @@ function ClientMessagesContent() {
     useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState("");
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+  const [sendError, setSendError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -242,7 +261,7 @@ function ClientMessagesContent() {
 
       const { data: profileRows } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name")
+        .select("id, first_name")
         .in("id", userIds);
 
       if (!active) return;
@@ -250,10 +269,7 @@ function ClientMessagesContent() {
       setTeamMemberLabels(
         (profileRows ?? []).map((profile) => ({
           id: profile.id,
-          name:
-            [profile.first_name, profile.last_name]
-              .filter(Boolean)
-              .join(" ") || "Ekip üyesi",
+          name: publicDisplayName(profile, "Ekip üyesi"),
         }))
       );
     };
@@ -277,6 +293,7 @@ function ClientMessagesContent() {
 
     const loadMessages = async () => {
       setLoading(true);
+      setLoadError("");
 
       const { data, error } = await supabase
         .from("messages")
@@ -294,6 +311,9 @@ function ClientMessagesContent() {
 
       if (error) {
         console.error("Mesajlar yüklenemedi:", error);
+        setLoadError(
+          "Mesajlar yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin."
+        );
         setLoading(false);
         return;
       }
@@ -380,7 +400,7 @@ function ClientMessagesContent() {
         } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, role"
+            "id, first_name, avatar_url, role"
           )
           .in("id", otherUserIds);
 
@@ -504,7 +524,7 @@ function ClientMessagesContent() {
             await supabase
               .from("profiles")
               .select(
-                "id, first_name, last_name, avatar_url, role"
+                "id, first_name, avatar_url, role"
               )
               .eq("id", otherUserId)
               .maybeSingle();
@@ -780,12 +800,7 @@ function ClientMessagesContent() {
 
       return conversations.filter(
         (conversation) => {
-          const fullName =
-            `${conversation.user.first_name || ""} ${
-              conversation.user.last_name || ""
-            }`.toLocaleLowerCase(
-              "tr-TR"
-            );
+          const fullName = publicDisplayName(conversation.user, "").toLocaleLowerCase("tr-TR");
 
           const projectTitle =
             (
@@ -922,7 +937,7 @@ function ClientMessagesContent() {
       messageText.trim();
 
     if (
-      !text ||
+      (!text && !attachmentFile) ||
       !currentUserId ||
       !selectedUserId ||
       sending
@@ -930,7 +945,29 @@ function ClientMessagesContent() {
       return;
     }
 
+    if (text && containsContactInfo(text)) {
+      setSendError(CONTACT_INFO_MESSAGE);
+      return;
+    }
+
     setSending(true);
+    setSendError("");
+
+    let attachment: { url: string; name: string; type: string } | null = null;
+
+    if (attachmentFile) {
+      const { data: uploaded, error: uploadError } = await uploadMessageAttachment(
+        supabase,
+        currentUserId,
+        attachmentFile
+      );
+      if (uploadError || !uploaded) {
+        setSendError(uploadError ?? "Dosya yüklenemedi.");
+        setSending(false);
+        return;
+      }
+      attachment = uploaded;
+    }
 
     const {
       data,
@@ -942,10 +979,10 @@ function ClientMessagesContent() {
         receiver_id: selectedUserId,
         proposal_id:
           selectedProposalId,
-        content: text,
-        attachment_url: null,
-        attachment_name: null,
-        attachment_type: null,
+        content: text || null,
+        attachment_url: attachment?.url ?? null,
+        attachment_name: attachment?.name ?? null,
+        attachment_type: attachment?.type ?? null,
       })
       .select()
       .single();
@@ -956,8 +993,16 @@ function ClientMessagesContent() {
         error
       );
 
-      alert(
-        `Mesaj gönderilemedi: ${error.message}`
+      if (attachment) {
+        await deleteMessageAttachment(supabase, attachment.url);
+      }
+
+      setSendError(
+        error.code === "42501"
+          ? "Bu kullanıcıyla mesajlaşamazsın. Kullanıcı engellenmiş olabilir."
+          : error.code === "P0001"
+            ? error.message
+            : "Mesaj gönderilemedi. Lütfen tekrar deneyin."
       );
 
       setSending(false);
@@ -987,7 +1032,9 @@ function ClientMessagesContent() {
             userId: selectedUserId,
             type: "message_received",
             title: "Yeni mesaj geldi",
-            message: text.length > 80 ? `${text.slice(0, 80)}…` : text,
+            message: text
+              ? text.length > 80 ? `${text.slice(0, 80)}…` : text
+              : "Bir ek dosya gönderdi.",
             link: `/freelancers/messages?user=${encodeURIComponent(currentUserId ?? "")}`,
           },
         ]);
@@ -995,39 +1042,27 @@ function ClientMessagesContent() {
     }
 
     setMessageText("");
+    setAttachmentFile(null);
     setSending(false);
   };
 
   /*
    * YARDIMCI FONKSİYONLAR
    */
-  const getFullName = (
-    profile: Profile
-  ) => {
-    const name =
-      `${profile.first_name || ""} ${
-        profile.last_name || ""
-      }`.trim();
+  const getFullName = (profile: Profile) => publicDisplayName(profile, "Kullanıcı");
 
-    return name || "Kullanıcı";
-  };
+  const getInitials = (profile: Profile) => displayInitial(profile);
 
-  const getInitials = (
-    profile: Profile
-  ) => {
-    const first =
-      profile.first_name?.charAt(0) ||
-      "";
-
-    const last =
-      profile.last_name?.charAt(0) ||
-      "";
-
-    return (
-      `${first}${last}`.toUpperCase() ||
-      "U"
-    );
-  };
+  function onPickAttachment(file: File | undefined | null) {
+    if (!file) return;
+    const validationError = validateAttachment(file);
+    if (validationError) {
+      setAttachmentError(validationError);
+      return;
+    }
+    setAttachmentError("");
+    setAttachmentFile(file);
+  }
 
   const formatTime = (
     date: string
@@ -1051,6 +1086,12 @@ function ClientMessagesContent() {
           Freelancerlar ve ekiplerle iletişimini yönet.
         </p>
       </div>
+
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
 
       <div className="flex h-[calc(100vh-220px)] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white">
         {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
@@ -1413,6 +1454,11 @@ function ClientMessagesContent() {
                     )}
                   </p>
                 </div>
+
+                <div className="ml-auto flex flex-wrap items-start justify-end gap-2">
+                  <ReportButton targetType="user" targetId={selectedProfile.id} label="Şikayet Et" />
+                  <BlockUserButton targetUserId={selectedProfile.id} />
+                </div>
               </div>
 
               {/* MESSAGES */}
@@ -1445,11 +1491,22 @@ function ClientMessagesContent() {
                                 : "border border-gray-200 bg-white text-gray-800"
                             }`}
                           >
-                            <p className="whitespace-pre-wrap break-words">
-                              {
-                                message.content
-                              }
-                            </p>
+                            {message.content && (
+                              <p className="whitespace-pre-wrap break-words">
+                                {
+                                  message.content
+                                }
+                              </p>
+                            )}
+
+                            {message.attachment_url && (
+                              <MessageAttachmentView
+                                path={message.attachment_url}
+                                name={message.attachment_name}
+                                type={message.attachment_type}
+                                tone={isMe ? "mine" : "theirs"}
+                              />
+                            )}
 
                             <span className="mt-2 block text-xs opacity-60">
                               {formatTime(
@@ -1465,11 +1522,44 @@ function ClientMessagesContent() {
               </div>
 
               {/* INPUT */}
-              <div className="flex gap-3 border-t border-gray-200 p-5">
+              <div className="border-t border-gray-200 p-5">
+                {sendError && (
+                  <p className="mb-3 text-sm text-red-600">{sendError}</p>
+                )}
+                {attachmentError && (
+                  <p className="mb-3 text-sm text-red-600">{attachmentError}</p>
+                )}
+                {attachmentFile && (
+                  <div className="mb-3 flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
+                    <FileText size={15} />
+                    <span className="flex-1 truncate">{attachmentFile.name}</span>
+                    <button
+                      type="button"
+                      aria-label="Ek dosyayı kaldır"
+                      onClick={() => setAttachmentFile(null)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                <input
+                  ref={attachmentInputRef}
+                  type="file"
+                  accept={ATTACHMENT_ACCEPT}
+                  className="hidden"
+                  onChange={(event) => {
+                    onPickAttachment(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
                 <button
                   type="button"
                   aria-label="Dosya ekle"
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500 transition hover:bg-gray-200"
+                  onClick={() => attachmentInputRef.current?.click()}
+                  disabled={sending}
+                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 disabled:opacity-40"
                 >
                   <Paperclip size={18} />
                 </button>
@@ -1502,7 +1592,7 @@ function ClientMessagesContent() {
                   }
                   disabled={
                     sending ||
-                    !messageText.trim()
+                    (!messageText.trim() && !attachmentFile)
                   }
                   className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-40"
                 >
@@ -1512,6 +1602,7 @@ function ClientMessagesContent() {
                     ? "Gönderiliyor..."
                     : "Gönder"}
                 </button>
+                </div>
               </div>
             </>
           )}

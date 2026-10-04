@@ -58,16 +58,24 @@ function getStatusLabel(status: string | null) {
   }
 }
 
+// Semantik renk sistemi: aktif/devam eden → primary blue, tamamlanan →
+// yeşil, reddedilen/iptal → kırmızı-nötr, bekleyen → amber. Diğer proje/
+// teklif status badge'leriyle (ProjectWorkroom, proposals) aynı ölçü
+// sistemi: rounded-full px-3 py-1 text-xs font-medium.
 function getStatusClass(status: string | null) {
   switch (status) {
     case "in_progress":
-      return "bg-green-100 text-green-700";
+      return "bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
     case "completed":
-      return "bg-blue-100 text-blue-700";
+      return "bg-green-50 text-green-700";
     case "cancelled":
-      return "bg-red-100 text-red-700";
+      return "bg-red-50 text-red-700";
+    case "paused":
+      return "bg-gray-100 text-gray-600";
+    case "ready_to_start":
+      return "bg-amber-50 text-amber-700";
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
   }
 }
 
@@ -105,7 +113,8 @@ export default function ProjectsPage() {
           .eq("status", "active");
 
         if (membershipsError) {
-          setError(`Projeler yüklenemedi: ${membershipsError.message}`);
+          console.error("Ekip üyelikleri yüklenemedi:", membershipsError);
+          setError("Projeler yüklenemedi. Lütfen tekrar deneyin.");
           return;
         }
 
@@ -124,7 +133,8 @@ export default function ProjectsPage() {
           .in("id", projectIds);
 
         if (projectsError) {
-          setError(`Projeler yüklenemedi: ${projectsError.message}`);
+          console.error("Projeler yüklenemedi:", projectsError);
+          setError("Projeler yüklenemedi. Lütfen tekrar deneyin.");
           return;
         }
 
@@ -238,7 +248,7 @@ export default function ProjectsPage() {
             >
               <div className="mb-4 flex items-start justify-between gap-4">
                 <h2 className="font-semibold text-gray-900">{project.title}</h2>
-                <span className={`rounded-full px-3 py-1 text-xs ${getStatusClass(project.status)}`}>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${getStatusClass(project.status)}`}>
                   {getStatusLabel(project.status)}
                 </span>
               </div>

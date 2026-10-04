@@ -7,6 +7,7 @@ import StatCard from "../components/StatCard";
 import QuickActions from "../components/QuickActions";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
+import { fetchBudgetBreakdown } from "@/lib/projects/teamReadiness";
 
 type ClientProject = {
   id: string;
@@ -88,7 +89,7 @@ export default function ClientDashboardPage() {
 
       const { data: projectRows, error: projectError } = await supabase
         .from("projects")
-        .select("id, title, description, status, budget, budget_max, budget_breakdown, created_at, updated_at")
+        .select("id, title, description, status, budget, budget_max, created_at, updated_at")
         .eq("client_id", user.id)
         .order("created_at", { ascending: false });
 
@@ -100,11 +101,28 @@ export default function ClientDashboardPage() {
         return;
       }
 
-      const projects = (projectRows ?? []) as ClientProject[];
+      const projects = ((projectRows ?? []) as Omit<ClientProject, "budget_breakdown">[]).map((p) => ({
+        ...p,
+        budget_breakdown: [] as ClientProject["budget_breakdown"],
+      }));
       const activeBase = projects.filter((p) => p.status === "in_progress");
       const openBase = projects.filter((p) => p.status === "open");
       const activeIds = activeBase.map((p) => p.id);
       const openIds = openBase.map((p) => p.id);
+
+      // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+      // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+      // Yalnızca gösterilen aktif/açık projeler için RPC üzerinden okunur.
+      const budgetByProjectId = new Map(
+        await Promise.all(
+          [...activeIds, ...openIds].map(
+            async (id) => [id, await fetchBudgetBreakdown(supabase, id)] as const
+          )
+        )
+      );
+      for (const project of [...activeBase, ...openBase]) {
+        project.budget_breakdown = budgetByProjectId.get(project.id) ?? [];
+      }
 
       const [teamResult, milestoneResult, proposalResult, activityResult] = await Promise.all([
         activeIds.length > 0

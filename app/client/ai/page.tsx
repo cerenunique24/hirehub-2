@@ -42,6 +42,11 @@ export default function ClientAIPage() {
         }
         setError("");
         setWorkspace(data as ClientWorkspace);
+      } catch (err) {
+        console.error("CollaCrew AI client workspace fetch error:", err);
+        if (!cancelled) {
+          setError("CollaCrew AI yüklenirken bir sorun oluştu. Lütfen tekrar deneyin.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

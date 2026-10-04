@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getRoleCapacity, normalizeRoleName } from "@/lib/projects/teamReadiness";
 import { containsContactInfo, CONTACT_INFO_MESSAGE } from "@/lib/moderation/contactInfoFilter";
 import { checkRateLimit, rateLimitKey, RATE_LIMIT_MESSAGE } from "@/lib/rateLimit";
+import { getServerSigningSecret } from "@/lib/server/trust";
 
 /**
  * Bir projenin yeni teklif kabul etmeye uygun sayıldığı durumlar.
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
      */
     const { data: project, error: projectError } = await supabase
       .from("projects")
-      .select("id, status, budget_breakdown")
+      .select("id, status")
       .eq("id", projectId)
       .maybeSingle();
 
@@ -147,6 +148,27 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Proje bulunamadı." },
         { status: 404 }
+      );
+    }
+
+    /*
+     * budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+     * supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+     * Burada sadece rol KAPASİTESİ (memberCount) için kullanılıyor —
+     * sunucuya özel imzayla tam veri okunur, hiçbir para alanı bu
+     * route'un response'una yansımaz.
+     */
+    const { data: budgetBreakdown, error: budgetError } = await supabase.rpc(
+      "get_project_budget_breakdown",
+      { p_project_id: projectId, p_server_secret: getServerSigningSecret() }
+    );
+
+    if (budgetError) {
+      console.error("Project budget breakdown lookup error:", budgetError);
+
+      return NextResponse.json(
+        { error: "Proje bilgisi okunamadı." },
+        { status: 500 }
       );
     }
 
@@ -222,7 +244,7 @@ export async function POST(request: Request) {
     }
 
     const roleCapacity = getRoleCapacity(
-      Array.isArray(project.budget_breakdown) ? project.budget_breakdown : null,
+      Array.isArray(budgetBreakdown) ? budgetBreakdown : null,
       matchedRole.role
     );
 

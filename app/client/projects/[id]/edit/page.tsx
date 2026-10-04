@@ -69,10 +69,6 @@ export default function EditProjectPage() {
   const [showDeleteModal, setShowDeleteModal] =
     useState(false);
 
-  useEffect(() => {
-    loadProject();
-  }, [projectId]);
-
   async function loadProject() {
     setLoading(true);
     setError("");
@@ -150,6 +146,10 @@ export default function EditProjectPage() {
       setLoading(false);
     }
   }
+
+useEffect(() => {
+    loadProject();
+  }, [projectId]);
 
   function addSkill() {
     const value = skillInput.trim();

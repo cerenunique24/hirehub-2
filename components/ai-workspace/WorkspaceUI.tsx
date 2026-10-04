@@ -12,6 +12,18 @@ export type PlanTierLabel = "free" | "plus" | "pro";
 
 const PLAN_LABEL: Record<PlanTierLabel, string> = { free: "Free", plus: "Plus", pro: "Pro" };
 
+/**
+ * Plan rozetlerinin tek, paylaşılan ölçü/renk sistemi (PlanBadge ve
+ * WorkspaceHeader'ın kendi plan göstergesi burayı kullanır). FREE nötr
+ * gri, PLUS ve PRO aynı mavi aile içinde — PRO sadece daha belirgin
+ * (kalın border + font-semibold), farklı bir renk değil.
+ */
+const PLAN_TIER_CLASSES: Record<PlanTierLabel, string> = {
+  free: "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]",
+  plus: "border border-[var(--color-primary-600)]/25 bg-[var(--color-primary-50)] text-[var(--color-primary-700)]",
+  pro: "border border-[var(--color-primary-600)]/50 bg-[var(--color-primary-50)] text-[var(--color-primary-700)] font-semibold",
+};
+
 export function WorkspaceHeader({
   description,
   plan,
@@ -27,7 +39,9 @@ export function WorkspaceHeader({
         <p className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-primary-600)]">
           <Sparkles size={14} />
           CollaCrew AI
-          <span className="rounded-[var(--radius-pill)] border border-[var(--color-border-subtle)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-secondary)]">
+          <span
+            className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-xs font-medium leading-[18px] ${PLAN_TIER_CLASSES[plan]}`}
+          >
             {PLAN_LABEL[plan]}
           </span>
         </p>
@@ -80,7 +94,9 @@ export function ScoreBadge({ score }: { score: number }) {
 
 export function PlanBadge({ plan }: { plan: PlanTierLabel }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--color-text-primary)] px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-white">
+    <span
+      className={`inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-2 py-0.5 text-xs font-medium leading-[18px] ${PLAN_TIER_CLASSES[plan]}`}
+    >
       <Lock size={10} />
       {PLAN_LABEL[plan]}
     </span>

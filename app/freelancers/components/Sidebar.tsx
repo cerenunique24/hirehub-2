@@ -13,6 +13,7 @@ import {
   UserCircle,
   Settings,
   CircleHelp,
+  Heart,
 } from "lucide-react";
 
 import { Sidebar, type SidebarMenuItem } from "@/components/layout/Sidebar";
@@ -23,6 +24,7 @@ const menuGroups: SidebarMenuItem[][] = [
     { name: "Projeleri Keşfet", href: "/freelancers/discover", icon: Compass },
     { name: "Projelerim", href: "/freelancers/projects", icon: BriefcaseBusiness },
     { name: "Tekliflerim", href: "/freelancers/proposals", icon: FileText },
+    { name: "Favorilerim", href: "/freelancers/saved", icon: Heart },
     { name: "Koalisyonlar", href: "/freelancers/coalitions", icon: UsersRound },
     { name: "Freelancerlar", href: "/freelancers/freelancers", icon: UsersRound },
     { name: "Kazançlar", href: "/freelancers/earnings", icon: Wallet },

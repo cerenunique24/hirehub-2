@@ -32,16 +32,15 @@ export async function listAdminProjects(
   let namesById = new Map<string, string>();
 
   if (clientIds.length > 0) {
-    const { data: profileRows, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", clientIds);
+    const { data: profileRows, error: profileError } = await supabase.rpc("admin_get_profile_names", {
+      p_ids: clientIds,
+    });
 
     if (profileError) {
       console.error("[CollaCrew Admin] Proje client isimleri alınamadı:", profileError);
     }
 
-    namesById = new Map((profileRows ?? []).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)]));
+    namesById = new Map((((profileRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)])));
   }
 
   return {

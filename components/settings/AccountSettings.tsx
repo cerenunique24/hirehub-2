@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import AccountDeletionCard from "@/components/settings/AccountDeletionCard";
 
 type Profile = {
   first_name: string | null;
@@ -26,6 +27,7 @@ type Profile = {
   phone: string | null;
   notification_preferences: Record<string, boolean> | null;
   profile_visibility: "public" | "private";
+  marketing_consent: boolean | null;
 };
 
 type Tab = "hesap" | "bildirimler" | "gizlilik" | "guvenlik" | "uyelik" | "hesap-islemleri";
@@ -308,6 +310,38 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
                 );
               })}
             </div>
+
+            <div className="mt-8 border-t border-[var(--color-border-subtle)] pt-6">
+              <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+                Pazarlama ve kampanya iletişimi
+              </h3>
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                Bu tercih, hesap/sözleşme onaylarından ayrıdır — istediğin zaman değiştirebilirsin.
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-4 rounded-lg bg-[var(--color-canvas)] px-4 py-3.5">
+                <p className="text-sm text-[var(--color-text-primary)]">
+                  Pazarlama ve kampanya amaçlı iletişim almak istiyorum.
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    void persistProfile(
+                      { marketing_consent: !profile?.marketing_consent },
+                      "marketing_consent"
+                    )
+                  }
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                    profile?.marketing_consent ? "bg-[var(--color-primary-600)]" : "bg-[var(--color-surface-2)]"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-[var(--color-surface-1)] shadow transition ${
+                      profile?.marketing_consent ? "left-5" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
           </section>
         )}
 
@@ -399,13 +433,7 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
                 </div>
                 <Badge>Yakında</Badge>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-[var(--color-canvas)] px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium text-[var(--color-text-primary)]">Hesabı sil</p>
-                  <p className="text-xs text-[var(--color-text-secondary)]">Yakında eklenecek.</p>
-                </div>
-                <Badge>Yakında</Badge>
-              </div>
+              <AccountDeletionCard />
             </div>
           </section>
         )}

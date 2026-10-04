@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { earningsBucketFor } from "@/lib/payments/status";
+import { calculateFreelancerNet } from "@/lib/pricing";
+
 /**
  * CollaCrew'da henüz gerçek bir ödeme altyapısı (payment gateway) yok.
  * Bu yüzden bu modül kesinlikle "ödendi" / "transfer edildi" gibi bir
@@ -31,10 +34,20 @@ export type FreelancerEarningsSummary = {
   totalEngagement: number;
   realizedEarnings: number;
   pendingEarnings: number;
+  /**
+   * Ödeme sağlayıcısı bağlandığında dolacak gruplar (milestone.payment_status'e
+   * göre): bekleyen / serbest bırakılabilir / ödenen. Sağlayıcı olmadığı için
+   * şu an availableEarnings ve paidEarnings 0'dır — sahte değer üretilmez.
+   */
+  paymentPending: number;
+  availableEarnings: number;
+  paidEarnings: number;
   projects: ProjectFinancialLine[];
 };
 
 export type ClientPaymentsSummary = {
+  /** Client'ın ödeyeceği toplam (bütçe + platform ücreti) — aşamalardaki client_total_amount toplamı. */
+  totalDueWithFee: number;
   totalBudget: number;
   activeBudget: number;
   completedBudget: number;
@@ -60,7 +73,15 @@ export async function getFreelancerEarningsSummary(
 
   const rows = memberships ?? [];
   if (rows.length === 0) {
-    return { totalEngagement: 0, realizedEarnings: 0, pendingEarnings: 0, projects: [] };
+    return {
+      totalEngagement: 0,
+      realizedEarnings: 0,
+      pendingEarnings: 0,
+      paymentPending: 0,
+      availableEarnings: 0,
+      paidEarnings: 0,
+      projects: [],
+    };
   }
 
   const projectIds = [...new Set(rows.map((r) => r.project_id))];
@@ -71,8 +92,28 @@ export async function getFreelancerEarningsSummary(
     proposalIds.length > 0
       ? supabase.from("proposals").select("id, bid_amount").in("id", proposalIds)
       : Promise.resolve({ data: [] as Array<{ id: string; bid_amount: number }> }),
-    supabase.from("project_milestones").select("project_id, budget, status").in("project_id", projectIds),
+    supabase
+      .from("project_milestones")
+      .select("project_id, budget, status, payment_status, freelancer_id, freelancer_payout_amount")
+      .in("project_id", projectIds),
   ]);
+
+  // Team projelerinde diğer üyelerin aşamaları bu freelancer'ın kazancına sayılmaz.
+  const ownMilestones = (milestones ?? []).filter(
+    (m) => m.freelancer_id === null || m.freelancer_id === freelancerId
+  );
+
+  let paymentPending = 0;
+  let availableEarnings = 0;
+  let paidEarnings = 0;
+
+  for (const m of ownMilestones) {
+    const amount = toNumber(m.freelancer_payout_amount ?? calculateFreelancerNet(toNumber(m.budget)));
+    const bucket = earningsBucketFor({ milestoneStatus: m.status, paymentStatus: m.payment_status });
+    if (bucket === "paid") paidEarnings += amount;
+    else if (bucket === "available") availableEarnings += amount;
+    else if (bucket === "pending") paymentPending += amount;
+  }
 
   const bidByProposalId = new Map((proposals ?? []).map((p) => [p.id, toNumber(p.bid_amount)]));
   const proposalIdByProjectId = new Map(rows.map((r) => [r.project_id, r.proposal_id]));
@@ -82,7 +123,7 @@ export async function getFreelancerEarningsSummary(
     const bidAmount = proposalId ? bidByProposalId.get(proposalId) : undefined;
     const engagementValue = bidAmount ?? toNumber(project.budget_max ?? project.budget ?? 0);
 
-    const projectMilestones = (milestones ?? []).filter((m) => m.project_id === project.id);
+    const projectMilestones = ownMilestones.filter((m) => m.project_id === project.id);
     const approvedFromMilestones = projectMilestones
       .filter((m) => m.status === "approved")
       .reduce((sum, m) => sum + toNumber(m.budget), 0);
@@ -105,6 +146,9 @@ export async function getFreelancerEarningsSummary(
     totalEngagement: lines.reduce((sum, l) => sum + l.engagementValue, 0),
     realizedEarnings: lines.reduce((sum, l) => sum + l.approvedValue, 0),
     pendingEarnings: lines.reduce((sum, l) => sum + l.pendingValue, 0),
+    paymentPending,
+    availableEarnings,
+    paidEarnings,
     projects: lines,
   };
 }
@@ -121,6 +165,7 @@ export async function getClientPaymentsSummary(
   const projectRows = projects ?? [];
   if (projectRows.length === 0) {
     return {
+      totalDueWithFee: 0,
       totalBudget: 0,
       activeBudget: 0,
       completedBudget: 0,
@@ -133,8 +178,13 @@ export async function getClientPaymentsSummary(
   const projectIds = projectRows.map((p) => p.id);
   const { data: milestones } = await supabase
     .from("project_milestones")
-    .select("project_id, budget, status")
+    .select("project_id, budget, status, client_total_amount")
     .in("project_id", projectIds);
+
+  const totalDueWithFee = (milestones ?? []).reduce(
+    (sum, m) => sum + toNumber(m.client_total_amount ?? m.budget),
+    0
+  );
 
   const lines: ProjectFinancialLine[] = projectRows.map((project) => {
     const engagementValue = toNumber(project.budget_max ?? project.budget ?? 0);
@@ -161,6 +211,7 @@ export async function getClientPaymentsSummary(
   });
 
   return {
+    totalDueWithFee,
     totalBudget: lines.reduce((sum, l) => sum + l.engagementValue, 0),
     activeBudget: lines.filter((l) => l.status === "in_progress").reduce((sum, l) => sum + l.engagementValue, 0),
     completedBudget: lines.filter((l) => l.status === "completed").reduce((sum, l) => sum + l.engagementValue, 0),

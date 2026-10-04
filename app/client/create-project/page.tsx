@@ -27,25 +27,8 @@ import type {
   PlusProjectAnalysis,
   ProProjectAnalysis,
 } from "@/lib/ai/projectAnalysisEnrichment";
-
-/**
- * Ana kategori: geniş iş alanı (Bionluk'taki üst kategori mantığı
- * referans alınmıştır). AI eşleştirme rol/beceri/açıklama üzerinden
- * çalışır — bu liste yalnızca projenin genel iş alanını sınıflandırır,
- * spesifik hizmet/rol seçimini daraltmaz.
- */
-const CATEGORIES = [
-  "Tasarım",
-  "Yazılım & Teknoloji",
-  "Pazarlama",
-  "İçerik & Çeviri",
-  "Video & Animasyon",
-  "Ses & Müzik",
-  "Fotoğraf",
-  "İş & Yönetim",
-  "Senaryo & Hikâye",
-  "Diğer",
-];
+import { CATEGORIES } from "@/lib/categories";
+import { STANDARD_COMMISSION_RATE } from "@/lib/pricing";
 
 const DELIVERY_FORMATS = [
   "Figma dosyası",
@@ -1030,6 +1013,22 @@ export default function CreateProjectPage() {
         );
       }
 
+      /*
+       * ÖNEMLİ (bkz. matching audit — "Bir Şehrin Hikâyesi" + Leyla Afet
+       * vakası): selectionMode "team" değilse (tek freelancer / henüz
+       * seçim yapılmadı) bile AI'nın ürettiği / client'ın düzenlediği
+       * rol bilgisi (isim, gerekli/tercih edilen beceriler, sorumluluklar)
+       * budget_breakdown'a yazılmalı. Aksi halde bu bilgi hiçbir yerde
+       * saklanmıyor ve matchFreelancerToProjectRoles() jenerik "Tek
+       * Freelancer" fallback'ine düşüyor — role-text skorlaması hiç
+       * çalışamıyor, sonuç olarak profili gerçekten uygun freelancerlar
+       * bile eleniyor.
+       *
+       * Tek freelancer modunda kişi başı bütçe/süre kavramı yok — proje
+       * genelindeki totalBudget/projectDuration her role girişine
+       * (memberCount=1 ile) uygulanır. Team akışı (roller kendi
+       * memberCount/budgetPerPerson'ıyla) DEĞİŞMEDİ.
+       */
       const budgetBreakdown =
         selectionMode === "team"
           ? roles.map((role) => ({
@@ -1048,7 +1047,26 @@ export default function CreateProjectPage() {
               preferredSkills:
                 role.preferredSkills,
             }))
-          : [];
+          : roles
+              .filter((role) =>
+                role.name.trim()
+              )
+              .map((role) => ({
+                roleId: role.id,
+                role: role.name.trim(),
+                memberCount: 1,
+                budgetPerPerson:
+                  totalBudget,
+                budget: totalBudget,
+                duration:
+                  projectDuration,
+                responsibilities:
+                  role.responsibilities,
+                requiredSkills:
+                  role.skills,
+                preferredSkills:
+                  role.preferredSkills,
+              }));
 
       const estimatedDuration =
         selectionMode === "team"
@@ -1148,10 +1166,11 @@ export default function CreateProjectPage() {
         .single();
 
       if (projectError || !project) {
-        throw new Error(
-          projectError?.message ||
-            "Proje oluşturulamadı."
-        );
+        if (projectError) {
+          console.error("Proje oluşturulamadı:", projectError);
+        }
+
+        throw new Error("Proje oluşturulamadı. Lütfen tekrar deneyin.");
       }
 
       router.push("/client/projects");
@@ -2908,7 +2927,7 @@ function BudgetPublishStep({
     };
   }, []);
 
-  const effectiveCommissionRate = commissionRate ?? 0.15;
+  const effectiveCommissionRate = commissionRate ?? STANDARD_COMMISSION_RATE;
   const platformFee = Math.round(totalBudget * effectiveCommissionRate);
   const totalWithFee = totalBudget + platformFee;
 
@@ -3163,7 +3182,7 @@ function BudgetPublishStep({
             </div>
 
             <p className="text-xs leading-5 text-gray-400">
-              Bu bir tahsilat değildir. CollaCrew'da ödeme
+              Bu bir tahsilat değildir. CollaCrew&apos;da ödeme
               altyapısı devreye girdiğinde gerçek tahsilat ayrı
               bir adımda onayınıza sunulacaktır.
             </p>

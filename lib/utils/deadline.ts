@@ -107,3 +107,33 @@ export function formatDeadlineDate(
     year: "numeric",
   });
 }
+
+/**
+ * Teslim durumu: on_track (zamanında), due_soon (2 gün veya daha az kaldı),
+ * overdue (süre geçti). Bu, veritabanında saklanan bir durum DEĞİL; her
+ * gösterimde `due_date` ve aşamanın güncel durumundan hesaplanır, böylece
+ * hiçbir zaman eskimiş bir "gecikti" bilgisi kalmaz.
+ */
+export type DeadlineStatus = "on_track" | "due_soon" | "overdue";
+
+export const DUE_SOON_THRESHOLD_DAYS = 2;
+
+/** Teslim beklenmeyen (onaylanmış / henüz başlamamış) aşamalar için null döner. */
+export function getDeadlineStatus(input: {
+  dueDate: string | null | undefined;
+  status: string;
+}): DeadlineStatus | null {
+  if (input.status === "approved" || input.status === "pending") return null;
+
+  const days = getDaysRemaining(input.dueDate);
+  if (days === null) return null;
+  if (days < 0) return "overdue";
+  if (days <= DUE_SOON_THRESHOLD_DAYS) return "due_soon";
+  return "on_track";
+}
+
+export const DEADLINE_STATUS_LABEL: Record<DeadlineStatus, string> = {
+  on_track: "Zamanında",
+  due_soon: "Teslim yaklaşıyor",
+  overdue: "Gecikti",
+};

@@ -4,6 +4,8 @@ import { matchFreelancerToProjectRoles, type FreelancerRoleMatch } from "@/lib/a
 import { matchSkills } from "@/lib/matching";
 import { canUseFeature, FEATURE_MATRIX, type AccessContext, type FeatureKey, type PlanTier } from "@/lib/premium";
 import { normalizeStringArray } from "@/lib/utils/normalizeStringArray";
+import { getServerSigningSecret } from "@/lib/server/trust";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 /**
  * CollaCrew AI workspaces (client + freelancer).
@@ -106,7 +108,7 @@ export async function buildClientWorkspace(
 
   const { data: projects } = await supabase
     .from("projects")
-    .select("id, title, status, category, budget_breakdown, created_at")
+    .select("id, title, status, category, created_at")
     .eq("client_id", context.userId!)
     .order("created_at", { ascending: false });
 
@@ -128,11 +130,18 @@ export async function buildClientWorkspace(
 
   if (!project) return empty;
 
-  const budgetRoles = readRoles(project.budget_breakdown);
+  // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+  // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+  const { data: projectBudgetBreakdown } = await supabase.rpc("get_project_budget_breakdown", {
+    p_project_id: project.id,
+    p_server_secret: getServerSigningSecret(),
+  });
+
+  const budgetRoles = readRoles(projectBudgetBreakdown);
 
   const { data: freelancers } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name, title")
+    .select("id, first_name, title")
     .eq("role", "freelancer")
     .limit(200);
 
@@ -180,7 +189,7 @@ export async function buildClientWorkspace(
       const matching = match.matchingSkills ?? [];
       const candidate: ClientCandidate = {
         freelancerId: freelancer.id,
-        name: [freelancer.first_name, freelancer.last_name].filter(Boolean).join(" ") || "Freelancer",
+        name: publicDisplayName(freelancer, "Freelancer"),
         title: freelancer.title,
         score: match.score,
         reason: plus ? match.reason : firstReason(match.reason),
@@ -297,7 +306,7 @@ export async function buildFreelancerWorkspace(
   const [{ data: openProjects }, { data: profile }, { data: portfolio }] = await Promise.all([
     supabase
       .from("projects")
-      .select("id, title, category, status, budget_breakdown")
+      .select("id, title, category, status")
       .in("status", ["open", "ready_to_start"]),
     supabase
       .from("profiles")
@@ -309,11 +318,21 @@ export async function buildFreelancerWorkspace(
 
   const perProject = await Promise.all(
     (openProjects ?? []).map(async (project) => {
+      // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+      // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+      // Skill-gap analizi sadece rol adı/skill alanlarını kullanır, para
+      // alanına ihtiyacı yok — bu yüzden RPC sunucu imzasız çağrılır.
+      const { data: budgetBreakdown } = await supabase.rpc("get_project_budget_breakdown", {
+        p_project_id: project.id,
+      });
+
+      const projectWithBudget = { ...project, budget_breakdown: budgetBreakdown };
+
       try {
-        return { project, matches: await matchFreelancerToProjectRoles(supabase, project.id, userId) };
+        return { project: projectWithBudget, matches: await matchFreelancerToProjectRoles(supabase, project.id, userId) };
       } catch (error) {
         console.error(`[AI workspace] match error for project ${project.id}:`, error);
-        return { project, matches: [] as FreelancerRoleMatch[] };
+        return { project: projectWithBudget, matches: [] as FreelancerRoleMatch[] };
       }
     })
   );

@@ -124,7 +124,7 @@ export async function POST(request: Request) {
        * Supabase client'ıyla DOĞRUDAN çağırmaz — aksi halde her
        * açık projenin TÜM rollerinin bütçesi, sadece en iyi rol
        * render edilse bile, network response'unda tarayıcıya
-       * gönderilirdi (bkz. HIREHUB_AUDIT_CONTEXT.md — "budget
+       * gönderilirdi (bkz. COLLACREW_AUDIT_CONTEXT.md — "budget
        * breakdown UI'da gizleniyor ama response'ta hâlâ mevcut").
        */
       const projectIds = Array.isArray(body.projectIds)

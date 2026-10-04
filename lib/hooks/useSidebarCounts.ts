@@ -38,11 +38,11 @@ export function useSidebarCounts(
 
   useEffect(() => {
     let cancelled = false;
+    const supabase = createClient();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     async function load() {
       setLoading(true);
-
-      const supabase = createClient();
 
       try {
         const {
@@ -67,7 +67,7 @@ export function useSidebarCounts(
             .from("messages")
             .select("id", { count: "exact", head: true })
             .eq("receiver_id", user.id)
-            .eq("is_read", false),
+            .is("read_at", null),
         ]);
 
         let pendingProposals = 0;
@@ -119,10 +119,55 @@ export function useSidebarCounts(
       }
     }
 
+    // Bu dosyanın kendi yorumu "gerçek zamanlı sayaç kaynağı" diyordu
+    // ama aslında sadece mount'ta bir kez fetch ediyordu — bildirim/mesaj
+    // okundu işaretlendiğinde veya yenisi geldiğinde badge hiç
+    // güncellenmiyordu (sayfa yenilenene kadar). Aynı satırların
+    // (notifications/messages) zaten çalışan realtime subscription
+    // deseni (app/freelancers/notifications/page.tsx) burada da
+    // kullanılarak, ilgili kullanıcı için herhangi bir INSERT/UPDATE'te
+    // sayaç tazelenir.
+    async function setupRealtime() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || cancelled) return;
+
+      channel = supabase
+        .channel(`sidebar-counts-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => void load()
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "messages",
+            filter: `receiver_id=eq.${user.id}`,
+          },
+          () => void load()
+        )
+        .subscribe();
+    }
+
     void load();
+    void setupRealtime();
 
     return () => {
       cancelled = true;
+
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
   }, [role]);
 

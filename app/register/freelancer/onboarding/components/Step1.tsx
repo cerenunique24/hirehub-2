@@ -4,28 +4,13 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 
 import type { OnboardingData } from "../page";
+import { CATEGORIES as categories } from "@/lib/categories";
 
 type Step1Props = {
   data: OnboardingData;
   onChange: (updates: Partial<OnboardingData>) => void;
   onNext: () => void;
 };
-
-const categories = [
-  "UI/UX Tasarım",
-  "Web Tasarım",
-  "Web Geliştirme",
-  "Mobil Uygulama",
-  "Yazılım Geliştirme",
-  "Marka Tasarımı",
-  "Grafik Tasarım",
-  "E-Ticaret",
-  "Dijital Pazarlama",
-  "İçerik Üretimi",
-  "3D Tasarım",
-  "Mimari & İç Mekân",
-  "Diğer",
-];
 
 export default function Step1({
   data,

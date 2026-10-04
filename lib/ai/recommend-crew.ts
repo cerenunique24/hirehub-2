@@ -29,7 +29,7 @@ export async function recommendCrew(
     members,
     totalEstimatedCost: analysis.estimatedBudget,
     estimatedDuration: analysis.estimatedTimeline,
-    summary: `CollaCrew recommends a ${members.length}-person crew for this ${analysis.complexity.toLowerCase()}-complexity ${analysis.category.toLowerCase()} project. Each member covers a distinct role — review and adjust before publishing.`,
+    summary: `CollaCrew recommends a ${members.length}-person crew for this ${analysis.complexity.toLowerCase()}-complexity ${(analysis.category ?? "").toLowerCase()} project. Each member covers a distinct role — review and adjust before publishing.`,
     confidence: analysis.complexity === "High" ? 82 : analysis.complexity === "Medium" ? 88 : 91,
   };
 }

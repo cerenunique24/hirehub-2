@@ -12,22 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-
-const categories = [
-  "Web Tasarım",
-  "Web Geliştirme",
-  "Mobil Uygulama",
-  "UI/UX Tasarım",
-  "Marka Tasarımı",
-  "Grafik Tasarım",
-  "E-Ticaret",
-  "Yazılım Geliştirme",
-  "Dijital Pazarlama",
-  "İçerik Üretimi",
-  "3D Tasarım",
-  "Mimari & İç Mekân",
-  "Diğer",
-];
+import { CATEGORIES as categories } from "@/lib/categories";
 
 export default function ClientSetupPage() {
   const router = useRouter();

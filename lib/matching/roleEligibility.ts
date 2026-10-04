@@ -1,3 +1,5 @@
+import { normalizeMatchText } from "@/lib/utils/normalizeMatchText";
+
 /**
  * Deterministic role-family eligibility.
  *
@@ -31,7 +33,8 @@ type RoleFamily =
   | "data_science"
   | "writing"
   | "project_management"
-  | "video_photo"
+  | "video"
+  | "photography"
   | "animation_3d"
   | "finance_accounting"
   | "legal"
@@ -94,6 +97,15 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
     "mekan tasarimi",
     "mimari proje",
     "bina bilgi modelleme",
+    "architectural visualizer",
+    "architectural visualization",
+    "mimari görselleştirici",
+    "mimari gorsellestirici",
+    "mimari görselleştirme",
+    "mimari gorsellestirme",
+    "cad designer",
+    "cad tasarımcısı",
+    "cad tasarimcisi",
     "autocad",
     "revit",
     "archicad",
@@ -317,8 +329,22 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
     "technical writer",
     "senarist",
     "screenwriter",
-    "editör",
-    "editor",
+    /*
+     * Bare "editör"/"editor" KASITLI OLARAK burada değil — "Video
+     * Editor"/"Photo Editor" gibi alakasız rollerin substring ile
+     * writing family'ye sızmasına yol açıyordu (bkz. matching audit,
+     * video/photography family ayrımı). İçerik/yayın editörlüğüne
+     * özgü bileşik ifadeler kullanılıyor.
+     */
+    "içerik editörü",
+    "icerik editoru",
+    "metin editörü",
+    "metin editoru",
+    "yayın editörü",
+    "yayin editoru",
+    "kitap editörü",
+    "kitap editoru",
+    "content editor",
     "redaktör",
     "redaktor",
     "proofreader",
@@ -328,6 +354,23 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
     "hayalet yazar",
     "akademik yazar",
     "academic writer",
+    /*
+     * "Kitap yazma projesi + Senarist" audit'inde AI'nın ürettiği genel
+     * yazarlık rolleri (bare "yazar" değil — o generic tek kelime, aile
+     * tespitinde false-positive riski taşır, bkz. dosya başındaki not)
+     * ile gerçek kitap/senaryo yazarlığı unvanları arasındaki boşluğu
+     * kapatır.
+     */
+    "kitap yazarı",
+    "kitap yazari",
+    "roman yazarı",
+    "roman yazari",
+    "hikaye yazarı",
+    "hikaye yazari",
+    "senaryo yazarı",
+    "senaryo yazari",
+    "öykü yazarı",
+    "oyku yazari",
   ],
 
   project_management: [
@@ -344,16 +387,51 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
     "agile coach",
   ],
 
-  video_photo: [
+  /*
+   * ÖNEMLİ: "video" ve "photography" KASITLI OLARAK ayrı aileler
+   * (eskiden tek "video_photo" ailesiydi). Bir Video Editor ile bir
+   * Photographer aynı proje türünde (video/foto prodüksiyon) çalışsa
+   * bile GERÇEK İŞLERİ farklı — biri diğerinin yerine role-eligible
+   * sayılmamalı (bkz. matching audit, "Fotoğraf + Video Editor" test
+   * senaryosu).
+   */
+  video: [
     "video editor",
     "video editörü",
     "video editoru",
     "videographer",
+    "video producer",
+    "video yapımcısı",
+    "video yapimcisi",
+    "motion designer",
+    "motion graphics",
+    "post production specialist",
+    "post prodüksiyon uzmanı",
+    "post produksiyon uzmani",
+    "animator",
+    "animatör",
+    "character animator",
+  ],
+
+  photography: [
     "photographer",
     "fotoğrafçı",
     "fotografci",
-    "motion designer",
-    "motion graphics",
+    "product photographer",
+    "ürün fotoğrafçısı",
+    "urun fotografcisi",
+    "fashion photographer",
+    "moda fotoğrafçısı",
+    "moda fotografcisi",
+    "event photographer",
+    "etkinlik fotoğrafçısı",
+    "etkinlik fotografcisi",
+    "photo editor",
+    "fotoğraf editörü",
+    "fotograf editoru",
+    "retoucher",
+    "rötuşçu",
+    "rotuscu",
   ],
 
   animation_3d: [
@@ -426,6 +504,14 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
     "muzik produktoru",
     "dublaj sanatçısı",
     "dublaj sanatcisi",
+    "sound designer",
+    "ses tasarımcısı",
+    "ses tasarimcisi",
+    "podcast producer",
+    "podcast prodüktörü",
+    "podcast produktoru",
+    "mixing mastering",
+    "mix ve mastering",
   ],
 
   hr_recruitment: [
@@ -472,19 +558,16 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
   ],
 };
 
+/**
+ * Merkezi normalizasyona yönlendirir (bkz. lib/utils/normalizeMatchText.ts).
+ * Önceki versiyon "â" gibi Unicode aksanlı karakterleri NFD yapmadan
+ * doğrudan boşlukla değiştiriyordu — bu, "Hikâye Yazarı" gibi girdilerin
+ * role-family tespitinde hiç eşleşmemesine yol açıyordu (bkz. matching
+ * audit — "Bir Şehrin Hikâyesi" + Leyla Afet vakası). Merkezi fonksiyon
+ * NFD ayrıştırma ile bunu doğru çözer; "/" ayraç davranışı aynı kaldı.
+ */
 function normalizeText(value: string): string {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .replace(/ı/g, "i")
-    .replace(/İ/g, "i")
-    .replace(/ğ/g, "g")
-    .replace(/ü/g, "u")
-    .replace(/ş/g, "s")
-    .replace(/ö/g, "o")
-    .replace(/ç/g, "c")
-    .replace(/[^a-z0-9\s/-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeMatchText(value);
 }
 
 /**

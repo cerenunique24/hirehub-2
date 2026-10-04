@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireFeatureAccess, canUseFeature } from "@/lib/premium";
 import { matchFreelancerToProjectRoles } from "@/lib/ai/match-talent";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 /**
  * GET /api/premium/client/ai-shortlist?projectId=...
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
 
     const { data: freelancers, error: freelancersError } = await supabase
       .from("profiles")
-      .select("id, first_name, last_name, title, avatar_url")
+      .select("id, first_name, title, avatar_url")
       .eq("role", "freelancer");
 
     if (freelancersError) {
@@ -76,7 +77,7 @@ export async function GET(request: Request) {
 
           return {
             freelancerId: freelancer.id,
-            name: [freelancer.first_name, freelancer.last_name].filter(Boolean).join(" ") || "Freelancer",
+            name: publicDisplayName(freelancer, "Freelancer"),
             title: freelancer.title,
             avatarUrl: freelancer.avatar_url,
             role: best.role,

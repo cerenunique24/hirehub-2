@@ -11,9 +11,12 @@ import {
   FileText,
   LifeBuoy,
   Briefcase,
-  Settings,
   LogOut,
   ShieldAlert,
+  Scale,
+  Flag,
+  ScrollText,
+  Star,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -25,18 +28,21 @@ type AdminMenuItem = {
 };
 
 const MAIN_MENU: AdminMenuItem[] = [
-  { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "Genel Bakış", href: "/admin", icon: LayoutDashboard },
   { name: "Kullanıcılar", href: "/admin/users", icon: Users },
   { name: "Projeler", href: "/admin/projects", icon: FolderKanban },
   { name: "Teklifler", href: "/admin/proposals", icon: FileText },
   { name: "Destek Talepleri", href: "/admin/support", icon: LifeBuoy },
   { name: "Kariyer Başvuruları", href: "/admin/careers", icon: Briefcase },
   { name: "Moderasyon", href: "/admin/moderation", icon: ShieldAlert },
+  { name: "Şikayetler", href: "/admin/reports", icon: Flag },
+  { name: "Değerlendirmeler", href: "/admin/reviews", icon: Star },
+  { name: "Uyuşmazlıklar", href: "/admin/disputes", icon: Scale },
+  { name: "Denetim Kaydı", href: "/admin/audit", icon: ScrollText },
 ];
 
-const BOTTOM_MENU: AdminMenuItem[] = [
-  { name: "Ayarlar", href: "/admin/settings", icon: Settings },
-];
+// /admin/settings sayfası henüz yok; ölü bir bağlantı göstermemek için menü boş bırakıldı.
+const BOTTOM_MENU: AdminMenuItem[] = [];
 
 export default function AdminSidebar() {
   const pathname = usePathname();

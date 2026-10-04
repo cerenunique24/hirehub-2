@@ -108,6 +108,26 @@ export default function EarningsPage() {
             </div>
           </div>
 
+          <h2 className="mb-2 text-lg font-semibold text-gray-900">Ödeme durumu</h2>
+          <p className="mb-4 text-sm text-gray-500">
+            Net kazancın (platform kesintisi uygulanmaz) ödeme durumuna göre dağılımı. Ödeme altyapısı aktif olana
+            kadar serbest bırakılabilir ve ödenen tutarlar sıfır görünür.
+          </p>
+          <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <p className="text-sm text-gray-500">Bekleyen</p>
+              <h3 className="mt-2 text-xl font-semibold text-gray-900">{formatCurrency(summary.paymentPending)}</h3>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <p className="text-sm text-gray-500">Serbest bırakılabilir</p>
+              <h3 className="mt-2 text-xl font-semibold text-gray-900">{formatCurrency(summary.availableEarnings)}</h3>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <p className="text-sm text-gray-500">Ödenen</p>
+              <h3 className="mt-2 text-xl font-semibold text-gray-900">{formatCurrency(summary.paidEarnings)}</h3>
+            </div>
+          </div>
+
           <h2 className="mb-4 text-lg font-semibold text-gray-900">Proje bazında özet</h2>
 
           {summary.projects.length === 0 ? (

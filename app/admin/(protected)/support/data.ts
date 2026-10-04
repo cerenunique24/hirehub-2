@@ -50,16 +50,15 @@ export async function listAdminSupportTickets(
   let namesById = new Map<string, string>();
 
   if (userIds.length > 0) {
-    const { data: profileRows, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", userIds);
+    const { data: profileRows, error: profileError } = await supabase.rpc("admin_get_profile_names", {
+      p_ids: userIds,
+    });
 
     if (profileError) {
       console.error("[CollaCrew Admin] Destek talebi sahiplerinin isimleri alınamadı:", profileError);
     }
 
-    namesById = new Map((profileRows ?? []).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)]));
+    namesById = new Map((((profileRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)])));
   }
 
   return {
@@ -162,12 +161,13 @@ export async function getAdminSupportTicketMessages(
   let namesById = new Map<string, string>();
 
   if (senderIds.length > 0) {
-    const { data: profileRows } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", senderIds);
+    const { data: profileRows } = await supabase.rpc("admin_get_profile_names", { p_ids: senderIds });
 
-    namesById = new Map((profileRows ?? []).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)]));
+    namesById = new Map(
+      ((profileRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map(
+        (p) => [p.id, fullNameOf(p.first_name, p.last_name)]
+      )
+    );
   }
 
   return {

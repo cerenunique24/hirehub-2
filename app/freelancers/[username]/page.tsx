@@ -5,11 +5,12 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, BriefcaseBusiness, Loader2, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import RatingSummary from "@/components/shared/RatingSummary";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Freelancer = {
   id: string;
   first_name: string | null;
-  last_name: string | null;
   avatar_url: string | null;
   title: string | null;
   bio: string | null;
@@ -48,7 +49,7 @@ export default function FreelancerProfilePage() {
       // seçilir (email/telefon gibi özel bilgiler asla döndürülmez).
       const { data, error: loadError } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name, avatar_url, title, bio, expertise, skills, role")
+        .select("id, first_name, avatar_url, title, bio, expertise, skills, role")
         .eq("id", id)
         .maybeSingle();
 
@@ -104,7 +105,7 @@ export default function FreelancerProfilePage() {
     );
   }
 
-  const name = [freelancer.first_name, freelancer.last_name].filter(Boolean).join(" ").trim() || "Freelancer";
+  const name = publicDisplayName(freelancer, "Freelancer");
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 
   return (
@@ -127,6 +128,7 @@ export default function FreelancerProfilePage() {
             <div>
               <h1 className="text-3xl font-semibold text-gray-900">{name}</h1>
               <p className="mt-1 text-gray-500">{freelancer.title || freelancer.expertise || "Uzmanlık bilgisi eklenmemiş"}</p>
+              <RatingSummary userId={freelancer.id} className="mt-2" />
               {freelancer.skills && freelancer.skills.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {freelancer.skills.slice(0, 6).map((skill) => (

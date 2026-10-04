@@ -36,8 +36,12 @@ export default function ClientNotificationsPage() {
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
 
-      if (notificationError) setError(`Bildirimler yüklenemedi: ${notificationError.message}`);
-      else setNotifications((data ?? []) as Notification[]);
+      if (notificationError) {
+        console.error("Bildirimler yüklenemedi:", notificationError);
+        setError("Bildirimler yüklenemedi. Lütfen tekrar deneyin.");
+      } else {
+        setNotifications((data ?? []) as Notification[]);
+      }
       setLoading(false);
     }
     void loadNotifications();
@@ -48,7 +52,8 @@ export default function ClientNotificationsPage() {
     if (!unreadIds.length) return;
     const { error: updateError } = await supabase.from("notifications").update({ is_read: true }).in("id", unreadIds);
     if (updateError) {
-      setError(`Bildirimler güncellenemedi: ${updateError.message}`);
+      console.error("Bildirimler güncellenemedi:", updateError);
+      setError("Bildirimler güncellenemedi. Lütfen tekrar deneyin.");
       return;
     }
     setNotifications((current) => current.map((item) => ({ ...item, is_read: true })));

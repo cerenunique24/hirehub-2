@@ -11,7 +11,7 @@ import { createServerClient } from "@supabase/ssr";
  * Önceden bu kontrol sadece her sidebar bileşeninin kendi
  * `useEffect` içinde yaptığı client-side `router.replace("/login")`
  * çağrısına bırakılmıştı — freelancer sidebar'ı bunu yapıyordu, client
- * sidebar'ı yapmıyordu (bkz. HIREHUB_AUDIT_CONTEXT.md §7/§27/§28) ve
+ * sidebar'ı yapmıyordu (bkz. COLLACREW_AUDIT_CONTEXT.md §7/§27/§28) ve
  * ikisi de sayfa içeriği bir an için render edildikten SONRA devreye
  * giriyordu. Bu, bir güvenlik sınırı değildi.
  *
@@ -41,6 +41,7 @@ const FREELANCER_PROTECTED_SEGMENTS = new Set([
   "profile",
   "projects",
   "proposals",
+  "saved",
   "settings",
 ]);
 

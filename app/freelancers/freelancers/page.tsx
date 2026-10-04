@@ -13,12 +13,13 @@ import {
   Check,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { CATEGORIES } from "@/lib/categories";
 import { FreelancerCard } from "@/components/freelancers/FreelancerCard";
+import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
 
 type Profile = {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
+  first_name: string | null;
   avatar_url: string | null;
   role: string | null;
   title: string | null;
@@ -29,6 +30,7 @@ type Profile = {
   availability: string | null;
   experience: string | null;
   expertise: string | null;
+  project_types: string[] | null;
   work_types: string[] | null;
   languages: string[] | null;
   profile_completion: number | null;
@@ -47,7 +49,7 @@ function FreelancersContent() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [search, setSearch] = useState("");
-  const [expertiseFilter, setExpertiseFilter] = useState("Tümü");
+  const [categoryFilter, setCategoryFilter] = useState("Tümü");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,7 +93,6 @@ function FreelancersContent() {
           `
             id,
             first_name,
-            last_name,
             avatar_url,
             role,
             title,
@@ -102,6 +103,7 @@ function FreelancersContent() {
             availability,
             experience,
             expertise,
+            project_types,
             work_types,
             languages,
             profile_completion
@@ -146,20 +148,16 @@ function FreelancersContent() {
     loadFreelancers();
   }, [coalitionId, supabase]);
 
-  const expertiseOptions = useMemo(() => {
-    const values = profiles
-      .map((profile) => profile.expertise)
-      .filter((value): value is string => Boolean(value?.trim()));
-
-    return ["Tümü", ...Array.from(new Set(values))];
-  }, [profiles]);
+  const categoryOptions = useMemo(
+    () => ["Tümü", ...CATEGORIES],
+    []
+  );
 
   const filteredProfiles = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("tr-TR");
 
     return profiles.filter((profile) => {
-      const fullName =
-        `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+      const fullName = publicDisplayName(profile, "");
 
       const searchableText = [
         fullName,
@@ -175,27 +173,17 @@ function FreelancersContent() {
       const matchesSearch =
         !query || searchableText.includes(query);
 
-      const matchesExpertise =
-        expertiseFilter === "Tümü" ||
-        profile.expertise === expertiseFilter;
+      const matchesCategory =
+        categoryFilter === "Tümü" ||
+        (profile.project_types ?? []).includes(categoryFilter);
 
-      return matchesSearch && matchesExpertise;
+      return matchesSearch && matchesCategory;
     });
-  }, [profiles, search, expertiseFilter]);
+  }, [profiles, search, categoryFilter]);
 
-  const getFullName = (profile: Profile) => {
-    const name =
-      `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+  const getFullName = (profile: Profile) => publicDisplayName(profile, "İsimsiz Freelancer");
 
-    return name || "İsimsiz Freelancer";
-  };
-
-  const getInitials = (profile: Profile) => {
-    const first = profile.first_name?.charAt(0) ?? "";
-    const last = profile.last_name?.charAt(0) ?? "";
-
-    return `${first}${last}`.toUpperCase() || "F";
-  };
+  const getInitials = (profile: Profile) => displayInitial(profile);
 
   const getMemberStatus = (profileId: string) => {
     return coalitionMembers.find(
@@ -384,16 +372,16 @@ function FreelancersContent() {
               />
 
               <select
-                value={expertiseFilter}
+                value={categoryFilter}
                 onChange={(event) =>
-                  setExpertiseFilter(event.target.value)
+                  setCategoryFilter(event.target.value)
                 }
                 className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400 focus:bg-white"
               >
-                {expertiseOptions.map((option) => (
+                {categoryOptions.map((option) => (
                   <option key={option} value={option}>
                     {option === "Tümü"
-                      ? "Tüm uzmanlıklar"
+                      ? "Tüm kategoriler"
                       : option}
                   </option>
                 ))}

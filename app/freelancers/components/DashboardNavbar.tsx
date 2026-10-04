@@ -16,7 +16,7 @@ import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
 type Message = {
   id: string;
   content: string;
-  is_read: boolean;
+  read_at: string | null;
   created_at: string;
   sender_id: string;
 };
@@ -43,6 +43,7 @@ export default function DashboardNavbar() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [showMessages, setShowMessages] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -59,7 +60,7 @@ export default function DashboardNavbar() {
       const { data, error } = await supabase
         .from("messages")
         .select(
-          "id, content, is_read, created_at, sender_id"
+          "id, content, read_at, created_at, sender_id"
         )
         .eq("receiver_id", userId)
         .order("created_at", { ascending: false })
@@ -149,14 +150,14 @@ export default function DashboardNavbar() {
        * Böylece profiles tablosunda profil satırı bulunmasa bile
        * navbar tamamen hata vermez.
        */
+      // `last_name` artık genel SELECT grant'inden çıkarıldığı için (bkz.
+      // 202609300012_surname_privacy.sql) kendi profilimiz bile doğrudan
+      // select ile okunamaz — get_my_full_profile() kullanılır.
       const {
-        data: profile,
+        data: profileRows,
         error: profileError,
-      } = await supabase
-        .from("profiles")
-        .select("first_name, last_name, avatar_url")
-        .eq("id", user.id)
-        .maybeSingle<Profile>();
+      } = await supabase.rpc("get_my_full_profile");
+      const profile = Array.isArray(profileRows) ? (profileRows[0] as Profile | undefined) : undefined;
 
       if (profileError) {
         console.error(
@@ -195,6 +196,8 @@ export default function DashboardNavbar() {
         setAvatarUrl(null);
       }
 
+      setUserId(user.id);
+
       await Promise.all([
         fetchMessages(user.id),
         fetchNotifications(user.id),
@@ -211,8 +214,50 @@ export default function DashboardNavbar() {
     void fetchUser();
   }, []);
 
+  /*
+   * Bu navbar'ın bildirim/mesaj sayıları önceden sadece mount'ta bir kez
+   * çekiliyordu, hiçbir realtime aboneliği yoktu — bir bildirim/mesaj
+   * başka bir sekmede/ekranda okundu işaretlense veya yenisi gelse bile
+   * rozet/liste sayfa yenilenene kadar bayat kalıyordu. Aynı desen
+   * (app/freelancers/notifications/page.tsx, app/client/components/
+   * Navbar.tsx) burada da uygulanıyor.
+   */
+  useEffect(() => {
+    if (!userId) return;
+
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel(`freelancer-navbar-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => void fetchNotifications(userId)
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `receiver_id=eq.${userId}`,
+        },
+        () => void fetchMessages(userId)
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   const unreadMessages = messages.filter(
-    (message) => !message.is_read
+    (message) => !message.read_at
   ).length;
 
   const unreadNotifications = notifications.filter(
@@ -428,7 +473,7 @@ export default function DashboardNavbar() {
                           Mesaj
                         </p>
 
-                        {!message.is_read && (
+                        {!message.read_at && (
                           <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-primary-600)]" />
                         )}
                       </div>

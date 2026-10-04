@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, UserPlus, Send } from "lucide-react";
+import { Search, Sparkles, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { getTeamCompletion } from "@/lib/projects/teamReadiness";
+import { fetchBudgetBreakdown, getTeamCompletion } from "@/lib/projects/teamReadiness";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type OpenCoalition = {
   id: string;
@@ -12,7 +13,6 @@ type OpenCoalition = {
   projectId: string;
   projectTitle: string;
   openRoles: string[];
-  requestStatus: "none" | "pending";
 };
 
 type Coalition = {
@@ -27,7 +27,6 @@ type Coalition = {
 type Profile = {
   id: string;
   first_name: string | null;
-  last_name: string | null;
   avatar_url: string | null;
   title: string | null;
 };
@@ -214,7 +213,7 @@ export default function CoalitionsPage() {
         } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, title"
+            "id, first_name, avatar_url, title"
           )
           .in("id", memberUserIds);
 
@@ -281,8 +280,6 @@ export default function CoalitionsPage() {
 
   const [openCoalitions, setOpenCoalitions] = useState<OpenCoalition[]>([]);
   const [loadingOpen, setLoadingOpen] = useState(true);
-  const [requestingId, setRequestingId] = useState<string | null>(null);
-  const [openError, setOpenError] = useState("");
 
   const loadOpenCoalitions = async () => {
     const supabase = createClient();
@@ -302,7 +299,7 @@ export default function CoalitionsPage() {
     const { data: rows, error } = await supabase
       .from("coalitions")
       .select(
-        "id, name, project_id, projects(id, title, status, budget_breakdown)"
+        "id, name, project_id, projects(id, title, status)"
       )
       .eq("status", "active")
       .not("project_id", "is", null);
@@ -347,6 +344,16 @@ export default function CoalitionsPage() {
       .in("project_id", projectIds)
       .eq("status", "active");
 
+    // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+    // supabase/migrations/202609300006_budget_breakdown_privacy.sql). Bu
+    // liste henüz üye olunmamış açık projeleri de gösterdiği için RPC
+    // sunucu imzasız çağrılır — ilgisiz roller için para alanı döndürülmez.
+    const budgetByProjectId = new Map(
+      await Promise.all(
+        projectIds.map(async (id) => [id, await fetchBudgetBreakdown(supabase, id)] as const)
+      )
+    );
+
     setOpenCoalitions(
       candidates.map((row) => {
         const project = (Array.isArray(row.projects) ? row.projects[0] : row.projects)!;
@@ -355,7 +362,7 @@ export default function CoalitionsPage() {
           (member) => member.project_id === project.id
         );
 
-        const openRoles = getTeamCompletion(project.budget_breakdown, projectActiveMembers)
+        const openRoles = getTeamCompletion(budgetByProjectId.get(project.id) ?? [], projectActiveMembers)
           .roles.filter((role) => !role.isFull)
           .map((role) => role.role);
 
@@ -365,8 +372,6 @@ export default function CoalitionsPage() {
           projectId: project.id,
           projectTitle: project.title,
           openRoles,
-          requestStatus:
-            myMembershipByCoalition.get(row.id) === "pending" ? "pending" : "none",
         };
       })
     );
@@ -377,46 +382,6 @@ export default function CoalitionsPage() {
   useEffect(() => {
     void loadOpenCoalitions();
   }, []);
-
-  const requestToJoin = async (coalitionId: string) => {
-    setRequestingId(coalitionId);
-    setOpenError("");
-
-    const supabase = createClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setRequestingId(null);
-      return;
-    }
-
-    const { error } = await supabase.from("coalition_members").insert({
-      coalition_id: coalitionId,
-      user_id: user.id,
-      role: "member",
-      status: "pending",
-    });
-
-    if (error) {
-      setOpenError(
-        error.code === "23505"
-          ? "Bu koalisyona zaten bir isteğin var."
-          : "Katılma isteği gönderilemedi."
-      );
-      setRequestingId(null);
-      return;
-    }
-
-    setOpenCoalitions((current) =>
-      current.map((item) =>
-        item.id === coalitionId ? { ...item, requestStatus: "pending" } : item
-      )
-    );
-    setRequestingId(null);
-  };
 
   const filteredCoalitions = useMemo(() => {
     const normalizedSearch =
@@ -441,10 +406,6 @@ export default function CoalitionsPage() {
         ...coalition.members.map(
           (member) =>
             member.profile?.first_name ?? ""
-        ),
-        ...coalition.members.map(
-          (member) =>
-            member.profile?.last_name ?? ""
         ),
         ...coalition.members.map(
           (member) =>
@@ -484,20 +445,7 @@ export default function CoalitionsPage() {
     });
   };
 
-  const getMemberName = (
-    member: CoalitionMember
-  ) => {
-    const firstName =
-      member.profile?.first_name ?? "";
-
-    const lastName =
-      member.profile?.last_name ?? "";
-
-    const fullName =
-      `${firstName} ${lastName}`.trim();
-
-    return fullName || "Kullanıcı";
-  };
+  const getMemberName = (member: CoalitionMember) => publicDisplayName(member.profile, "Kullanıcı");
 
   const getAvatar = (
     member: CoalitionMember
@@ -742,12 +690,6 @@ export default function CoalitionsPage() {
           </h2>
         </div>
 
-        {openError && (
-          <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-            {openError}
-          </p>
-        )}
-
         {loadingOpen ? (
           <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
             Yükleniyor...
@@ -796,23 +738,6 @@ export default function CoalitionsPage() {
                     <Send size={15} />
                     Teklif Gönder
                   </Link>
-
-                  {coalition.openRoles.length > 0 && (
-                    <button
-                      type="button"
-                      disabled={
-                        coalition.requestStatus === "pending" ||
-                        requestingId === coalition.id
-                      }
-                      onClick={() => void requestToJoin(coalition.id)}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <UserPlus size={15} />
-                      {coalition.requestStatus === "pending"
-                        ? "İstek Gönderildi"
-                        : "Katılma İsteği Gönder"}
-                    </button>
-                  )}
                 </div>
               </div>
             ))}

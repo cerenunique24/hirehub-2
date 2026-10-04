@@ -263,4 +263,31 @@ export function ConsentGroup({
   );
 }
 
+/**
+ * Pazarlama/kampanya iletişimi onayı — opsiyonel, sözleşme onaylarıyla
+ * AYNI kutuda DEĞİL. İşaretlenmese de hesap oluşturulabilir.
+ */
+export function MarketingConsentCheckbox({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5 rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] p-3.5">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-primary-600)]"
+      />
+      <span className="cc-body-sm text-[var(--color-text-secondary)]">
+        Pazarlama ve kampanya amaçlı iletişim almak istiyorum. (Opsiyonel — hesap ayarlarından
+        istediğin zaman değiştirebilirsin.)
+      </span>
+    </label>
+  );
+}
+
 export default RegisterSplitLayout;

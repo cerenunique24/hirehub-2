@@ -11,6 +11,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
 import { normalizeStringArray, stringArrayToTextColumn } from "@/lib/utils/normalizeStringArray";
+import { CATEGORIES } from "@/lib/categories";
 import {
   Plus,
   Trash2,
@@ -36,6 +37,9 @@ type Profile = {
   hourly_rate: number | null;
   availability: string | null;
   availability_status: string | null;
+  availability_note: string | null;
+  available_from: string | null;
+  availability_updated_at: string | null;
   experience: string | null;
   expertise: string[] | null;
   work_types: string[] | null;
@@ -61,22 +65,7 @@ type Experience = {
   description: string | null;
 };
 
-const PORTFOLIO_CATEGORIES = [
-  "UI/UX Tasarım",
-  "Web Tasarım",
-  "Mobil Uygulama",
-  "Ürün Tasarımı",
-  "Web Geliştirme",
-  "Marka Tasarımı",
-  "Grafik Tasarım",
-  "E-Ticaret",
-  "Yazılım",
-  "Dijital Pazarlama",
-  "İçerik Üretimi",
-  "3D Tasarım",
-  "Mimari & İç Mekân",
-  "Diğer",
-];
+const PORTFOLIO_CATEGORIES = CATEGORIES;
 
 const SKILL_OPTIONS = [
   "Figma",
@@ -913,7 +902,7 @@ export default function ProfilePage() {
         // Aşağıda mevcut profil state'iyle merge edildiği için bellekteki
         // phone değeri kaybolmaz.
         .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, experience, expertise, work_types, languages"
+          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, availability_note, available_from, availability_updated_at, experience, expertise, work_types, languages"
         )
         .single();
 
@@ -1203,7 +1192,7 @@ export default function ProfilePage() {
         // Zaten yukarıda `phone`'u kendimiz yazdığımız için değerini
         // biliyoruz; state'e onu doğrudan set ediyoruz.
         .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, experience, expertise, work_types, languages"
+          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, availability_note, available_from, availability_updated_at, experience, expertise, work_types, languages"
         )
         .single();
 
@@ -2014,6 +2003,9 @@ export default function ProfilePage() {
         <AvailabilityCard
           status={profile.availability_status}
           activeProjectCount={activeProjectCount}
+          availableFrom={profile.available_from}
+          availabilityNote={profile.availability_note}
+          availabilityUpdatedAt={profile.availability_updated_at}
           onStatusChange={(next) =>
             setProfile((current) =>
               current

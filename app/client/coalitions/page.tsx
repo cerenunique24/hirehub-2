@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { EmptyState } from "@/components/common/EmptyState";
-import { getTeamCompletion } from "@/lib/projects/teamReadiness";
+import { fetchBudgetBreakdown, getTeamCompletion } from "@/lib/projects/teamReadiness";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Coalition = {
   id: string;
@@ -126,7 +127,7 @@ export default function ClientCoalitionsPage() {
       const { data: profiles } = userIds.length
         ? await supabase
             .from("profiles")
-            .select("id, first_name, last_name, avatar_url")
+            .select("id, first_name, avatar_url")
             .in("id", userIds)
         : { data: [] };
 
@@ -148,14 +149,24 @@ export default function ClientCoalitionsPage() {
       const { data: projectRows } = projectIds.length
         ? await supabase
             .from("projects")
-            .select("id, title, status, budget_breakdown")
+            .select("id, title, status")
             .in("id", projectIds)
         : { data: [] };
 
+      // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+      // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+      const budgetByProjectId = new Map(
+        await Promise.all(
+          projectIds.map(
+            async (id) => [id, await fetchBudgetBreakdown(supabase, id)] as const
+          )
+        )
+      );
+
       const projectById = new Map(
-        ((projectRows ?? []) as Project[]).map((project) => [
+        ((projectRows ?? []) as Omit<Project, "budget_breakdown">[]).map((project) => [
           project.id,
-          project,
+          { ...project, budget_breakdown: budgetByProjectId.get(project.id) ?? [] } as Project,
         ])
       );
 
@@ -395,10 +406,7 @@ export default function ClientCoalitionsPage() {
                           )}
 
                           {coalition.members.slice(0, 4).map((member, index) => {
-                            const name =
-                              [member.profile?.first_name, member.profile?.last_name]
-                                .filter(Boolean)
-                                .join(" ") || "Üye";
+                            const name = publicDisplayName(member.profile, "Üye");
 
                             return (
                               <div

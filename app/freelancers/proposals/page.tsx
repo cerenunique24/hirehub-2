@@ -66,6 +66,8 @@ function getStatusKey(status: string): FilterType {
   if (
     normalized === "rejected" ||
     normalized === "cancelled" ||
+    normalized === "withdrawn" ||
+    normalized === "expired" ||
     normalized === "reddedildi"
   ) {
     return "rejected";
@@ -78,6 +80,9 @@ function getStatusLabel(status: string) {
   const normalized = status.toLowerCase();
 
   if (normalized === "cancelled") return "İptal Edildi";
+  if (normalized === "shortlisted") return "Kısa Listede";
+  if (normalized === "withdrawn") return "Geri Çekildi";
+  if (normalized === "expired") return "Süresi Doldu";
 
   const key = getStatusKey(status);
 
@@ -90,21 +95,25 @@ function getStatusLabel(status: string) {
 function getStatusClass(status: string) {
   const normalized = status.toLowerCase();
 
-  if (normalized === "cancelled") {
+  if (normalized === "cancelled" || normalized === "withdrawn" || normalized === "expired") {
     return "bg-gray-100 text-gray-600";
+  }
+
+  if (normalized === "shortlisted") {
+    return "bg-blue-50 text-blue-700";
   }
 
   const key = getStatusKey(status);
 
   if (key === "accepted") {
-    return "bg-green-100 text-green-700";
+    return "bg-green-50 text-green-700";
   }
 
   if (key === "rejected") {
-    return "bg-red-100 text-red-700";
+    return "bg-red-50 text-red-700";
   }
 
-  return "bg-yellow-100 text-yellow-700";
+  return "bg-amber-50 text-amber-700";
 }
 
 function formatPrice(amount: number) {
@@ -127,6 +136,19 @@ export default function OffersPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [activeTab, setActiveTab] = useState<TopTab>("sent");
+  const [justSubmitted, setJustSubmitted] = useState(false);
+
+  // Teklif gönderimi sonrası yönlendirmenin (artık router.push ile, tam
+  // sayfa yeniden yüklemesi olmadan) başarı state'i taşıyabilmesi için.
+  // useSearchParams yerine düz URL okuma kullanılır — Suspense sınırı
+  // gerektirmeden, bu sayfanın mevcut yapısını değiştirmeden çalışır.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("submitted") === "1") {
+      setJustSubmitted(true);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
 
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [proposalsLoading, setProposalsLoading] = useState(true);
@@ -193,6 +215,7 @@ export default function OffersPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const normalizedData: Proposal[] = (data ?? []).map((item: any) => ({
       id: item.id,
       project_id: item.project_id,
@@ -257,6 +280,7 @@ export default function OffersPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const normalizedData: Invitation[] = (data ?? []).map((item: any) => ({
       id: item.id,
       project_id: item.project_id,
@@ -458,6 +482,12 @@ export default function OffersPage() {
           takip et.
         </p>
       </div>
+
+      {justSubmitted && (
+        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          Teklifin başarıyla gönderildi. Client teklifini incelediğinde bildirim alacaksın.
+        </div>
+      )}
 
       {/* Üst tablar: Gönderilen / Gelen */}
       <div className="mb-6 flex gap-2 border-b border-gray-200">

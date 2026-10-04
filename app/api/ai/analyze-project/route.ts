@@ -2,19 +2,32 @@ import type {
   ProjectBrief,
   ProjectAnalysis,
 } from "@/types/ai";
-import { cleanJsonOutput, generateJson, toSafeAiResponse } from "@/lib/ai/gemini";
-import { createClient } from "@/lib/supabase/server";
-import { getUserAccessContext, canUseFeature, incrementAiExtraAnalysisUsage } from "@/lib/premium";
-import { checkRateLimit, rateLimitKey, getClientIp, RATE_LIMIT_MESSAGE } from "@/lib/rateLimit";
-import { buildPlusAnalysis, buildProAnalysis } from "@/lib/ai/projectAnalysisEnrichment";
 
-/**
- * CollaCrew AI - Proje Analiz Endpoint'i
- *
- * Gemini çağrısı, model fallback ve retry mantığı artık merkezi
- * lib/ai/gemini.ts üzerinden yönetiliyor — bu dosya sadece prompt'u
- * ve CollaCrew'a özel doğrulama/normalize mantığını içerir.
- */
+import {
+  cleanJsonOutput,
+  generateJson,
+  toSafeAiResponse,
+} from "@/lib/ai/openai";
+
+import { createClient } from "@/lib/supabase/server";
+
+import {
+  getUserAccessContext,
+  canUseFeature,
+  incrementAiExtraAnalysisUsage,
+} from "@/lib/premium";
+
+import {
+  checkRateLimit,
+  rateLimitKey,
+  getClientIp,
+  RATE_LIMIT_MESSAGE,
+} from "@/lib/rateLimit";
+
+import {
+  buildPlusAnalysis,
+  buildProAnalysis,
+} from "@/lib/ai/projectAnalysisEnrichment";
 
 /**
  * String array alanlarını güvenli şekilde normalize eder.
@@ -46,7 +59,7 @@ function validateProjectAnalysis(
 ): ProjectAnalysis {
   if (!value || typeof value !== "object") {
     throw new Error(
-      "Gemini geçerli bir proje analiz nesnesi döndürmedi."
+      "OpenAI geçerli bir proje analiz nesnesi döndürmedi."
     );
   }
 
@@ -83,7 +96,9 @@ function validateProjectAnalysis(
 
   const roleDetails = parsed.roleDetails
     .filter(
-      (detail): detail is Record<string, unknown> =>
+      (
+        detail
+      ): detail is Record<string, unknown> =>
         Boolean(
           detail &&
             typeof detail === "object"
@@ -157,14 +172,6 @@ function validateProjectAnalysis(
 
 /**
  * CollaCrew proje analiz prompt'u.
- *
- * Buradaki amaç:
- * - Projenin ihtiyacını anlamak
- * - Gerekli freelancer rollerini çıkarmak
- * - Her rol için sorumlulukları belirlemek
- * - Required / preferred skill'leri ayırmak
- * - Client tarafındaki ekip oluşturma ekranına
- *   kullanılabilir temiz JSON döndürmek
  */
 function buildPrompt(
   brief: ProjectBrief
@@ -178,7 +185,9 @@ proje için gerekli freelancer rollerini ve her rolün ihtiyaçlarını
 belirlemektir.
 
 AMAÇ:
+
 Client'ın projesini doğru anlayarak:
+
 1. Gerekli freelancer rollerini belirle.
 2. Her rolün sorumluluklarını çıkar.
 3. Her rol için gerekli teknik / profesyonel becerileri belirle.
@@ -190,7 +199,9 @@ Client'ın projesini doğru anlayarak:
    rol isimlerini kullan.
 
 ÖNEMLİ:
+
 - Rol isimleri kısa ve profesyonel olmalı.
+
 - Örneğin:
   "UI/UX Designer"
   "Frontend Developer"
@@ -204,30 +215,42 @@ Client'ın projesini doğru anlayarak:
   "3D Artist"
   "Motion Designer"
   "Brand Designer"
+
   gibi gerçek ve anlaşılır rol isimleri kullan.
+
 - Gereksiz şekilde "Senior", "Junior" gibi seviyeler ekleme.
+
 - Bir rol başka bir rolün sorumluluğunu zaten karşılıyorsa
   ikinci bir rol oluşturma.
+
 - Proje yalnızca bir uzmanla yapılabiliyorsa gereksiz büyük ekip
   önerme.
+
 - Projenin açıklamasında açıkça belirtilmeyen bir uzmanlığı
   varsayarak ekleme.
+
 - Ancak projenin tamamlanması için açıkça gerekli olan uzmanlıkları
   belirleyebilirsin.
 
-CLIENT'IN SEÇTİĞİ UZMANLIK VE BECERİLER (ÇOK ÖNEMLİ):
+CLIENT'IN SEÇTİĞİ UZMANLIK VE BECERİLER:
+
 - Client, rol analizinden önce genel uzmanlık alanlarını ve
   becerilerini kendisi seçmiştir. Bu seçimler client'ın açıkça
   belirttiği ihtiyaçlardır ve kaybedilmemelidir.
+
 - Client'ın seçtiği uzmanlık alanlarını, hangi rollerin gerekli
   olduğuna karar verirken doğrudan girdi olarak kullan.
+
 - Client'ın seçtiği her beceriyi, en uygun olduğu role
-  requiredSkills veya preferredSkills alanına dağıt. Bir beceri
-  birden fazla rolle ilgiliyse en uygun role ata; aynı beceriyi
-  gereksiz yere her role tekrar ekleme.
-- Client'ın seçtiği bir beceri hiçbir önerilen role uymuyorsa
-  bile, en yakın ilgili role preferredSkills olarak ekle;
+  requiredSkills veya preferredSkills alanına dağıt.
+
+- Bir beceri birden fazla rolle ilgiliyse en uygun role ata;
+  aynı beceriyi gereksiz yere her role tekrar ekleme.
+
+- Client'ın seçtiği bir beceri hiçbir önerilen role uymuyorsa bile,
+  en yakın ilgili role preferredSkills olarak ekle;
   sessizce yok sayma.
+
 - roleDetails içindeki requiredSkills/preferredSkills SADECE
   client'ın seçtiği becerilerle sınırlı kalmak zorunda değil;
   gerekirse projeye uygun ek beceriler de önerebilirsin, ancak
@@ -252,14 +275,16 @@ ${brief.requirements || "(Belirtilmedi)"}
 
 Client'ın seçtiği uzmanlık alanları:
 ${
-  brief.expertise && brief.expertise.length > 0
+  brief.expertise &&
+  brief.expertise.length > 0
     ? brief.expertise.join(", ")
     : "(Belirtilmedi)"
 }
 
 Client'ın seçtiği beceriler:
 ${
-  brief.skills && brief.skills.length > 0
+  brief.skills &&
+  brief.skills.length > 0
     ? brief.skills.join(", ")
     : "(Belirtilmedi)"
 }
@@ -273,10 +298,13 @@ ${brief.deadline || "(Belirtilmedi)"}
 ANALİZ KURALLARI:
 
 - requiredRoles sadece gerekli rollerin isimlerinden oluşmalı.
+
 - requiredSkills proje genelindeki önemli gerekli becerileri
   içermeli.
+
 - roleDetails içerisindeki her nesne requiredRoles içerisindeki
   bir rolle eşleşmeli.
+
 - Her rol için:
   - role
   - responsibilities
@@ -284,20 +312,28 @@ ANALİZ KURALLARI:
   - preferredSkills
   - reason
   alanlarını oluştur.
+
 - responsibilities somut işlerden oluşmalı.
+
 - requiredSkills gerçekten gerekli becerileri içermeli.
+
 - preferredSkills işi daha iyi yapabilecek ancak zorunlu olmayan
   becerileri içermeli.
+
 - reason kısa ve client'ın anlayabileceği şekilde yazılmalı.
 
 BÜTÇE:
+
 Bütçeyi roller arasında dağıtma.
 Rol başına fiyat belirleme.
 Freelancer ücretlerini tahmin etme.
+
 Sadece proje kapsamını ve gerekli ekip yapısını analiz et.
 
 ÇIKTI:
+
 SADECE geçerli JSON döndür.
+
 Markdown kullanma.
 Kod bloğu kullanma.
 Açıklama ekleme.
@@ -333,15 +369,21 @@ JSON ŞEMASI:
 }
 
 /**
- * Gemini'yi merkezi helper üzerinden çağırır (retry + model fallback
- * lib/ai/gemini.ts içinde yönetiliyor) ve sonucu CollaCrew'a özel
- * şemaya göre doğrular.
+ * OpenAI'yi merkezi helper üzerinden çağırır.
+ *
+ * Retry, timeout ve model ayarları
+ * lib/ai/openai.ts içinde yönetiliyor.
  */
 async function generateProjectAnalysis(
   prompt: string
 ): Promise<ProjectAnalysis> {
-  const output = await generateJson(prompt, { temperature: 0.2 });
-  const cleanedOutput = cleanJsonOutput(output);
+  const output = await generateJson(
+    prompt,
+    { temperature: 0.2 }
+  );
+
+  const cleanedOutput =
+    cleanJsonOutput(output);
 
   let parsed: unknown;
 
@@ -349,12 +391,12 @@ async function generateProjectAnalysis(
     parsed = JSON.parse(cleanedOutput);
   } catch {
     console.error(
-      "Gemini JSON parse hatası. Model çıktısı:",
+      "OpenAI JSON parse hatası. Model çıktısı:",
       cleanedOutput.slice(0, 2000)
     );
 
     throw new Error(
-      "Gemini geçerli bir analiz formatı döndürmedi."
+      "OpenAI geçerli bir analiz formatı döndürmedi."
     );
   }
 
@@ -369,19 +411,19 @@ export async function POST(
 ) {
   try {
     /**
-     * API key kontrolü.
+     * OpenAI API key kontrolü.
      */
     if (
-      !process.env.GEMINI_API_KEY?.trim()
+      !process.env.OPENAI_API_KEY?.trim()
     ) {
       console.error(
-        "[CollaCrew AI] GEMINI_API_KEY eksik."
+        "[CollaCrew AI] OPENAI_API_KEY eksik."
       );
 
       return Response.json(
         {
           error:
-            "AI servisi yapılandırılmamış. GEMINI_API_KEY eksik.",
+            "AI servisi yapılandırılmamış. OPENAI_API_KEY eksik.",
         },
         {
           status: 500,
@@ -390,43 +432,51 @@ export async function POST(
     }
 
     /**
-     * Rate limit — bu endpoint'in temel analizi kasıtlı olarak
-     * oturumsuz erişime açık (bkz. HIREHUB_AUDIT_CONTEXT.md §18), bu
-     * yüzden kullanıcı yerine IP bazlı sınırlanır — asıl Gemini
-     * maliyetini oluşturan çağrı burada.
+     * Rate limit.
+     *
+     * Bu endpoint'in temel analizi oturumsuz erişime
+     * açık olabildiği için IP bazlı sınırlanır.
      */
-    const rateLimitSupabase = await createClient();
-    const clientIp = getClientIp(request);
+    const rateLimitSupabase =
+      await createClient();
 
-    const { ok: withinLimit } = await checkRateLimit(
+    const clientIp =
+      getClientIp(request);
+
+    const {
+      ok: withinLimit,
+    } = await checkRateLimit(
       rateLimitSupabase,
-      rateLimitKey("ai_analyze_project", clientIp),
+      rateLimitKey(
+        "ai_analyze_project",
+        clientIp
+      ),
       15,
       600
     );
 
     if (!withinLimit) {
-      return Response.json({ error: RATE_LIMIT_MESSAGE }, { status: 429 });
+      return Response.json(
+        {
+          error: RATE_LIMIT_MESSAGE,
+        },
+        {
+          status: 429,
+        }
+      );
     }
 
     /**
      * Request body.
-     */
-    const body =
-      (await request.json()) as
-        | Partial<ProjectBrief> & {
-            brief?: Partial<ProjectBrief>;
-          };
-
-    /**
-     * Hem:
+     *
+     * Desteklenen formatlar:
      *
      * {
      *   title,
      *   description
      * }
      *
-     * hem de:
+     * veya
      *
      * {
      *   brief: {
@@ -434,9 +484,13 @@ export async function POST(
      *     description
      *   }
      * }
-     *
-     * formatlarını destekliyoruz.
      */
+    const body =
+      (await request.json()) as
+        | Partial<ProjectBrief> & {
+            brief?: Partial<ProjectBrief>;
+          };
+
     const input =
       body.brief ?? body;
 
@@ -522,50 +576,86 @@ export async function POST(
       buildPrompt(brief);
 
     /**
-     * Gemini + fallback sistemi.
+     * OpenAI + merkezi retry sistemi.
      */
     const analysis =
       await generateProjectAnalysis(
         prompt
       );
 
-    /*
-     * PLUS/PRO ZENGİNLEŞTİRME
-     * ----------------------------------------------------
-     * ÖNEMLİ: Bu blok, `analysis` alanının Free kullanıcı için
-     * döndüğü haliyle BİREBİR AYNI kalmasını garanti eder — hiçbir
-     * koşulda temel analiz değiştirilmez veya kısıtlanmaz. Ek alanlar
-     * (`advancedAnalysis`, `proAnalysis`, `aiUsage`) tamamen additive'dir;
-     * mevcut create-project/page.tsx tüketimini etkilemez.
+    /**
+     * PLUS / PRO ZENGİNLEŞTİRME
      *
-     * Auth/plan kontrolü burada başarısız olsa bile (misafir istek,
-     * beklenmeyen hata vb.) sadece zenginleştirme atlanır, temel
-     * analiz yanıtı asla bloklanmaz.
+     * Temel analysis alanı değiştirilmez.
+     * Ek alanlar additive olarak döndürülür.
      */
-    let advancedAnalysis: ReturnType<typeof buildPlusAnalysis> | null = null;
-    let proAnalysis: ReturnType<typeof buildProAnalysis> | null = null;
-    let aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null = null;
+    let advancedAnalysis:
+      ReturnType<
+        typeof buildPlusAnalysis
+      > | null = null;
+
+    let proAnalysis:
+      ReturnType<
+        typeof buildProAnalysis
+      > | null = null;
+
+    let aiUsage: {
+      count: number;
+      monthlyLimit: number;
+      limitReached: boolean;
+    } | null = null;
 
     try {
-      const supabase = await createClient();
-      const context = await getUserAccessContext(supabase);
+      const supabase =
+        await createClient();
 
-      if (canUseFeature(context, "advanced_project_analysis")) {
-        const { data: usage } = await incrementAiExtraAnalysisUsage(supabase);
+      const context =
+        await getUserAccessContext(
+          supabase
+        );
+
+      if (
+        canUseFeature(
+          context,
+          "advanced_project_analysis"
+        )
+      ) {
+        const {
+          data: usage,
+        } =
+          await incrementAiExtraAnalysisUsage(
+            supabase
+          );
 
         if (usage) {
           aiUsage = {
             count: usage.count,
-            monthlyLimit: usage.monthly_limit,
-            limitReached: usage.limit_reached,
+            monthlyLimit:
+              usage.monthly_limit,
+            limitReached:
+              usage.limit_reached,
           };
         }
 
         if (!usage?.limit_reached) {
-          advancedAnalysis = buildPlusAnalysis(analysis, brief);
+          advancedAnalysis =
+            buildPlusAnalysis(
+              analysis,
+              brief
+            );
 
-          if (canUseFeature(context, "advanced_matching_client")) {
-            proAnalysis = buildProAnalysis(analysis, brief, advancedAnalysis);
+          if (
+            canUseFeature(
+              context,
+              "advanced_matching_client"
+            )
+          ) {
+            proAnalysis =
+              buildProAnalysis(
+                analysis,
+                brief,
+                advancedAnalysis
+              );
           }
         }
       }
@@ -588,17 +678,23 @@ export async function POST(
       }
     );
   } catch (error) {
-    const { status, body: responseBody } = toSafeAiResponse(error, [
-      "GEMINI_API_KEY tanımlı değil.",
+    const {
+      status,
+      body: responseBody,
+    } = toSafeAiResponse(error, [
+      "OPENAI_API_KEY tanımlı değil.",
       "AI analizinde gerekli roller belirlenemedi.",
       "AI analizinde rol detayları bulunamadı.",
       "AI analizinde gerekli rol detayları oluşturulamadı.",
       "AI analizinde geçerli rol detayları bulunamadı.",
-      "Gemini geçerli bir proje analiz nesnesi döndürmedi.",
-      "Gemini geçerli bir analiz formatı döndürmedi.",
+      "OpenAI geçerli bir proje analiz nesnesi döndürmedi.",
+      "OpenAI geçerli bir analiz formatı döndürmedi.",
       "Bazı roller için detay oluşturulamadı:",
     ]);
 
-    return Response.json(responseBody, { status });
+    return Response.json(
+      responseBody,
+      { status }
+    );
   }
 }

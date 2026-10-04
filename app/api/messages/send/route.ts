@@ -44,20 +44,26 @@ export async function POST(request: Request) {
       receiverId?: string;
       proposalId?: string | null;
       content?: string;
+      attachmentUrl?: string | null;
+      attachmentName?: string | null;
+      attachmentType?: string | null;
     };
 
     const receiverId = body.receiverId;
     const proposalId = body.proposalId || null;
     const content = (body.content ?? "").trim();
+    const attachmentUrl = body.attachmentUrl || null;
+    const attachmentName = body.attachmentName || null;
+    const attachmentType = body.attachmentType || null;
 
-    if (!receiverId || !content) {
+    if (!receiverId || (!content && !attachmentUrl)) {
       return NextResponse.json(
-        { error: "Alıcı ve mesaj metni zorunludur." },
+        { error: "Alıcı ve bir mesaj metni veya ek dosya gerekli." },
         { status: 400 }
       );
     }
 
-    if (containsContactInfo(content)) {
+    if (content && containsContactInfo(content)) {
       return NextResponse.json({ error: CONTACT_INFO_MESSAGE }, { status: 400 });
     }
 
@@ -164,16 +170,30 @@ export async function POST(request: Request) {
         sender_id: senderId,
         receiver_id: receiverId,
         proposal_id: proposalId,
-        content,
-        attachment_url: null,
-        attachment_name: null,
-        attachment_type: null,
+        content: content || null,
+        attachment_url: attachmentUrl,
+        attachment_name: attachmentName,
+        attachment_type: attachmentType,
       })
       .select()
       .single();
 
     if (insertError) {
       console.error("[messages/send] insert error:", insertError);
+
+      // 42501 = RLS reddi. Engellenen kullanıcılar arasındaki mesajlar
+      // ("Blocked users cannot exchange messages") burada yakalanır.
+      if (insertError.code === "42501") {
+        return NextResponse.json(
+          { error: "Bu kullanıcıyla mesajlaşamazsın. Kullanıcı engellenmiş olabilir." },
+          { status: 403 }
+        );
+      }
+
+      if (insertError.code === "P0001") {
+        return NextResponse.json({ error: insertError.message }, { status: 400 });
+      }
+
       return NextResponse.json(
         { error: "Mesaj gönderilemedi." },
         { status: 500 }

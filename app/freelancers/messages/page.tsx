@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -13,8 +13,21 @@ import {
   Paperclip,
   Users,
   ArrowLeft,
+  FileText,
+  X,
 } from "lucide-react";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+import MessageAttachmentView from "@/components/messaging/MessageAttachmentView";
+import ReportButton from "@/components/safety/ReportButton";
+import BlockUserButton from "@/components/safety/BlockUserButton";
+import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
+import {
+  ATTACHMENT_ACCEPT,
+  deleteMessageAttachment,
+  isImageAttachment,
+  uploadMessageAttachment,
+  validateAttachment,
+} from "@/lib/messaging/attachments";
 
 type TeamConversation = {
   coalitionId: string;
@@ -112,10 +125,14 @@ function FreelancerMessagesContent() {
     useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState("");
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [teamConversations, setTeamConversations] = useState<
     TeamConversation[]
@@ -291,7 +308,7 @@ function FreelancerMessagesContent() {
 
       const { data: profileRows } = await supabase
         .from("profiles")
-        .select("id, first_name, last_name")
+        .select("id, first_name")
         .in("id", userIds);
 
       if (!active) return;
@@ -299,10 +316,7 @@ function FreelancerMessagesContent() {
       setTeamMemberLabels(
         (profileRows ?? []).map((profile) => ({
           id: profile.id,
-          name:
-            [profile.first_name, profile.last_name]
-              .filter(Boolean)
-              .join(" ") || "Ekip üyesi",
+          name: publicDisplayName(profile, "Ekip üyesi"),
         }))
       );
     };
@@ -326,10 +340,19 @@ function FreelancerMessagesContent() {
 
     const loadMessages = async () => {
       setLoading(true);
+      setLoadError("");
 
+      // Bu sayfa yalnızca 1:1 (client<->freelancer) konuşmalar için.
+      // Takım/koalisyon yayın mesajları (lib/coalitions/teamMessages.ts,
+      // receiver_id = null, coalition_id dolu) ayrı bir bileşende
+      // (TeamMessagesPanel) gösteriliyor. Onları burada da çekmek,
+      // gönderenin kendi yayın mesajları için receiver_id = null'ı
+      // "diğer kullanıcı" olarak seçip aşağıdaki profiles .in()
+      // sorgusuna literal "null" göndermeye (22P02) yol açıyordu.
       const { data, error } = await supabase
         .from("messages")
         .select("*")
+        .not("receiver_id", "is", null)
         .or(
           `sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`
         )
@@ -346,6 +369,9 @@ function FreelancerMessagesContent() {
           "Mesajlar yüklenemedi:",
           error
         );
+        setLoadError(
+          "Mesajlar yüklenemedi. Lütfen sayfayı yenileyip tekrar deneyin."
+        );
         setLoading(false);
         return;
       }
@@ -355,8 +381,10 @@ function FreelancerMessagesContent() {
       setMessages(loadedMessages);
 
       /*
-       * Mesajların bağlı olduğu tekliflerin
-       * proje isimlerini getir.
+       * Mesajların bağlı olduğu tekliflerin proje isimleri VE
+       * konuşmalardaki diğer kullanıcıların profilleri — ikisi de
+       * yalnızca loadedMessages'a bağlı, birbirine bağlı değil,
+       * bu yüzden paralel çekiliyor (art arda iki round trip yerine tek).
        */
       const proposalIds = [
         ...new Set(
@@ -372,58 +400,20 @@ function FreelancerMessagesContent() {
         ),
       ];
 
-      if (proposalIds.length > 0) {
-        const {
-          data: proposalRows,
-          error: proposalError,
-        } = await supabase
-          .from("proposals")
-          .select("id, projects(id, title, status)")
-          .in("id", proposalIds);
-
-        if (proposalError) {
-          console.error(
-            "Teklifler yüklenemedi:",
-            proposalError
-          );
-        }
-
-        const names: Record<string, string> = {};
-        const ids: Record<string, string> = {};
-        const statuses: Record<string, string | null> = {};
-
-        for (const proposal of (proposalRows ?? []) as Array<{
-          id: string;
-          projects: unknown;
-        }>) {
-          const project = extractProject(proposal.projects);
-          names[proposal.id] = project?.title ?? "Proje";
-          if (project?.id) {
-            ids[proposal.id] = project.id;
-            statuses[proposal.id] = project.status;
-          }
-        }
-
-        setProjectNames(names);
-        setProjectIds(ids);
-        setProjectStatuses(statuses);
-      } else {
-        setProjectNames({});
-        setProjectIds({});
-        setProjectStatuses({});
-      }
-
-      /*
-       * Konuşmalardaki diğer kullanıcılar.
-       */
+      // receiver_id = null satırları artık sorgu seviyesinde dışlanıyor
+      // (yukarıdaki .not("receiver_id", "is", null)); Boolean() filtresi
+      // sadece ek bir güvenlik katmanı — profiles.in() sorgusuna hiçbir
+      // zaman null/boş bir ID gitmediğinden emin olmak için.
       const otherUserIds = Array.from(
         new Set(
-          loadedMessages.map((message) =>
-            message.sender_id ===
-            currentUserId
-              ? message.receiver_id
-              : message.sender_id
-          )
+          loadedMessages
+            .map((message) =>
+              message.sender_id ===
+              currentUserId
+                ? message.receiver_id
+                : message.sender_id
+            )
+            .filter((id): id is string => Boolean(id))
         )
       );
 
@@ -444,34 +434,74 @@ function FreelancerMessagesContent() {
         otherUserIds.push(urlUserId);
       }
 
-      if (otherUserIds.length > 0) {
-        const {
-          data: profileData,
-          error: profileError,
-        } = await supabase
-          .from("profiles")
-          .select(
-            "id, first_name, last_name, avatar_url, role"
-          )
-          .in("id", otherUserIds);
+      const [proposalResult, profileResult] = await Promise.all([
+        proposalIds.length > 0
+          ? supabase
+              .from("proposals")
+              .select("id, projects(id, title, status)")
+              .in("id", proposalIds)
+          : Promise.resolve({ data: [], error: null }),
+        otherUserIds.length > 0
+          ? supabase
+              .from("profiles")
+              .select(
+                "id, first_name, avatar_url, role"
+              )
+              .in("id", otherUserIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
 
-        if (!active) {
-          return;
-        }
-
-        if (profileError) {
-          console.error(
-            "Profiller yüklenemedi:",
-            profileError
-          );
-        }
-
-        setProfiles(
-          (profileData ?? []) as Profile[]
-        );
-      } else {
-        setProfiles([]);
+      if (!active) {
+        return;
       }
+
+      const { data: proposalRows, error: proposalError } = proposalResult;
+
+      if (proposalError) {
+        console.error(
+          "Teklifler yüklenemedi:",
+          proposalError.message,
+          proposalError.code,
+          proposalError.details,
+          proposalError.hint
+        );
+      }
+
+      const names: Record<string, string> = {};
+      const ids: Record<string, string> = {};
+      const statuses: Record<string, string | null> = {};
+
+      for (const proposal of (proposalRows ?? []) as Array<{
+        id: string;
+        projects: unknown;
+      }>) {
+        const project = extractProject(proposal.projects);
+        names[proposal.id] = project?.title ?? "Proje";
+        if (project?.id) {
+          ids[proposal.id] = project.id;
+          statuses[proposal.id] = project.status;
+        }
+      }
+
+      setProjectNames(names);
+      setProjectIds(ids);
+      setProjectStatuses(statuses);
+
+      const { data: profileData, error: profileError } = profileResult;
+
+      if (profileError) {
+        console.error(
+          "Profiller yüklenemedi:",
+          profileError.message,
+          profileError.code,
+          profileError.details,
+          profileError.hint
+        );
+      }
+
+      setProfiles(
+        (profileData ?? []) as Profile[]
+      );
 
       setLoading(false);
     };
@@ -567,7 +597,7 @@ function FreelancerMessagesContent() {
           } = await supabase
             .from("profiles")
             .select(
-              "id, first_name, last_name, avatar_url, role"
+              "id, first_name, avatar_url, role"
             )
             .eq("id", otherUserId)
             .maybeSingle();
@@ -871,12 +901,7 @@ function FreelancerMessagesContent() {
 
       return conversations.filter(
         (conversation) => {
-          const name =
-            `${conversation.user.first_name || ""} ${
-              conversation.user.last_name || ""
-            }`.toLocaleLowerCase(
-              "tr-TR"
-            );
+          const name = publicDisplayName(conversation.user, "").toLocaleLowerCase("tr-TR");
 
           const projectTitle =
             (
@@ -1118,7 +1143,7 @@ function FreelancerMessagesContent() {
       messageText.trim();
 
     if (
-      !text ||
+      (!text && !attachmentFile) ||
       !currentUserId ||
       !selectedUserId ||
       sending ||
@@ -1130,6 +1155,18 @@ function FreelancerMessagesContent() {
     setSending(true);
     setSendError("");
 
+    let attachment: { url: string; name: string; type: string } | null = null;
+
+    if (attachmentFile) {
+      const { data, error } = await uploadMessageAttachment(supabase, currentUserId, attachmentFile);
+      if (error || !data) {
+        setSendError(error ?? "Dosya yüklenemedi.");
+        setSending(false);
+        return;
+      }
+      attachment = data;
+    }
+
     const response = await fetch("/api/messages/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1137,6 +1174,9 @@ function FreelancerMessagesContent() {
         receiverId: selectedUserId,
         proposalId: selectedProposalId,
         content: text,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentType: attachment?.type ?? null,
       }),
     });
 
@@ -1147,6 +1187,12 @@ function FreelancerMessagesContent() {
         "Mesaj gönderilemedi:",
         responseData
       );
+
+      // Mesaj kaydı başarısız olduysa, yüklenen dosya sahipsiz (orphan)
+      // kalmasın diye geri silinir.
+      if (attachment) {
+        await deleteMessageAttachment(supabase, attachment.url);
+      }
 
       setSendError(
         (responseData as { error?: string }).error ||
@@ -1190,31 +1236,27 @@ function FreelancerMessagesContent() {
     }
 
     setMessageText("");
+    setAttachmentFile(null);
     setSending(false);
   };
+
+  function onPickAttachment(file: File | undefined | null) {
+    if (!file) return;
+    const validationError = validateAttachment(file);
+    if (validationError) {
+      setAttachmentError(validationError);
+      return;
+    }
+    setAttachmentError("");
+    setAttachmentFile(file);
+  }
 
   /*
    * YARDIMCI FONKSİYONLAR
    */
-  const getFullName = (
-    profile: Profile
-  ) => {
-    return (
-      `${profile.first_name || ""} ${
-        profile.last_name || ""
-      }`.trim() || "Kullanıcı"
-    );
-  };
+  const getFullName = (profile: Profile) => publicDisplayName(profile, "Kullanıcı");
 
-  const getInitials = (
-    profile: Profile
-  ) => {
-    return (
-      `${profile.first_name?.[0] || ""}${
-        profile.last_name?.[0] || ""
-      }`.toUpperCase() || "U"
-    );
-  };
+  const getInitials = (profile: Profile) => displayInitial(profile);
 
   const formatTime = (
     date: string
@@ -1238,6 +1280,12 @@ function FreelancerMessagesContent() {
           Müşteriler ve ekiplerle iletişimini yönet.
         </p>
       </div>
+
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
 
       <div className="flex h-[calc(100vh-220px)] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white">
         {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
@@ -1600,6 +1648,11 @@ function FreelancerMessagesContent() {
                     )}
                   </p>
                 </div>
+
+                <div className="ml-auto flex flex-wrap items-start justify-end gap-2">
+                  <ReportButton targetType="user" targetId={selectedProfile.id} label="Şikayet Et" />
+                  <BlockUserButton targetUserId={selectedProfile.id} />
+                </div>
               </div>
 
               {/* MESAJLAR */}
@@ -1632,11 +1685,22 @@ function FreelancerMessagesContent() {
                                 : "border border-gray-200 bg-white text-gray-800"
                             }`}
                           >
-                            <p className="whitespace-pre-wrap break-words">
-                              {
-                                message.content
-                              }
-                            </p>
+                            {message.content && (
+                              <p className="whitespace-pre-wrap break-words">
+                                {
+                                  message.content
+                                }
+                              </p>
+                            )}
+
+                            {message.attachment_url && (
+                              <MessageAttachmentView
+                                path={message.attachment_url}
+                                name={message.attachment_name}
+                                type={message.attachment_type}
+                                tone={isMe ? "mine" : "theirs"}
+                              />
+                            )}
 
                             <span className="mt-2 block text-xs opacity-60">
                               {formatTime(
@@ -1684,11 +1748,40 @@ function FreelancerMessagesContent() {
                   {sendError && (
                     <p className="mb-3 text-sm text-red-600">{sendError}</p>
                   )}
+                  {attachmentError && (
+                    <p className="mb-3 text-sm text-red-600">{attachmentError}</p>
+                  )}
+                  {attachmentFile && (
+                    <div className="mb-3 flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
+                      <FileText size={15} />
+                      <span className="flex-1 truncate">{attachmentFile.name}</span>
+                      <button
+                        type="button"
+                        aria-label="Ek dosyayı kaldır"
+                        onClick={() => setAttachmentFile(null)}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                   <div className="flex gap-3">
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      accept={ATTACHMENT_ACCEPT}
+                      className="hidden"
+                      onChange={(event) => {
+                        onPickAttachment(event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                    />
                     <button
                       type="button"
                       aria-label="Dosya ekle"
-                      className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500"
+                      onClick={() => attachmentInputRef.current?.click()}
+                      disabled={sending}
+                      className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-40"
                     >
                       <Paperclip size={18} />
                     </button>
@@ -1721,7 +1814,7 @@ function FreelancerMessagesContent() {
                       }
                       disabled={
                         sending ||
-                        !messageText.trim()
+                        (!messageText.trim() && !attachmentFile)
                       }
                       className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white disabled:opacity-40"
                     >

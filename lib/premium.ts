@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
- * HireHub / CollaCrew plan sistemi.
+ * CollaCrew plan sistemi.
  *
  * ÖNEMLİ ÜRÜN KURALI: Free kullanıcı için proje keşfi, temel AI/proje
  * eşleşmesi, eşleşme yüzdesi, eşleştiği rolün bütçe/süresi, teklif

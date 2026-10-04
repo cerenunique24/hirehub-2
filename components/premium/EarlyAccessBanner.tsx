@@ -21,24 +21,35 @@ export default function EarlyAccessBanner() {
   if (loading || can("proposal_performance") || dismissed) return null;
 
   return (
-    <div className="mb-4 flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/50 px-4 py-2.5">
-      <div className="flex items-center gap-2.5 text-sm text-gray-700">
-        <BarChart3 size={15} className="shrink-0 text-gray-500" />
-        <span>
-          <Link href="/premium" className="font-medium text-gray-900 underline-offset-2 hover:underline">
-            Plus
-          </Link>{" "}
-          ile tekliflerinin performansını analiz et.
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--color-primary-600)]/15 bg-[var(--color-primary-50)]/60 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-white text-[var(--color-primary-600)]">
+          <BarChart3 size={15} />
         </span>
+
+        <p className="cc-body-sm min-w-0 text-[var(--color-text-primary)]">
+          <span className="font-semibold text-[var(--color-primary-700)]">Plus</span>{" "}
+          ile tekliflerinin performansını analiz et.
+        </p>
       </div>
-      <button
-        type="button"
-        onClick={() => setDismissed(true)}
-        aria-label="Kapat"
-        className="shrink-0 rounded-[var(--radius-button)] p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-      >
-        <X size={15} />
-      </button>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <Link
+          href="/premium"
+          className="rounded-[var(--radius-button)] px-3 py-1.5 text-sm font-medium text-[var(--color-primary-700)] transition hover:bg-white"
+        >
+          İncele
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="Kapat"
+          className="rounded-[var(--radius-button)] p-1 text-[var(--color-primary-600)]/60 hover:bg-white hover:text-[var(--color-primary-700)]"
+        >
+          <X size={15} />
+        </button>
+      </div>
     </div>
   );
 }

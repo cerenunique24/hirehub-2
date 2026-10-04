@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import {
+  File,
   FileText,
   Loader2,
   Paperclip,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { notifyUsers } from "@/lib/notifications";
 
 type ProjectFile = {
   id: string;
@@ -29,6 +31,33 @@ type ProjectFile = {
 };
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+
+/**
+ * `project-files` Storage bucket'ının GERÇEKTEN kabul ettiği MIME
+ * listesiyle birebir aynı olmalı (bkz. Supabase bucket ayarları —
+ * allowed_mime_types). Önceden frontend SVG/GIF/HEIC'i de "resim"
+ * sayıyordu ama bucket bunları kabul etmiyordu; dosya sessizce/anlaşılmaz
+ * bir hatayla reddediliyordu. Artık yükleme ÖNCESİNDE burada kontrol
+ * edilip açık bir Türkçe mesaj gösteriliyor.
+ */
+const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "application/zip",
+  "application/x-zip-compressed",
+  "video/mp4",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+
+const SUPPORTED_FILE_FORMATS_LABEL =
+  "PDF, PNG, JPG, WEBP, ZIP, MP4, Word, Excel, PowerPoint";
 
 export default function ProjectFiles({
   projectId,
@@ -49,6 +78,11 @@ export default function ProjectFiles({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Signed URL süresi dolmuş/geçici bir ağ hatası varsa <img> kırık
+  // resim ikonu göstermek yerine genel dosya ikonuna düşülür.
+  const [brokenImageIds, setBrokenImageIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -83,25 +117,36 @@ export default function ProjectFiles({
 
     const items = (data ?? []) as ProjectFile[];
 
-    const filesWithUrls = await Promise.all(
-      items.map(async (item) => {
-        const { data: signed, error: signedError } = await supabase.storage
-          .from("project-files")
-          .createSignedUrl(item.file_path, 60 * 60);
+    // Dosya sayısı kadar ayrı ayrı createSignedUrl round trip'i yerine
+    // tek bir batch çağrısı (aynı sonuç, N istek yerine 1 istek).
+    let signedByPath = new Map<string, string>();
 
-        if (signedError) {
-          console.error(
-            "Dosya için signed URL oluşturulamadı:",
-            formatSupabaseError(signedError),
-          );
-        }
+    if (items.length > 0) {
+      const { data: signedList, error: signedError } = await supabase.storage
+        .from("project-files")
+        .createSignedUrls(
+          items.map((item) => item.file_path),
+          60 * 60,
+        );
 
-        return {
-          ...item,
-          url: signed?.signedUrl,
-        };
-      }),
-    );
+      if (signedError) {
+        console.error(
+          "Dosyalar için signed URL oluşturulamadı:",
+          formatSupabaseError(signedError),
+        );
+      }
+
+      signedByPath = new Map(
+        (signedList ?? [])
+          .filter((entry) => !entry.error && entry.signedUrl)
+          .map((entry) => [entry.path ?? "", entry.signedUrl as string]),
+      );
+    }
+
+    const filesWithUrls = items.map((item) => ({
+      ...item,
+      url: signedByPath.get(item.file_path),
+    }));
 
     setFiles(filesWithUrls);
     setLoading(false);
@@ -122,11 +167,22 @@ export default function ProjectFiles({
 
     if (candidates.length === 0) return;
 
-    const invalid = candidates.find((file) => file.size > MAX_FILE_SIZE);
+    const tooLarge = candidates.find((file) => file.size > MAX_FILE_SIZE);
 
-    if (invalid) {
+    if (tooLarge) {
       setError(
-        `"${invalid.name}" dosyası 25 MB sınırını aşıyor.`,
+        `"${tooLarge.name}" dosyası 25 MB sınırını aşıyor.`,
+      );
+      return;
+    }
+
+    const unsupported = candidates.find(
+      (file) => !SUPPORTED_UPLOAD_MIME_TYPES.has(file.type || guessMimeTypeFromName(file.name))
+    );
+
+    if (unsupported) {
+      setError(
+        `"${unsupported.name}" desteklenmeyen bir dosya türü. Desteklenen türler: ${SUPPORTED_FILE_FORMATS_LABEL}.`,
       );
       return;
     }
@@ -165,21 +221,17 @@ export default function ProjectFiles({
 
         const filePath = `${user.id}/${projectId}/${crypto.randomUUID()}-${safeName}`;
 
-        console.log("Storage upload başlatılıyor:", {
-          bucket: "project-files",
-          filePath,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          projectId,
-          milestoneId: milestoneId ?? null,
-          userId: user.id,
-        });
+        // Bazı tarayıcı/OS kombinasyonlarında (özellikle sürükle-bırak ile
+        // eklenen bazı görsel formatlarında) `file.type` boş gelebiliyor.
+        // Doğrudan "application/octet-stream"e düşmek, gerçek bir görseli
+        // kalıcı olarak "resim değil" gibi kaydedip küçük önizlemeyi hep
+        // devre dışı bırakıyordu — önce uzantıdan tahmin ediliyor.
+        const contentType = file.type || guessMimeTypeFromName(file.name);
 
         const { error: storageError } = await supabase.storage
           .from("project-files")
           .upload(filePath, file, {
-            contentType: file.type || "application/octet-stream",
+            contentType,
             upsert: false,
           });
 
@@ -190,16 +242,11 @@ export default function ProjectFiles({
           );
 
           setError(
-            `"${file.name}" yüklenemedi. Ayrıntılı hata için tarayıcı console'unu kontrol edin.`,
+            `"${file.name}" ${describeUploadError(storageError)}`,
           );
 
           continue;
         }
-
-        console.log("Storage upload başarılı:", {
-          bucket: "project-files",
-          filePath,
-        });
 
         const { error: metadataError } = await supabase
           .from("project_files")
@@ -208,7 +255,7 @@ export default function ProjectFiles({
             milestone_id: milestoneId ?? null,
             file_name: file.name,
             file_path: filePath,
-            file_type: file.type || "application/octet-stream",
+            file_type: contentType,
             file_size: file.size,
           });
 
@@ -249,6 +296,39 @@ export default function ProjectFiles({
             ? "1 dosya başarıyla eklendi."
             : `${uploadedCount} dosya başarıyla eklendi.`,
         );
+
+        /*
+         * Bir aşamaya (milestoneId) bağlı dosya yüklemesi, teslim
+         * KOMPOZİSYONUNUN bir parçasıdır — ayrı bir "dosya eklendi"
+         * bildirimi göndermez. Aksi halde 7 dosyalı bir teslimde, her
+         * dosya için bir bildirim + "Teslim Et" bildirimi = 8 ayrı
+         * bildirim oluşuyordu (bkz. notifyDeliverySubmitted,
+         * ProjectWorkroom.tsx::handleSubmitDelivery — asıl business
+         * event budur). Sadece proje genel "Dosyalar" sekmesine
+         * (milestoneId yok) eklenen dosyalar kendi bildirimini üretir.
+         */
+        if (!milestoneId) {
+          // Yükleyen client'ın kendisi değilse (yani bir takım üyesi
+          // dosya eklediyse) projenin client'ına bildirim gönder.
+          // Client kendi dosyasını yüklerken bildirim gitmez.
+          const { data: projectRow } = await supabase
+            .from("projects")
+            .select("client_id, title")
+            .eq("id", projectId)
+            .maybeSingle();
+
+          if (projectRow && projectRow.client_id !== user.id) {
+            await notifyUsers(supabase, [
+              {
+                userId: projectRow.client_id,
+                type: "project_file_uploaded",
+                title: "Yeni dosya eklendi",
+                message: `"${projectRow.title}" projesine yeni bir dosya eklendi.`,
+                link: `/client/projects/${projectId}`,
+              },
+            ]);
+          }
+        }
       }
     } catch (uploadError) {
       console.error(
@@ -401,15 +481,28 @@ export default function ProjectFiles({
               key={file.id}
               className="flex min-w-0 items-center gap-3 rounded-xl border border-gray-100 p-3"
             >
-              {file.file_type.startsWith("image/") && file.url ? (
+              {file.file_type.startsWith("image/") &&
+              file.url &&
+              !brokenImageIds.has(file.id) ? (
                 <img
                   src={file.url}
                   alt=""
                   className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                  onError={() =>
+                    setBrokenImageIds((current) => {
+                      const next = new Set(current);
+                      next.add(file.id);
+                      return next;
+                    })
+                  }
                 />
               ) : (
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                  <FileText size={20} />
+                  {file.file_type === "application/pdf" ? (
+                    <FileText size={20} />
+                  ) : (
+                    <File size={20} />
+                  )}
                 </div>
               )}
 
@@ -448,6 +541,46 @@ export default function ProjectFiles({
       )}
     </section>
   );
+}
+
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  heic: "image/heic",
+  pdf: "application/pdf",
+};
+
+function guessMimeTypeFromName(fileName: string): string {
+  const extension = fileName.split(".").pop()?.toLowerCase() ?? "";
+  return EXTENSION_MIME_TYPES[extension] ?? "application/octet-stream";
+}
+
+function describeUploadError(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  if (/row-level security|permission denied/i.test(message)) {
+    return "için dosya yükleme yetkiniz bulunmuyor.";
+  }
+
+  // Supabase Storage, bucket'ın allowed_mime_types listesine girmeyen bir
+  // dosya türünü bu mesajla reddeder. Önceden burada jenerik "yüklenemedi"
+  // gösteriliyordu — kullanıcı SVG/GIF/HEIC gibi arayüzün desteklediğini
+  // sandığı ama storage'ın kabul etmediği bir türü tekrar tekrar
+  // denemeye çalışıyordu. Bkz. ALLOWED_FILE_LABEL.
+  if (/mime type.*not supported|not allowed/i.test(message)) {
+    return `için desteklenmeyen bir dosya türü seçtiniz. Desteklenen türler: ${SUPPORTED_FILE_FORMATS_LABEL}.`;
+  }
+
+  return "yüklenemedi. Lütfen tekrar deneyin.";
 }
 
 function formatSupabaseError(error: unknown) {

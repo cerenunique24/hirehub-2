@@ -348,7 +348,7 @@ export default function ClientProjectDetailsPage() {
     }
 
     if (expertise.length === 0) {
-      setError("Lütfen en az bir uzmanlık alanı seçin.");
+      setError("Lütfen en az bir beceri seçin.");
       return;
     }
 
@@ -619,7 +619,7 @@ export default function ClientProjectDetailsPage() {
 
           <p className="mt-3 max-w-xl text-base leading-7 text-gray-500">
             Bütçe, süre, konum ve ihtiyaç duyduğun
-            uzmanlıkları belirleyerek projen için
+            becerileri belirleyerek projen için
             doğru freelancer ve ekiplerle eşleşebilirsin.
           </p>
         </div>
@@ -814,11 +814,11 @@ export default function ClientProjectDetailsPage() {
 
               <div>
                 <h2 className="font-bold text-neutral-900">
-                  Hangi uzmanlıklara ihtiyacın var?
+                  Hangi becerilere ihtiyacın var?
                 </h2>
 
                 <p className="mt-1 text-sm leading-6 text-gray-500">
-                  Bir veya birden fazla uzmanlık alanı
+                  Bir veya birden fazla beceri
                   seçebilirsin.
                 </p>
               </div>
@@ -826,12 +826,12 @@ export default function ClientProjectDetailsPage() {
 
             <div>
               <label className="mb-2 block text-sm font-semibold text-neutral-900">
-                Uzmanlık alanları
+                Beceriler
               </label>
 
               <div className="rounded-xl border border-gray-200 bg-white p-3">
 
-                {/* Selected expertise */}
+                {/* Selected skills */}
                 <div className="mb-3 flex flex-wrap gap-2">
                   {expertise.length > 0 ? (
                     expertise.map((item) => (
@@ -849,7 +849,7 @@ export default function ClientProjectDetailsPage() {
                     ))
                   ) : (
                     <span className="px-1 py-1 text-sm text-gray-400">
-                      Uzmanlık alanı seç
+                      Beceri seç
                     </span>
                   )}
                 </div>

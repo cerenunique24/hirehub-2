@@ -43,7 +43,7 @@ export async function listAdminProposals(
         ? supabase.from("projects").select("id, title").in("id", projectIds)
         : Promise.resolve({ data: [] as Array<{ id: string; title: string }>, error: null }),
       freelancerIds.length > 0
-        ? supabase.from("profiles").select("id, first_name, last_name").in("id", freelancerIds)
+        ? supabase.rpc("admin_get_profile_names", { p_ids: freelancerIds })
         : Promise.resolve({ data: [] as Array<{ id: string; first_name: string | null; last_name: string | null }>, error: null }),
     ]);
 
@@ -56,7 +56,7 @@ export async function listAdminProposals(
 
   const titleByProjectId = new Map((projectRows ?? []).map((p) => [p.id, p.title]));
   const nameByFreelancerId = new Map(
-    (freelancerRows ?? []).map((f) => [f.id, fullNameOf(f.first_name, f.last_name)])
+((freelancerRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((f) => [f.id, fullNameOf(f.first_name, f.last_name)])
   );
 
   return {

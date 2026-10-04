@@ -14,6 +14,7 @@ import {
   PasswordInput,
   PasswordChecklist,
   ConsentGroup,
+  MarketingConsentCheckbox,
 } from "@/components/auth/RegisterSplitLayout";
 
 type LegalDocument = "kvkk" | "terms" | null;
@@ -32,6 +33,7 @@ export default function FreelancerRegisterPage() {
 
   const [acceptKvkk, setAcceptKvkk] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptMarketing, setAcceptMarketing] = useState(false);
   const [activeDocument, setActiveDocument] =
     useState<LegalDocument>(null);
   const [error, setError] = useState("");
@@ -130,6 +132,7 @@ export default function FreelancerRegisterPage() {
             consent_terms_version: "v1",
             consent_kvkk_accepted_at: acceptedAt,
             consent_terms_accepted_at: acceptedAt,
+            consent_marketing: acceptMarketing,
           },
         },
       });
@@ -160,7 +163,17 @@ export default function FreelancerRegisterPage() {
       `${form.firstName.trim()} ${form.lastName.trim()}`
     );
 
-    router.push("/register/freelancer/verify");
+    // "Confirm email" kapalıysa oturum hemen açılır: OTP ekranı atlanıp
+    // freelancer kurulumuna geçilir. Açıkken `session` null gelir ve
+    // doğrulama (OTP) ekranı aynen çalışır.
+    if (data.session) {
+      router.push("/register/freelancer/setup");
+      return;
+    }
+
+    router.push(
+      `/auth/verify-email?email=${encodeURIComponent(email)}`
+    );
   }
 
   return (
@@ -283,6 +296,9 @@ export default function FreelancerRegisterPage() {
             onTermsChange={setAcceptTerms}
             onOpenDocument={setActiveDocument}
           />
+          <div className="mt-2.5">
+            <MarketingConsentCheckbox checked={acceptMarketing} onChange={setAcceptMarketing} />
+          </div>
 
           {/* GÜVENLİK */}
           <p className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">

@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 /**
  * Shape a FreelancerCard can render. Every field beyond `id` is optional —
@@ -61,8 +62,7 @@ export function FreelancerCard({
   action?: React.ReactNode;
   className?: string;
 }) {
-  const name =
-    [freelancer.first_name, freelancer.last_name].filter(Boolean).join(" ").trim() || "Freelancer";
+  const name = publicDisplayName(freelancer, "Freelancer");
 
   const href = viewerRole === "client" ? `/client/freelancers/${freelancer.id}` : `/freelancers/${freelancer.id}`;
 

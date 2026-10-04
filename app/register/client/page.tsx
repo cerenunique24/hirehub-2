@@ -13,6 +13,7 @@ import {
   PasswordInput,
   PasswordChecklist,
   ConsentGroup,
+  MarketingConsentCheckbox,
 } from "@/components/auth/RegisterSplitLayout";
 
 type AccountType = "individual" | "company";
@@ -58,6 +59,7 @@ export default function ClientRegisterPage() {
 
   const [kvkkAccepted, setKvkkAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingAccepted, setMarketingAccepted] = useState(false);
   const [activeDocument, setActiveDocument] =
     useState<LegalDocument>(null);
 
@@ -130,6 +132,7 @@ export default function ClientRegisterPage() {
               consent_terms_version: "v1",
               consent_kvkk_accepted_at: acceptedAt,
               consent_terms_accepted_at: acceptedAt,
+              consent_marketing: marketingAccepted,
         },
 
         emailRedirectTo: `${window.location.origin}/auth/callback?next=/client/dashboard`,
@@ -178,7 +181,17 @@ export default function ClientRegisterPage() {
         : ""
     );
 
-    router.push("/register/client/verify");
+    // Supabase'de "Confirm email" kapalıyken signUp doğrudan oturum döndürür:
+    // OTP ekranı atlanır, kullanıcı panele gider. Confirm email açıldığında
+    // `session` null gelir ve aynı doğrulama (OTP) ekranı devreye girer.
+    if (data.session) {
+      router.push("/client/dashboard");
+      return;
+    }
+
+    router.push(
+      `/auth/verify-email?email=${encodeURIComponent(normalizedEmail)}`
+    );
   }
 
   const isCompany = accountType === "company";
@@ -392,6 +405,12 @@ export default function ClientRegisterPage() {
                 onTermsChange={setTermsAccepted}
                 onOpenDocument={setActiveDocument}
               />
+              <div className="mt-2.5">
+                <MarketingConsentCheckbox
+                  checked={marketingAccepted}
+                  onChange={setMarketingAccepted}
+                />
+              </div>
             </div>
           )}
 

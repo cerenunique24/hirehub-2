@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Briefcase,
@@ -18,8 +18,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ProjectFiles from "@/components/projects/ProjectFiles";
-import { notifyUsers } from "@/lib/notifications";
+import { notifyProposalSubmitted } from "@/lib/notifications";
 import PremiumGate from "@/components/premium/PremiumGate";
+import { Avatar } from "@/components/ui/Avatar";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Project = {
   id: string;
@@ -44,6 +46,13 @@ type Profile = {
   expertise: string[] | null;
   work_types: string[] | null;
   experience: string | null;
+};
+
+type ClientProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
 };
 
 type MatchedRole = {
@@ -318,6 +327,7 @@ function FreelancerProjectDetailContent({
   );
 
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const cameFromMessages =
     searchParams.get("ref") === "messages";
@@ -326,6 +336,9 @@ function FreelancerProjectDetailContent({
 
   const [project, setProject] =
     useState<Project | null>(null);
+
+  const [clientProfile, setClientProfile] =
+    useState<ClientProfile | null>(null);
 
   const [matchedRoles, setMatchedRoles] =
     useState<MatchedRole[]>([]);
@@ -504,6 +517,33 @@ function FreelancerProjectDetailContent({
 
         /*
          * ----------------------------------------------------
+         * PROJE SAHİBİ (client) — teklif verilmeden önce de görünsün
+         * ----------------------------------------------------
+         */
+        if (loadedProject.client_id) {
+          const {
+            data: clientData,
+            error: clientError,
+          } = await supabase
+            .from("profiles")
+            .select("id, first_name, avatar_url")
+            .eq("id", loadedProject.client_id)
+            .maybeSingle();
+
+          if (clientError) {
+            console.error(
+              "Proje sahibi profili yüklenemedi:",
+              clientError
+            );
+          } else if (!cancelled) {
+            setClientProfile(
+              clientData as ClientProfile | null
+            );
+          }
+        }
+
+        /*
+         * ----------------------------------------------------
          * FREELANCER PROFİLİ
          * ----------------------------------------------------
          */
@@ -585,25 +625,65 @@ function FreelancerProjectDetailContent({
          * Frontend burada budget_breakdown istemez.
          */
         try {
-          const response =
-            await fetch(
-              "/api/ai/match-talent",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
-                body: JSON.stringify({
-                  projectId: id,
-                }),
+          // Sayfa yenilendiğinde/tekrar girildiğinde aynı freelancer +
+          // aynı proje için AI eşleşmesi gereksiz yere tekrar
+          // hesaplanmasın diye kısa süreli sessionStorage cache'i.
+          const matchCacheKey = `discover-detail-match:${user.id}:${id}`;
+          const MATCH_CACHE_TTL_MS = 10 * 60 * 1000;
+
+          let data: unknown = null;
+
+          try {
+            const cachedRaw = sessionStorage.getItem(matchCacheKey);
+
+            if (cachedRaw) {
+              const cached = JSON.parse(cachedRaw) as {
+                data: unknown;
+                cachedAt: number;
+              };
+
+              if (Date.now() - cached.cachedAt < MATCH_CACHE_TTL_MS) {
+                data = cached.data;
               }
-            );
+            }
+          } catch {
+            // sessionStorage kullanılamıyorsa cache'siz devam edilir.
+          }
 
-          const data =
-            await response.json();
+          let response: Response | null = null;
 
-          if (!response.ok) {
+          if (data === null) {
+            response =
+              await fetch(
+                "/api/ai/match-talent",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type":
+                      "application/json",
+                  },
+                  body: JSON.stringify({
+                    projectId: id,
+                  }),
+                }
+              );
+
+            data =
+              await response.json();
+
+            if (response.ok) {
+              try {
+                sessionStorage.setItem(
+                  matchCacheKey,
+                  JSON.stringify({ data, cachedAt: Date.now() })
+                );
+              } catch {
+                // Depolama kotası/gizli sekme — cache yazılamazsa sorun değil.
+              }
+            }
+          }
+
+          if (response && !response.ok) {
             console.error(
               "AI eşleşme hatası:",
               data
@@ -902,20 +982,19 @@ function FreelancerProjectDetailContent({
         "Teklifin başarıyla gönderildi."
       );
 
-      await notifyUsers(supabase, [
-        {
-          userId: project.client_id,
-          type: "proposal_received",
-          title: "Yeni teklif aldın",
-          message: `"${project.title}" projesine yeni bir teklif geldi.`,
-          link: "/client/proposals",
-        },
-      ]);
+      await notifyProposalSubmitted(supabase, {
+        clientId: project.client_id,
+        freelancerId: user.id,
+        projectId: project.id,
+        projectTitle: project.title,
+      });
 
       setTimeout(() => {
-        window.location.href =
-          "/freelancers/proposals";
-      }, 1500);
+        // `router.push` (full sayfa yeniden yükleme değil) kullanılır —
+        // böylece başarı mesajı tam bir "reload" anında kaybolmaz ve
+        // hedef sayfa ?submitted=1 ile kendi onay banner'ını gösterebilir.
+        router.push("/freelancers/proposals?submitted=1");
+      }, 1200);
     } catch (error) {
       console.error(
         "Teklif gönderme hatası:",
@@ -1084,6 +1163,22 @@ function FreelancerProjectDetailContent({
             <h1 className="mt-5 text-3xl font-semibold tracking-[-0.01em] text-gray-950 md:text-4xl">
               {project.title}
             </h1>
+
+            {clientProfile && (
+              <div className="mt-4 flex items-center gap-2.5">
+                <Avatar
+                  src={clientProfile.avatar_url}
+                  name={publicDisplayName(clientProfile)}
+                  size="sm"
+                />
+                <div className="leading-tight">
+                  <p className="text-sm font-medium text-gray-900">
+                    {publicDisplayName(clientProfile, "Proje sahibi")}
+                  </p>
+                  <p className="text-xs text-gray-500">Proje sahibi</p>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-5 text-sm text-gray-500">
               <span className="inline-flex items-center gap-2">

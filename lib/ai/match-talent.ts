@@ -5,7 +5,19 @@ import type { ProjectAnalysis } from "@/types/ai";
 import { matchSkills } from "@/lib/matching";
 import { normalizeStringArray } from "@/lib/utils/normalizeStringArray";
 import { computeRoleEligibility } from "@/lib/matching/roleEligibility";
-import { reviewMatchPairs, type SemanticPair } from "@/lib/ai/semanticMatch";
+import { getServerSigningSecret } from "@/lib/server/trust";
+import { publicDisplayName } from "@/lib/utils/displayName";
+import {
+  reviewMatchPairs,
+  type SemanticPair,
+  type SemanticVerdict,
+} from "@/lib/ai/semanticMatch";
+import {
+  getCachedSemanticVerdicts,
+  setCachedSemanticVerdicts,
+} from "@/lib/ai/semanticMatchCache";
+import { normalizeCategory } from "@/lib/categories";
+import { normalizeMatchText } from "@/lib/utils/normalizeMatchText";
 
 /**
  * Deterministic skor bu aralıktaysa ("ne net eşleşme ne net uyumsuzluk")
@@ -632,8 +644,7 @@ export async function matchFreelancerToProjectRoles(
           description,
           skills,
           category,
-          deliverables,
-          budget_breakdown
+          deliverables
         `
       )
       .eq("id", projectId)
@@ -645,7 +656,6 @@ export async function matchFreelancerToProjectRoles(
         [
           "id",
           "first_name",
-          "last_name",
           "avatar_url",
           "title",
           "bio",
@@ -706,17 +716,33 @@ export async function matchFreelancerToProjectRoles(
     return [];
   }
 
+  /*
+   * budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+   * supabase/migrations/202609300006_budget_breakdown_privacy.sql) —
+   * PostgREST'e çıplak select ile herhangi bir authenticated kullanıcı
+   * diğer rollerin bütçesini okuyabiliyordu. Sunucu tarafı eşleştirme
+   * (burası — her zaman bir Next.js route handler'ı içinde çalışır) bu
+   * RPC'yi sunucuya özel imzayla çağırarak TAM veriyi okur; eşleştirme/
+   * eligibility mantığı aşağıda hiç değişmeden sürüyor.
+   */
+  const { data: budgetBreakdown, error: budgetError } = await supabase.rpc(
+    "get_project_budget_breakdown",
+    { p_project_id: projectId, p_server_secret: getServerSigningSecret() }
+  );
+
+  if (budgetError) {
+    throw budgetError;
+  }
+
   /* ---------------------------------------------------------------------- */
   /* Normalize                                                              */
   /* ---------------------------------------------------------------------- */
 
   const project =
-    normalizeProject(
-      projectData as unknown as Record<
-        string,
-        unknown
-      >
-    );
+    normalizeProject({
+      ...(projectData as unknown as Record<string, unknown>),
+      budget_breakdown: budgetBreakdown,
+    });
 
   const profile =
     normalizeProfile(
@@ -938,63 +964,90 @@ export async function matchFreelancerToProjectRoles(
   }
 
   if (pendingReviews.length > 0) {
-    const pairs: SemanticPair[] = pendingReviews.map((review) => ({
-      pairId: String(review.resultIndex),
-      role: {
-        name: review.roleName,
-        responsibilities: uniqueStrings(
-          review.projectRole.responsibilities ?? []
-        ),
-        requiredSkills: uniqueStrings([
-          ...(review.projectRole.skills ?? []),
-          ...(review.projectRole.requiredSkills ?? []),
-        ]),
-        preferredSkills: uniqueStrings(
-          review.projectRole.preferredSkills ?? []
-        ),
-      },
-      freelancer: {
-        title: profile.title,
-        bio: profile.bio,
-        skills: buildFreelancerSkillPool(profile),
-        expertise: profile.expertise,
-        experience: profile.experience,
-        portfolio: portfolioItems
-          .map((item) =>
-            [item.title, item.category]
-              .filter((value): value is string => Boolean(value))
-              .join(" — ")
-          )
-          .filter((text) => text.length > 0),
-      },
-      deterministicScore: review.calculation.score,
-    }));
+    // freelancer + proje çifti için 24 saatlik cache: taze bir verdict
+    // varsa Gemini'ye HİÇ gidilmez. pairId burada review.roleName
+    // (resultIndex değil) çünkü cache tekrar kullanılabilir olmalı —
+    // resultIndex her çağrıda değişebilir, rol adı aynı projede kalıcı.
+    const cachedVerdicts = await getCachedSemanticVerdicts(
+      supabase,
+      freelancerId,
+      projectId
+    );
 
-    let verdicts: Awaited<ReturnType<typeof reviewMatchPairs>> = null;
+    const allRolesCached =
+      cachedVerdicts !== null &&
+      pendingReviews.every((review) => cachedVerdicts.has(review.roleName));
 
-    try {
-      verdicts = await reviewMatchPairs(
-        {
-          title: project.title,
-          description: project.description,
-          deliverables: project.deliverables ?? [],
+    let verdicts: Map<string, SemanticVerdict> | null = allRolesCached
+      ? cachedVerdicts
+      : null;
+
+    if (!verdicts) {
+      const pairs: SemanticPair[] = pendingReviews.map((review) => ({
+        pairId: review.roleName,
+        role: {
+          name: review.roleName,
+          responsibilities: uniqueStrings(
+            review.projectRole.responsibilities ?? []
+          ),
+          requiredSkills: uniqueStrings([
+            ...(review.projectRole.skills ?? []),
+            ...(review.projectRole.requiredSkills ?? []),
+          ]),
+          preferredSkills: uniqueStrings(
+            review.projectRole.preferredSkills ?? []
+          ),
         },
-        pairs
-      );
-    } catch (semanticError) {
-      console.error(
-        "[CollaCrew AI] matchFreelancerToProjectRoles: semantic review " +
-          "beklenmeyen şekilde başarısız oldu, deterministic sonuçlara " +
-          "devam ediliyor:",
-        semanticError instanceof Error
-          ? semanticError.message
-          : semanticError
-      );
+        freelancer: {
+          title: profile.title,
+          bio: profile.bio,
+          skills: buildFreelancerSkillPool(profile),
+          expertise: profile.expertise,
+          experience: profile.experience,
+          portfolio: portfolioItems
+            .map((item) =>
+              [item.title, item.category]
+                .filter((value): value is string => Boolean(value))
+                .join(" — ")
+            )
+            .filter((text) => text.length > 0),
+        },
+        deterministicScore: review.calculation.score,
+      }));
+
+      try {
+        verdicts = await reviewMatchPairs(
+          {
+            title: project.title,
+            description: project.description,
+            deliverables: project.deliverables ?? [],
+          },
+          pairs
+        );
+
+        if (verdicts) {
+          await setCachedSemanticVerdicts(
+            supabase,
+            freelancerId,
+            projectId,
+            verdicts
+          );
+        }
+      } catch (semanticError) {
+        console.error(
+          "[CollaCrew AI] matchFreelancerToProjectRoles: semantic review " +
+            "beklenmeyen şekilde başarısız oldu, deterministic sonuçlara " +
+            "devam ediliyor:",
+          semanticError instanceof Error
+            ? semanticError.message
+            : semanticError
+        );
+      }
     }
 
     if (verdicts) {
       for (const review of pendingReviews) {
-        const verdict = verdicts.get(String(review.resultIndex));
+        const verdict = verdicts.get(review.roleName);
 
         if (!verdict) continue;
 
@@ -1051,11 +1104,23 @@ function buildFreelancerSkillPool(profile: Profile): string[] {
   ]);
 }
 
-/** Project category ↔ the freelancer's declared project types. */
+/**
+ * Project category ↔ the freelancer's declared project types.
+ *
+ * Her iki taraf da normalizeCategory() (lib/categories.ts) ile canonical
+ * karşılığına çözülür — eski, tam yazımla eşleşmeyen kayıtlar (ör.
+ * "Yazılım" ya da "Yazılım & Teknoloji") artık canonical "Yazılım
+ * Geliştirme" ile eşleşir. Hiçbir DB satırı değiştirilmez, sadece
+ * karşılaştırma normalize edilir.
+ */
 function hasProjectTypeMatch(profile: Profile, category: string | null): boolean {
   if (!category || !profile.project_types?.length) return false;
-  const target = normalizeText(category);
-  return profile.project_types.some((type) => normalizeText(type) === target);
+
+  const target = normalizeText(normalizeCategory(category) ?? category);
+
+  return profile.project_types.some(
+    (type) => normalizeText(normalizeCategory(type) ?? type) === target
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1567,6 +1632,56 @@ function calculateRoleTextScore(
     }
   }
 
+  /**
+   * İkinci geçiş: eş anlamlı olmayan ama gerçekten ilişkili roller
+   * (bkz. getRelatedRoles). Sadece birebir/substring eşleşmesi
+   * kontrol edilir (word-overlap uygulanmaz) ve katkı
+   * RELATED_ROLE_SCORE ile sınırlıdır — bu yüzden "Yazar" rolü
+   * isteyen bir proje, unvanı "Senarist" olan bir freelancer'ı artık
+   * roleScore=0 yüzünden otomatik elemez, ama bu tek başına da
+   * "birebir eşleşme" gücünde sayılmaz.
+   */
+  if (bestScore < RELATED_ROLE_SCORE) {
+    for (
+      const relatedRole of getRelatedRoles(
+        required
+      )
+    ) {
+      for (
+        const candidateText of candidateTexts
+      ) {
+        const normalizedCandidate =
+          normalizeText(
+            candidateText
+          );
+
+        if (
+          normalizedCandidate &&
+          normalizedCandidate.includes(
+            relatedRole
+          )
+        ) {
+          bestScore = Math.max(
+            bestScore,
+            RELATED_ROLE_SCORE
+          );
+        }
+      }
+    }
+  }
+
+  if (
+    bestScore >
+      RELATED_ROLE_SCORE &&
+    isQualifierDowngrade(
+      required,
+      candidateTexts
+    )
+  ) {
+    bestScore =
+      RELATED_ROLE_SCORE;
+  }
+
   return Math.round(
     Math.min(
       100,
@@ -1575,6 +1690,70 @@ function calculateRoleTextScore(
   );
 }
 
+/**
+ * Bazı compound/qualifier rol adları ("İç Mimar" = "İç" + "Mimar",
+ * "Product Photographer" = "Product" + "Photographer") temel
+ * substring/word-overlap kontrolünde KAÇINILMAZ OLARAK ana rolün
+ * kendisini içerir — bu yüzden hiçbir alias/related listesi
+ * eklenmese bile normalde 100 (exact) puan alırlardı. Ama bunlar
+ * GERÇEKTE farklı bir uzmanlık (bkz. matching audit: "Mimar ↔ İç
+ * Mimar exact değil, closely related olmalı").
+ *
+ * Bu, substring/word-overlap MEKANİZMASINI değiştirmez — sadece bu
+ * bilinen, açıkça listelenmiş çiftlerin SONUCUNU RELATED_ROLE_SCORE'a
+ * sınırlar (calculateRoleTextScore'un sonunda uygulanır).
+ */
+const QUALIFIER_DOWNGRADE_PAIRS: [
+  string,
+  string
+][] = [
+  ["mimar", "ic mimar"],
+  ["architect", "interior architect"],
+  ["photographer", "product photographer"],
+  ["photographer", "fashion photographer"],
+  ["photographer", "event photographer"],
+  ["fotografci", "urun fotografcisi"],
+  ["fotografci", "moda fotografcisi"],
+  ["fotografci", "etkinlik fotografcisi"],
+];
+
+function isQualifierDowngrade(
+  required: string,
+  candidateTexts: string[]
+): boolean {
+  return candidateTexts.some(
+    (text) => {
+      const candidate =
+        normalizeText(text);
+
+      return QUALIFIER_DOWNGRADE_PAIRS.some(
+        ([a, b]) =>
+          (required === a &&
+            candidate.includes(
+              b
+            )) ||
+          (required === b &&
+            candidate.includes(
+              a
+            ))
+      );
+    }
+  );
+}
+
+/**
+ * EXACT / SYNONYM roller.
+ *
+ * Bu liste SADECE gerçekten "aynı işin farklı adı" olan çiftler
+ * içindir — aynı meslek, farklı dil (TR/EN) ya da yaygın yazım
+ * varyasyonu (bkz. matching audit — role relationship matrisi).
+ *
+ * "Product Designer", "UI Designer", "UX Designer" gibi GERÇEKTE
+ * FARKLI uzmanlıklar (birbiriyle örtüşse de aynı iş değil) burada
+ * DEĞİL — getRelatedRoles()'ta, sınırlı puanla. Bu ayrım kasıtlı:
+ * "Mimar ↔ İç Mimar", "Photographer ↔ Product Photographer" gibi
+ * çiftlerin exact/100 puan almasını önlemek için.
+ */
 function getRoleAliases(
   role: string
 ): string[] {
@@ -1585,30 +1764,20 @@ function getRoleAliases(
     string,
     string[]
   > = {
-    "ui ux tasarim": [
-      "ui ux designer",
-      "ui designer",
-      "ux designer",
-      "product designer",
-      "product design",
-    ],
+    /* ---- UI/UX & Web Tasarım — sadece aynı işin TR/EN adı ---- */
+    "ui ux tasarim": ["ui ux designer"],
+    "ui ux designer": ["ui ux tasarim"],
+    "ui designer": ["arayuz tasarimcisi", "arayuz tasarimi"],
+    "arayuz tasarimcisi": ["ui designer"],
+    "ux designer": ["kullanici deneyimi tasarimcisi"],
+    "kullanici deneyimi tasarimcisi": ["ux designer"],
+    "product designer": ["urun tasarimcisi"],
+    "urun tasarimcisi": ["product designer"],
+    "web tasarim": ["web designer", "web design"],
+    "web designer": ["web tasarim", "web design"],
+    "web design": ["web tasarim", "web designer"],
 
-    "ui ux designer": [
-      "ui ux tasarim",
-      "ui designer",
-      "ux designer",
-      "product designer",
-      "product design",
-    ],
-
-    "product designer": [
-      "ui ux designer",
-      "ui ux tasarim",
-      "product design",
-      "ux designer",
-      "ui designer",
-    ],
-
+    /* ---- Frontend / Backend geliştirme (değiştirilmedi) ---- */
     "frontend gelistirme": [
       "frontend developer",
       "front end developer",
@@ -1635,66 +1804,15 @@ function getRoleAliases(
       "backend engineer",
     ],
 
-    "web tasarim": [
-      "web designer",
-      "ui designer",
-      "ui ux designer",
-      "product designer",
-    ],
-
-    "web design": [
-      "web designer",
-      "ui designer",
-      "ui ux designer",
-      "product designer",
-    ],
-
-    "grafik tasarim": [
-      "graphic designer",
-      "visual designer",
-      "brand designer",
-    ],
-
-    "graphic designer": [
-      "grafik tasarim",
-      "visual designer",
-      "brand designer",
-    ],
-
-    "marka tasarimi": [
-      "brand designer",
-      "branding designer",
-      "graphic designer",
-      "visual designer",
-      "marka tasarimcisi",
-      "grafik tasarimci",
-    ],
-
-    "marka tasarimcisi": [
-      "brand designer",
-      "branding designer",
-      "graphic designer",
-      "visual designer",
-      "marka tasarimi",
-      "grafik tasarimci",
-    ],
-
-    "brand designer": [
-      "marka tasarimi",
-      "branding designer",
-      "graphic designer",
-      "visual designer",
-      "marka tasarimcisi",
-    ],
-
-    "grafik tasarimci": [
-      "graphic designer",
-      "visual designer",
-      "brand designer",
-      "grafik tasarim",
-      "marka tasarimi",
-      "marka tasarimcisi",
-    ],
+    /* ---- Grafik / Marka — sadece aynı işin TR/EN adı ---- */
+    "grafik tasarim": ["graphic designer", "grafik tasarimci"],
+    "graphic designer": ["grafik tasarim", "grafik tasarimci"],
+    "grafik tasarimci": ["graphic designer", "grafik tasarim"],
+    "marka tasarimi": ["brand designer", "marka tasarimcisi"],
+    "brand designer": ["marka tasarimi", "marka tasarimcisi"],
+    "marka tasarimcisi": ["brand designer", "marka tasarimi"],
+    "logo tasarimi": ["logo designer"],
+    "logo designer": ["logo tasarimi"],
 
     "mobil uygulama": [
       "mobile developer",
@@ -1726,13 +1844,17 @@ function getRoleAliases(
       "developer",
     ],
 
+    /*
+     * Dijital Pazarlama — "seo specialist"/"social media specialist"
+     * ARTIK bu listede değil: SEO ya da sosyal medya uzmanlığı,
+     * genel dijital pazarlamacılıkla aynı iş değil, ilişkili ama ayrı
+     * bir uzmanlık (bkz. getRelatedRoles).
+     */
     "dijital pazarlama": [
       "digital marketing",
       "digital marketing specialist",
       "digital marketer",
       "marketing specialist",
-      "seo specialist",
-      "social media specialist",
       "dijital pazarlama uzmani",
     ],
 
@@ -1756,8 +1878,6 @@ function getRoleAliases(
       "seo specialist",
       "seo uzmani",
       "search engine optimization",
-      "dijital pazarlama",
-      "digital marketing",
     ],
 
     "social media": [
@@ -1765,16 +1885,12 @@ function getRoleAliases(
       "social media manager",
       "sosyal medya uzmani",
       "sosyal medya yoneticisi",
-      "dijital pazarlama",
-      "digital marketing",
     ],
 
     "sosyal medya": [
       "social media specialist",
       "social media manager",
       "social media",
-      "dijital pazarlama",
-      "digital marketing",
     ],
 
     "icerik uretimi": [
@@ -1803,9 +1919,6 @@ function getRoleAliases(
     "ui ux": [
       "ui ux designer",
       "ui ux tasarim",
-      "ui designer",
-      "ux designer",
-      "product designer",
     ],
 
     "frontend": [
@@ -1820,6 +1933,50 @@ function getRoleAliases(
       "backend gelistirme",
       "back end developer",
     ],
+
+    /* ---- Yazarlık / İçerik — sadece aynı işin TR/EN adı ---- */
+    senarist: ["senaryo yazari", "screenwriter"],
+    "senaryo yazari": ["senarist", "screenwriter"],
+    screenwriter: ["senarist", "senaryo yazari"],
+
+    /* ---- Çeviri — writing'den AYRI, kendi exact grubu ---- */
+    translator: ["cevirmen", "tercuman"],
+    cevirmen: ["translator", "tercuman"],
+    tercuman: ["translator", "cevirmen"],
+
+    /* ---- 3D Tasarım ---- */
+    "3d artist": ["3d sanatci"],
+    "3d sanatci": ["3d artist"],
+    "3d modeler": ["3d modelleyici"],
+    "3d modelleyici": ["3d modeler"],
+
+    /* ---- Mimari & İç Mekân — sadece aynı işin TR/EN adı ---- */
+    mimar: ["architect"],
+    architect: ["mimar"],
+    "ic mimar": ["interior architect"],
+    "interior architect": ["ic mimar"],
+    "peyzaj mimari": ["landscape architect"],
+    "landscape architect": ["peyzaj mimari"],
+
+    /* ---- Video & Animasyon ---- */
+    "video editor": ["video editoru"],
+    "video editoru": ["video editor"],
+    "video producer": ["video yapimcisi"],
+    "video yapimcisi": ["video producer"],
+
+    /* ---- Fotoğraf ---- */
+    photographer: ["fotografci"],
+    fotografci: ["photographer"],
+
+    /* ---- Ses & Müzik ---- */
+    "sound designer": ["ses tasarimcisi"],
+    "ses tasarimcisi": ["sound designer"],
+    "music producer": ["muzik produktoru"],
+    "muzik produktoru": ["music producer"],
+
+    /* ---- İş & Yönetim ---- */
+    "project manager": ["proje yoneticisi"],
+    "proje yoneticisi": ["project manager"],
   };
 
   return (
@@ -1827,6 +1984,539 @@ function getRoleAliases(
     []
   );
 }
+
+/**
+ * "Yakın ama eş anlamlı DEĞİL" roller.
+ *
+ * getRoleAliases() içindeki gruplar (ör. UI/UX Designer ↔ Product
+ * Designer) gerçek eş anlamlılardır — birebir alias eşleşmesi 100 puan
+ * alır. Ama "Yazar" ile "Senarist" ya da "İçerik Yazarı" öyle değil:
+ * gerçekten ilişkili meslekler ama birbirinin otomatik yerine geçmemeli
+ * (bkz. matching audit — "Kitap yazma projesi + Senarist" senaryosu).
+ *
+ * Bu liste calculateRoleTextScore()'da SADECE RELATED_ROLE_SCORE ile
+ * sınırlı (aliaslardaki 100 potansiyeline göre daha düşük) bir katkı
+ * sağlar — nihai skoru tek başına belirlemez, diğer sinyallerle
+ * (skill/responsibility/experience) birlikte eşik karşılaştırmasına
+ * girer.
+ */
+function getRelatedRoles(
+  role: string
+): string[] {
+  const normalized =
+    normalizeText(role);
+
+  const relatedGroups: Record<
+    string,
+    string[]
+  > = {
+    /* ---- UI/UX — birbiriyle örtüşen ama AYNI iş olmayan uzmanlıklar ---- */
+    "ui ux tasarim": [
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "interaction designer",
+      "ux researcher",
+      "web designer",
+      "design system designer",
+      "urun tasarimcisi",
+    ],
+    "ui ux designer": [
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "interaction designer",
+      "ux researcher",
+      "web designer",
+      "design system designer",
+      "urun tasarimcisi",
+    ],
+    "product designer": [
+      "ui designer",
+      "ux designer",
+      "interaction designer",
+      "ux researcher",
+      "ui ux designer",
+      "ui ux tasarim",
+    ],
+    "urun tasarimcisi": [
+      "ui designer",
+      "ux designer",
+      "interaction designer",
+      "ux researcher",
+      "ui ux designer",
+      "ui ux tasarim",
+    ],
+    "ui designer": [
+      "ux designer",
+      "product designer",
+      "ui ux designer",
+      "ui ux tasarim",
+      "interaction designer",
+    ],
+    "ux designer": [
+      "ui designer",
+      "product designer",
+      "ux researcher",
+      "ui ux designer",
+      "ui ux tasarim",
+      "interaction designer",
+    ],
+    "ux researcher": [
+      "ux designer",
+      "product designer",
+      "ui ux designer",
+      "ui ux tasarim",
+    ],
+    "kullanici arastirmacisi": [
+      "ux designer",
+      "product designer",
+      "ui ux designer",
+    ],
+    "interaction designer": [
+      "ui designer",
+      "ux designer",
+      "product designer",
+      "ui ux designer",
+    ],
+    "etkilesim tasarimcisi": [
+      "ui designer",
+      "ux designer",
+      "product designer",
+    ],
+    "design system designer": [
+      "ui designer",
+      "product designer",
+      "ui ux designer",
+    ],
+    "web tasarim": [
+      "ui designer",
+      "product designer",
+      "ui ux designer",
+      "ux designer",
+    ],
+    "web design": [
+      "ui designer",
+      "product designer",
+      "ui ux designer",
+      "ux designer",
+    ],
+    "web designer": [
+      "ui designer",
+      "product designer",
+      "ui ux designer",
+      "ux designer",
+    ],
+
+    /* ---- Grafik / Marka — birbiriyle örtüşen ama AYNI iş olmayan uzmanlıklar ---- */
+    "grafik tasarim": [
+      "visual designer",
+      "brand designer",
+      "illustrator",
+      "art director",
+      "creative designer",
+      "logo designer",
+    ],
+    "grafik tasarimci": [
+      "visual designer",
+      "brand designer",
+      "illustrator",
+      "art director",
+      "creative designer",
+      "logo designer",
+    ],
+    "graphic designer": [
+      "visual designer",
+      "brand designer",
+      "illustrator",
+      "art director",
+      "creative designer",
+      "logo designer",
+    ],
+    "marka tasarimi": [
+      "graphic designer",
+      "visual designer",
+      "art director",
+      "creative designer",
+      "grafik tasarim",
+    ],
+    "marka tasarimcisi": [
+      "graphic designer",
+      "visual designer",
+      "art director",
+      "creative designer",
+      "grafik tasarim",
+    ],
+    "brand designer": [
+      "graphic designer",
+      "visual designer",
+      "art director",
+      "creative designer",
+      "grafik tasarim",
+    ],
+    "visual designer": [
+      "graphic designer",
+      "brand designer",
+      "illustrator",
+      "grafik tasarim",
+    ],
+    "gorsel tasarimci": [
+      "graphic designer",
+      "brand designer",
+      "illustrator",
+    ],
+    "art director": [
+      "graphic designer",
+      "brand designer",
+      "creative designer",
+      "illustrator",
+    ],
+    "sanat yonetmeni": [
+      "graphic designer",
+      "brand designer",
+      "creative designer",
+    ],
+    illustrator: [
+      "graphic designer",
+      "visual designer",
+      "creative designer",
+    ],
+    "creative designer": [
+      "graphic designer",
+      "brand designer",
+      "art director",
+    ],
+    "yaratici tasarimci": [
+      "graphic designer",
+      "brand designer",
+      "art director",
+    ],
+    "logo designer": [
+      "graphic designer",
+      "brand designer",
+    ],
+
+    /* ---- Yazılım geliştirme — mevcut exact gruplara ek, geniş sektör terimleri ---- */
+    "frontend gelistirme": [
+      "react developer",
+      "typescript developer",
+      "javascript developer",
+      "full stack developer",
+    ],
+    "frontend developer": [
+      "react developer",
+      "typescript developer",
+      "javascript developer",
+      "full stack developer",
+    ],
+    frontend: [
+      "react developer",
+      "typescript developer",
+      "javascript developer",
+      "full stack developer",
+    ],
+    "yazilim gelistirme": [
+      "full stack developer",
+      "backend developer",
+      "react developer",
+    ],
+    "software developer": [
+      "full stack developer",
+      "backend developer",
+      "react developer",
+    ],
+
+    /* ---- Dijital Pazarlama — genel pazarlama ile alt-uzmanlıklar arası ---- */
+    "dijital pazarlama": [
+      "seo specialist",
+      "social media specialist",
+      "social media manager",
+      "content strategist",
+      "advertising specialist",
+      "performance marketer",
+      "growth marketer",
+    ],
+    "dijital pazarlama uzmani": [
+      "seo specialist",
+      "social media specialist",
+      "social media manager",
+      "content strategist",
+      "advertising specialist",
+    ],
+    "digital marketing": [
+      "seo specialist",
+      "social media specialist",
+      "social media manager",
+      "content strategist",
+      "advertising specialist",
+      "performance marketer",
+      "growth marketer",
+    ],
+    seo: ["dijital pazarlama", "digital marketing"],
+    "social media": ["dijital pazarlama", "digital marketing"],
+    "sosyal medya": ["dijital pazarlama", "digital marketing"],
+
+    /*
+     * ---- Yazarlık / İçerik ----
+     * "senarist" ↔ "senaryo yazari" artık BURADA DEĞİL — exact/synonym
+     * olarak getRoleAliases()'a taşındı (bkz. audit düzeltmesi).
+     */
+    yazar: [
+      "senarist",
+      "senaryo yazari",
+      "kitap yazari",
+      "icerik yazari",
+      "metin yazari",
+      "hikaye yazari",
+      "roman yazari",
+      "copywriter",
+      "content writer",
+    ],
+    "kitap yazari": [
+      "yazar",
+      "senarist",
+      "senaryo yazari",
+      "hikaye yazari",
+      "roman yazari",
+    ],
+    senarist: [
+      "yazar",
+      "kitap yazari",
+      "hikaye yazari",
+    ],
+    "senaryo yazari": [
+      "yazar",
+      "hikaye yazari",
+      "kitap yazari",
+    ],
+    "hikaye yazari": [
+      "yazar",
+      "senarist",
+      "senaryo yazari",
+      "kitap yazari",
+      "icerik yazari",
+    ],
+    "icerik yazari": [
+      "yazar",
+      "metin yazari",
+      "kitap yazari",
+      "hikaye yazari",
+      "copywriter",
+      "content writer",
+    ],
+    "metin yazari": [
+      "icerik yazari",
+      "yazar",
+      "copywriter",
+      "content writer",
+    ],
+
+    /* ---- 3D Tasarım ---- */
+    "3d artist": [
+      "3d modeler",
+      "character designer",
+      "motion designer",
+      "game designer",
+    ],
+    "3d sanatci": [
+      "3d modeler",
+      "character designer",
+      "motion designer",
+      "game designer",
+    ],
+    "3d modeler": [
+      "3d artist",
+      "character designer",
+      "cad designer",
+    ],
+    "3d modelleyici": [
+      "3d artist",
+      "character designer",
+      "cad designer",
+    ],
+
+    /* ---- Mimari & İç Mekân — farklı ama gerçekten ilişkili uzmanlıklar ---- */
+    mimar: [
+      "ic mimar",
+      "interior architect",
+      "landscape architect",
+      "architectural visualizer",
+      "mimari gorsellestirici",
+      "cad designer",
+      "technical designer",
+    ],
+    architect: [
+      "ic mimar",
+      "interior architect",
+      "landscape architect",
+      "architectural visualizer",
+      "mimari gorsellestirici",
+      "cad designer",
+      "technical designer",
+    ],
+    "ic mimar": [
+      "mimar",
+      "architect",
+      "architectural visualizer",
+      "mimari gorsellestirici",
+    ],
+    "interior architect": [
+      "mimar",
+      "architect",
+      "architectural visualizer",
+      "mimari gorsellestirici",
+    ],
+    "architectural visualizer": [
+      "mimar",
+      "ic mimar",
+      "architect",
+      "interior architect",
+    ],
+    "mimari gorsellestirici": [
+      "mimar",
+      "ic mimar",
+      "architect",
+      "interior architect",
+    ],
+    "cad designer": [
+      "mimar",
+      "ic mimar",
+      "technical designer",
+    ],
+    "cad tasarimcisi": [
+      "mimar",
+      "ic mimar",
+      "technical designer",
+    ],
+
+    /* ---- Video & Animasyon ---- */
+    "video editor": [
+      "motion designer",
+      "video producer",
+      "videographer",
+      "post production specialist",
+      "animator",
+    ],
+    "video editoru": [
+      "motion designer",
+      "video producer",
+      "videographer",
+      "post production specialist",
+      "animator",
+    ],
+    "motion designer": [
+      "video editor",
+      "animator",
+      "3d artist",
+    ],
+    "hareketli grafik tasarimcisi": [
+      "video editor",
+      "animator",
+      "3d artist",
+    ],
+    videographer: [
+      "video editor",
+      "video producer",
+    ],
+    animator: [
+      "motion designer",
+      "3d artist",
+      "character animator",
+    ],
+
+    /* ---- Fotoğraf — farklı ama gerçekten ilişkili uzmanlıklar ---- */
+    photographer: [
+      "product photographer",
+      "fashion photographer",
+      "event photographer",
+      "photo editor",
+      "retoucher",
+    ],
+    fotografci: [
+      "product photographer",
+      "fashion photographer",
+      "event photographer",
+      "photo editor",
+      "retoucher",
+    ],
+    "product photographer": [
+      "photographer",
+      "fashion photographer",
+      "event photographer",
+    ],
+    "urun fotografcisi": [
+      "photographer",
+      "fashion photographer",
+      "event photographer",
+    ],
+    "fashion photographer": [
+      "photographer",
+      "product photographer",
+      "event photographer",
+    ],
+    "event photographer": [
+      "photographer",
+      "product photographer",
+      "fashion photographer",
+    ],
+    "photo editor": [
+      "photographer",
+      "retoucher",
+    ],
+    retoucher: [
+      "photographer",
+      "photo editor",
+    ],
+
+    /* ---- Ses & Müzik ---- */
+    "ses tasarimcisi": [
+      "muzik produktoru",
+      "ses muhendisi",
+      "podcast produktoru",
+    ],
+    "sound designer": [
+      "music producer",
+      "sound engineer",
+      "podcast producer",
+    ],
+    "muzik produktoru": [
+      "ses tasarimcisi",
+      "ses muhendisi",
+      "dublaj sanatcisi",
+    ],
+    "music producer": [
+      "sound designer",
+      "sound engineer",
+      "voice actor",
+    ],
+
+    /* ---- İş & Yönetim ---- */
+    "proje yoneticisi": [
+      "business analyst",
+      "business consultant",
+      "operations manager",
+      "virtual assistant",
+    ],
+    "project manager": [
+      "business analyst",
+      "business consultant",
+      "operations manager",
+      "virtual assistant",
+    ],
+  };
+
+  return (
+    relatedGroups[normalized] ??
+    []
+  );
+}
+
+/**
+ * related (eş anlamlı olmayan ama ilişkili) rol eşleşmesinin alabileceği
+ * en yüksek puan — tam alias/birebir eşleşmenin (100) altında, gerçek
+ * ilişkisizliğin (0) üstünde.
+ */
+const RELATED_ROLE_SCORE = 65;
 
 /* -------------------------------------------------------------------------- */
 /* Client matching helpers                                                    */
@@ -2513,7 +3203,6 @@ async function getFreelancerProfiles(
       [
         "id",
         "first_name",
-        "last_name",
         "avatar_url",
         "title",
         "bio",
@@ -3061,29 +3750,14 @@ function availabilitySortValue(
 /* Utilities                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Marketplace'te soyisim karşı tarafa gösterilmez (bkz. supabase/migrations/
+ * 202609300012_surname_privacy.sql) — client'a yalnızca ilk ad döner.
+ */
 function getProfileName(
   profile: Profile
 ): string {
-  const name = [
-    profile.first_name,
-    profile.last_name,
-  ]
-    .filter(
-      (
-        value
-      ): value is string =>
-        typeof value ===
-          "string" &&
-        value.trim()
-          .length > 0
-    )
-    .join(" ")
-    .trim();
-
-  return (
-    name ||
-    "Freelancer"
-  );
+  return publicDisplayName(profile, "Freelancer");
 }
 
 function normalizeSkills(
@@ -3151,44 +3825,7 @@ function uniqueStrings(
 function normalizeText(
   value: string
 ): string {
-  return value
-    .toLocaleLowerCase(
-      "tr-TR"
-    )
-    .normalize("NFD")
-    .replace(
-      /[\u0300-\u036f]/g,
-      ""
-    )
-    .replace(
-      /ı/g,
-      "i"
-    )
-    .replace(
-      /ğ/g,
-      "g"
-    )
-    .replace(
-      /ü/g,
-      "u"
-    )
-    .replace(
-      /ş/g,
-      "s"
-    )
-    .replace(
-      /ö/g,
-      "o"
-    )
-    .replace(
-      /ç/g,
-      "c"
-    )
-    .trim()
-    .replace(
-      /\s+/g,
-      " "
-    );
+  return normalizeMatchText(value);
 }
 
 function getMeaningfulWords(

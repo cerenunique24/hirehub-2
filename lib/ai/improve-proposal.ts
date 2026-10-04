@@ -71,7 +71,7 @@ export async function draftProposal(
   const [{ data: project }, { data: profile }, { data: portfolio }] = await Promise.all([
     supabase
       .from("projects")
-      .select("title, description, requirements, deliverables, budget_breakdown")
+      .select("title, description, requirements, deliverables")
       .eq("id", input.projectId)
       .single(),
     supabase
@@ -90,7 +90,15 @@ export async function draftProposal(
     throw new ProposalDraftError("Proje veya profil bilgisi alınamadı.", 404);
   }
 
-  const roleData = (Array.isArray(project.budget_breakdown) ? (project.budget_breakdown as BudgetRole[]) : []).find(
+  // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+  // supabase/migrations/202609300006_budget_breakdown_privacy.sql). Burada
+  // sadece responsibilities/requiredSkills kullanılır, para alanına
+  // ihtiyaç yok — RPC sunucu imzasız çağrılır.
+  const { data: budgetBreakdown } = await supabase.rpc("get_project_budget_breakdown", {
+    p_project_id: input.projectId,
+  });
+
+  const roleData = (Array.isArray(budgetBreakdown) ? (budgetBreakdown as BudgetRole[]) : []).find(
     (role) => role.roleId === input.roleId
   );
 

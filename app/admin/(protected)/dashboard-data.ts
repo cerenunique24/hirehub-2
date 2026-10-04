@@ -184,12 +184,9 @@ export async function getAdminDashboardData(supabase: SupabaseClient): Promise<A
   let namesById = new Map<string, string>();
 
   if (userIds.length > 0) {
-    const { data: profileRows } = await supabase
-      .from("profiles")
-      .select("id, first_name, last_name")
-      .in("id", userIds);
+    const { data: profileRows } = await supabase.rpc("admin_get_profile_names", { p_ids: userIds });
 
-    namesById = new Map((profileRows ?? []).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)]));
+    namesById = new Map((((profileRows ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>).map((p) => [p.id, fullNameOf(p.first_name, p.last_name)])));
   }
 
   const recentSupportTickets: RecentSupportTicket[] = (ticketRows ?? []).map((t) => ({

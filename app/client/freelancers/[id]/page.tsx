@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import InviteFreelancerPanel from "@/components/client/InviteFreelancerPanel";
+import RatingSummary from "@/components/shared/RatingSummary";
 import {
   ArrowLeft,
   BriefcaseBusiness,
@@ -19,11 +21,11 @@ import {
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Freelancer = {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
+  first_name: string | null;
   avatar_url: string | null;
   title: string | null;
   bio: string | null;
@@ -153,7 +155,7 @@ export default function ClientFreelancerDetailPage() {
         const { data, error: profileError } = await supabase
           .from("profiles")
           .select(
-            "id, first_name, last_name, avatar_url, title, bio, expertise, skills, city, experience, hourly_rate, availability, availability_status, work_types, languages, role"
+            "id, first_name, avatar_url, title, bio, expertise, skills, city, experience, hourly_rate, availability, availability_status, work_types, languages, role"
           )
           .eq("id", id)
           .eq("role", "freelancer")
@@ -185,7 +187,6 @@ export default function ClientFreelancerDetailPage() {
         const freelancerData: Freelancer = {
           id: data.id,
           first_name: data.first_name ?? null,
-          last_name: data.last_name ?? null,
           avatar_url: data.avatar_url ?? null,
           title: data.title ?? null,
           bio: data.bio ?? null,
@@ -327,11 +328,7 @@ export default function ClientFreelancerDetailPage() {
     );
   }
 
-  const name =
-    [freelancer.first_name, freelancer.last_name]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || "Freelancer";
+  const name = publicDisplayName(freelancer, "Freelancer");
 
   const initials = name
     .split(" ")
@@ -414,6 +411,9 @@ export default function ClientFreelancerDetailPage() {
           </section>
 
           <div className="p-7 md:p-8">
+            <InviteFreelancerPanel freelancerId={freelancer.id} />
+            <RatingSummary userId={freelancer.id} className="mb-6" />
+
             {/* ABOUT */}
             <section>
               <h2 className="text-lg font-semibold text-neutral-900">

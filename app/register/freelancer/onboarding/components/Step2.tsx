@@ -144,16 +144,81 @@ const expertiseByCategory: Record<string, string[]> = {
     "Marketing Strategy",
   ],
 
-  "İçerik Üretimi": [
+  "İçerik & Çeviri": [
     "Content Creation",
     "Copywriting",
     "Content Writing",
     "Social Media Content",
-    "Video Content",
     "Creative Writing",
     "Blog Writing",
-    "Script Writing",
     "Content Strategy",
+    "Translation",
+    "Localization",
+    "Proofreading",
+    "Editing",
+  ],
+
+  "Ürün Tasarımı": [
+    "Product Design",
+    "Product Strategy",
+    "UX Research",
+    "Design Systems",
+    "Prototyping",
+    "User Flow",
+    "Wireframing",
+    "Interaction Design",
+  ],
+
+  "Video & Animasyon": [
+    "Video Editing",
+    "Motion Graphics",
+    "2D Animation",
+    "3D Animation",
+    "Video Production",
+    "Color Grading",
+    "Visual Effects",
+    "Explainer Videos",
+    "Animation Storyboarding",
+  ],
+
+  "Ses & Müzik": [
+    "Sound Design",
+    "Music Production",
+    "Voice Over",
+    "Audio Editing",
+    "Podcast Production",
+    "Mixing & Mastering",
+    "Jingle Composition",
+  ],
+
+  "Fotoğraf": [
+    "Product Photography",
+    "Portrait Photography",
+    "Event Photography",
+    "Photo Retouching",
+    "Photo Editing",
+    "Studio Photography",
+    "Food Photography",
+  ],
+
+  "İş & Yönetim": [
+    "Project Management",
+    "Business Consulting",
+    "Business Analysis",
+    "Operations Management",
+    "Strategy Consulting",
+    "Process Optimization",
+    "Virtual Assistance",
+  ],
+
+  "Senaryo & Hikâye": [
+    "Screenwriting",
+    "Story Development",
+    "Script Writing",
+    "Storyboarding",
+    "Narrative Design",
+    "Dialogue Writing",
+    "Plot Development",
   ],
 
   "3D Tasarım": [

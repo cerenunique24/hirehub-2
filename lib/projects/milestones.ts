@@ -25,13 +25,21 @@ export type Milestone = {
   deliverable_description: string | null;
   submitted_at: string | null;
   approved_at: string | null;
+  reviewed_at: string | null;
+  revision_requested_at: string | null;
+  revision_count: number;
   revision_notes: string | null;
+  payment_status: string | null;
+  dispute_status: string | null;
+  platform_fee_amount: number | null;
+  freelancer_payout_amount: number | null;
+  client_total_amount: number | null;
   created_at: string;
   updated_at: string;
 };
 
 const MILESTONE_COLUMNS =
-  "id, project_id, freelancer_id, title, description, due_date, budget, sort_order, status, deliverable_description, submitted_at, approved_at, revision_notes, created_at, updated_at";
+  "id, project_id, freelancer_id, title, description, due_date, budget, sort_order, status, deliverable_description, submitted_at, approved_at, reviewed_at, revision_requested_at, revision_count, revision_notes, payment_status, dispute_status, platform_fee_amount, freelancer_payout_amount, client_total_amount, created_at, updated_at";
 
 export type MilestoneEventType = "submitted" | "revision_requested" | "resubmitted" | "approved";
 
@@ -154,4 +162,57 @@ export async function reviewMilestone(
     .single();
 }
 
-export { notifyUsers } from "@/lib/notifications";
+export type MilestoneDeliveryStatus = "submitted" | "revision_requested" | "approved";
+
+/**
+ * Bir aşamanın her teslim denemesi (ilk teslim + her yeniden teslim). Normal
+ * proje dosyalarından (project_files) ayrıdır: yalnızca teslim gönderildiğinde
+ * DB trigger'ı tarafından yazılır ve teslimle birlikte yüklenen dosyalar
+ * `project_files.delivery_id` ile bu kayda bağlanır.
+ */
+export type MilestoneDelivery = {
+  id: string;
+  milestone_id: string;
+  project_id: string;
+  submitted_by: string;
+  attempt_no: number;
+  message: string;
+  status: MilestoneDeliveryStatus;
+  submitted_at: string;
+  reviewed_at: string | null;
+  review_feedback: string | null;
+};
+
+export type DeliveryFile = {
+  id: string;
+  delivery_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number | null;
+};
+
+export async function fetchMilestoneDeliveries(supabase: SupabaseClient, projectId: string) {
+  return supabase
+    .from("project_milestone_deliveries")
+    .select("id, milestone_id, project_id, submitted_by, attempt_no, message, status, submitted_at, reviewed_at, review_feedback")
+    .eq("project_id", projectId)
+    .order("submitted_at", { ascending: true });
+}
+
+export async function fetchDeliveryFiles(supabase: SupabaseClient, deliveryIds: string[]) {
+  if (deliveryIds.length === 0) {
+    return { data: [] as DeliveryFile[], error: null };
+  }
+
+  return supabase
+    .from("project_files")
+    .select("id, delivery_id, file_name, file_path, file_size")
+    .in("delivery_id", deliveryIds);
+}
+
+export {
+  notifyUsers,
+  notifyDeliverySubmitted,
+  notifyRevisionRequested,
+  notifyDeliveryApproved,
+} from "@/lib/notifications";

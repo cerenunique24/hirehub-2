@@ -14,6 +14,32 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * uygulanmalı, bu yüzden tek yerde toplanmıştır.
  */
 
+/**
+ * `projects.budget_breakdown` tek, paylaşılan okuma noktası.
+ *
+ * Bu sütun artık doğrudan `.select()` ile okunamaz (bkz. supabase/migrations/
+ * 202609300006_budget_breakdown_privacy.sql — RLS satır seviyesinde çalıştığı
+ * için "open" bir projeyi görebilen herkes çıplak select ile TÜM rollerin
+ * bütçesini okuyabiliyordu). Tüm okumalar `get_project_budget_breakdown()`
+ * RPC'si üzerinden geçer; RPC çağıranın proje sahibi/admin/aktif ekip
+ * üyesi/teklif-davet geçmişi olup olmadığına göre veriyi otomatik filtreler.
+ */
+export async function fetchBudgetBreakdown(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<BudgetBreakdownRole[]> {
+  const { data, error } = await supabase.rpc("get_project_budget_breakdown", {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    console.error("[fetchBudgetBreakdown] RPC hatası:", error);
+    return [];
+  }
+
+  return Array.isArray(data) ? (data as BudgetBreakdownRole[]) : [];
+}
+
 type BudgetBreakdownRole = {
   roleId?: string;
   role?: string;
@@ -157,7 +183,7 @@ export async function checkAndUpdateProjectReadiness(
 ): Promise<{ projectReady: boolean; error?: string }> {
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("status, budget_breakdown")
+    .select("status")
     .eq("id", projectId)
     .single();
 
@@ -170,6 +196,10 @@ export async function checkAndUpdateProjectReadiness(
     return { projectReady: project.status === "ready_to_start" };
   }
 
+  // Bu fonksiyon her zaman proje sahibi veya (davet kabulü sonrası) aktif
+  // bir ekip üyesi tarafından çağrılır — RPC bu durumlarda tam veriyi döner.
+  const budgetBreakdown = await fetchBudgetBreakdown(supabase, projectId);
+
   const { data: activeMembers, error: activeMembersError } = await supabase
     .from("project_team_members")
     .select("role")
@@ -180,7 +210,7 @@ export async function checkAndUpdateProjectReadiness(
     return { projectReady: false, error: activeMembersError.message };
   }
 
-  const budgetRoles = Array.isArray(project.budget_breakdown) ? project.budget_breakdown : [];
+  const budgetRoles = Array.isArray(budgetBreakdown) ? budgetBreakdown : [];
 
   let projectReady: boolean;
 

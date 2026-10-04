@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { requireFeatureAccess } from "@/lib/premium";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 /**
  * POST /api/premium/client/freelancer-comparison
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select(
-        "id, first_name, last_name, title, expertise, skills, experience, hourly_rate, hourly_rate_min, hourly_rate_max, availability_status, profile_completion"
+        "id, first_name, title, expertise, skills, experience, hourly_rate, hourly_rate_min, hourly_rate_max, availability_status, profile_completion"
       )
       .in("id", freelancerIds)
       .eq("role", "freelancer");
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
 
       return {
         id: profile.id,
-        name: [profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Freelancer",
+        name: publicDisplayName(profile, "Freelancer"),
         title: profile.title,
         expertise: profile.expertise,
         skills: Array.isArray(profile.skills) ? profile.skills : [],

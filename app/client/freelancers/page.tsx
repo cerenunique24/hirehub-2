@@ -14,6 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import PremiumGate from "@/components/premium/PremiumGate";
 import { SKILLS } from "@/lib/constants/skills";
+import { CATEGORIES } from "@/lib/categories";
 import { FreelancerCard } from "@/components/freelancers/FreelancerCard";
 
 /* -------------------------------------------------------------------------- */
@@ -51,7 +52,7 @@ const SORT_LABEL: Record<SortOption, string> = {
 const PAGE_SIZE = 24;
 
 const LIST_SELECT =
-  "id, first_name, last_name, avatar_url, title, bio, expertise, skills, experience, city, hourly_rate, availability_status";
+  "id, first_name, avatar_url, title, bio, expertise, project_types, skills, experience, city, hourly_rate, availability_status";
 
 /* -------------------------------------------------------------------------- */
 /* Tipler                                                                      */
@@ -65,6 +66,7 @@ type Freelancer = {
   title: string | null;
   bio: string | null;
   expertise: string | null;
+  project_types: string[] | null;
   skills: string[] | null;
   experience: string | null;
   city: string | null;
@@ -73,12 +75,18 @@ type Freelancer = {
 };
 
 /*
- * Sadece 6 ANA filtre: Uzmanlık, Skill, Deneyim, Ücret, Uygunluk, Çalışma
+ * Sadece 6 ANA filtre: Kategori, Skill, Deneyim, Ücret, Uygunluk, Çalışma
  * Şekli. Language/City gibi ikincil kriterler bilinçli olarak ilk
  * seviyede gösterilmiyor (daha fazla filtre = daha iyi değil).
+ *
+ * "Kategori" filtresi profiles.project_types (freelancer'ın kayıt
+ * sırasında seçtiği merkezi kategori) üzerinden çalışır — profiles.expertise
+ * DEĞİL. expertise, serbest uzmanlık/özgeçmiş metni olarak arama
+ * kutusunda taranır ama bir sınıflandırma/filtre değildir (bkz.
+ * lib/categories.ts).
  */
 type Filters = {
-  expertise: string[];
+  category: string[];
   skills: string[];
   experience: string[];
   availabilityStatus: string[];
@@ -88,7 +96,7 @@ type Filters = {
 };
 
 const EMPTY_FILTERS: Filters = {
-  expertise: [],
+  category: [],
   skills: [],
   experience: [],
   availabilityStatus: [],
@@ -97,7 +105,7 @@ const EMPTY_FILTERS: Filters = {
   rateMax: "",
 };
 
-type FilterKey = "expertise" | "skills" | "experience" | "rate" | "availability" | "workType";
+type FilterKey = "category" | "skills" | "experience" | "rate" | "availability" | "workType";
 
 type ComparisonRow = {
   id: string;
@@ -157,8 +165,6 @@ export default function ClientFreelancersPage() {
 
   const [sort, setSort] = useState<SortOption>("recommended");
 
-  const [expertiseOptions, setExpertiseOptions] = useState<string[]>([]);
-
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
@@ -187,40 +193,6 @@ export default function ClientFreelancersPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openFilter]);
-
-  /*
-   * Uzmanlık facet seçenekleri — sadece TEK kolon çekilen, hafif ve bir
-   * kere çalışan bir sorgu. Listing sorgusundan tamamen ayrı: binlerce
-   * satırlık tam kart verisini değil, sadece bu tek kolonu getirir.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadFacets() {
-      const { data, error: facetError } = await supabase
-        .from("profiles")
-        .select("expertise")
-        .eq("role", "freelancer")
-        .not("expertise", "is", null)
-        .limit(5000);
-
-      if (cancelled || facetError) return;
-
-      const values = (data ?? [])
-        .map((row) => row.expertise?.trim())
-        .filter((value): value is string => Boolean(value));
-
-      setExpertiseOptions(
-        Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, "tr"))
-      );
-    }
-
-    void loadFacets();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [supabase]);
 
   /*
    * Ana listing sorgusu — search/filters/sort değiştiğinde baştan
@@ -282,13 +254,17 @@ export default function ClientFreelancersPage() {
       .eq("role", "freelancer");
 
     if (search) {
+      // `last_name` artık genel SELECT grant'inden çıkarıldı (bkz.
+      // 202609300012_surname_privacy.sql); filtrede referans vermek de
+      // SELECT ayrıcalığı gerektirdiğinden soyisimle arama kaldırıldı —
+      // bu zaten soyismin ifşa edilmemesi hedefiyle tutarlı.
       query = query.or(
-        `first_name.ilike.%${search}%,last_name.ilike.%${search}%,title.ilike.%${search}%,expertise.ilike.%${search}%,skills.cs.{${search}}`
+        `first_name.ilike.%${search}%,title.ilike.%${search}%,expertise.ilike.%${search}%,skills.cs.{${search}}`
       );
     }
 
-    if (filters.expertise.length > 0) {
-      query = query.in("expertise", filters.expertise);
+    if (filters.category.length > 0) {
+      query = query.overlaps("project_types", filters.category);
     }
 
     if (filters.skills.length > 0) {
@@ -373,7 +349,7 @@ export default function ClientFreelancersPage() {
   }
 
   const activeFilterCount =
-    filters.expertise.length +
+    filters.category.length +
     filters.skills.length +
     filters.experience.length +
     filters.availabilityStatus.length +
@@ -477,15 +453,15 @@ export default function ClientFreelancersPage() {
         {/* FILTERS + SORT (compact dropdown toolbar) */}
         <div ref={toolbarRef} className="mb-4 flex flex-wrap items-center gap-2">
           <FilterDropdown
-            label="Uzmanlık"
-            count={filters.expertise.length}
-            isOpen={openFilter === "expertise"}
-            onToggle={() => setOpenFilter((k) => (k === "expertise" ? null : "expertise"))}
+            label="Kategori"
+            count={filters.category.length}
+            isOpen={openFilter === "category"}
+            onToggle={() => setOpenFilter((k) => (k === "category" ? null : "category"))}
           >
             <OptionList
-              options={expertiseOptions}
-              selected={filters.expertise}
-              onToggle={(value) => setFilter("expertise", toggleInArray(filters.expertise, value))}
+              options={CATEGORIES}
+              selected={filters.category}
+              onToggle={(value) => setFilter("category", toggleInArray(filters.category, value))}
             />
           </FilterDropdown>
 
@@ -622,12 +598,12 @@ export default function ClientFreelancersPage() {
               />
             )}
 
-            {filters.expertise.map((value) => (
+            {filters.category.map((value) => (
               <FilterChip
-                key={`expertise-${value}`}
+                key={`category-${value}`}
                 label={value}
                 onRemove={() =>
-                  setFilter("expertise", filters.expertise.filter((v) => v !== value))
+                  setFilter("category", filters.category.filter((v) => v !== value))
                 }
               />
             ))}
@@ -868,7 +844,7 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
 
 /**
  * Kompakt filtre dropdown butonu — spec'in istediği
- * "[ Uzmanlık ] [ Skill ] [ Deneyim ] [ Ücret ] [ Uygunluk ] [ Çalışma Şekli ]"
+ * "[ Kategori ] [ Skill ] [ Deneyim ] [ Ücret ] [ Uygunluk ] [ Çalışma Şekli ]"
  * toolbar yapısı. Her biri kendi küçük panelini (checkbox listesi ya da
  * range input) açar; tüm sayfayı kaplayan bir drawer DEĞİLDİR.
  */

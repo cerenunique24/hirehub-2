@@ -1,16 +1,10 @@
-export default async function ProjectDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+import { redirect } from "next/navigation";
 
-  return (
-    <main className="p-5">
-      <h1 className="text-2xl font-semibold">Project</h1>
-      <p className="mt-2 text-sm text-gray-500">
-        Project ID: {id}
-      </p>
-    </main>
-  );
+import { requireSession } from "@/lib/auth/session";
+
+/** Eski yer tutucu route; gerçek proje detayı rol bazlı panellerde. */
+export default async function ProjectDetailRedirect({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { role } = await requireSession();
+  redirect(role === "freelancer" ? `/freelancers/projects/${id}` : `/client/projects/${id}`);
 }

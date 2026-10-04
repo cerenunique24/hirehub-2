@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -12,8 +13,9 @@ import {
   LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { getTeamCompletion, type TeamCompletion } from "@/lib/projects/teamReadiness";
+import { fetchBudgetBreakdown, getTeamCompletion, type TeamCompletion } from "@/lib/projects/teamReadiness";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Coalition = {
   id: string;
@@ -39,7 +41,6 @@ type Project = {
 type Profile = {
   id: string;
   first_name: string | null;
-  last_name: string | null;
   avatar_url: string | null;
   title: string | null;
 };
@@ -55,18 +56,26 @@ type CoalitionMember = {
   profile: Profile | null;
 };
 
+type SelfMembership = {
+  id: string; // project_team_members.id — leave_or_remove_team_member RPC bunu bekliyor.
+};
+
 export default function CoalitionDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const router = useRouter();
   const [coalition, setCoalition] = useState<Coalition | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [teamCompletion, setTeamCompletion] = useState<TeamCompletion | null>(null);
   const [members, setMembers] = useState<CoalitionMember[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [selfMembership, setSelfMembership] = useState<SelfMembership | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [leaving, setLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState("");
 
   useEffect(() => {
     const loadCoalition = async () => {
@@ -164,7 +173,7 @@ export default function CoalitionDetailPage({
           } = await supabase
             .from("projects")
             .select(
-              "id, title, description, status, created_at, deadline, estimated_duration, budget_breakdown"
+              "id, title, description, status, created_at, deadline, estimated_duration"
             )
             .eq("id", coalitionData.project_id)
             .maybeSingle();
@@ -179,7 +188,13 @@ export default function CoalitionDetailPage({
             return;
           }
 
-          setProject(projectData ?? null);
+          // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+          // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+          const budgetBreakdown = projectData
+            ? await fetchBudgetBreakdown(supabase, projectData.id)
+            : [];
+
+          setProject(projectData ? { ...projectData, budget_breakdown: budgetBreakdown } : null);
 
           if (projectData) {
             const { data: teamMemberRows } = await supabase
@@ -190,7 +205,7 @@ export default function CoalitionDetailPage({
 
             setTeamCompletion(
               getTeamCompletion(
-                projectData.budget_breakdown,
+                budgetBreakdown,
                 (teamMemberRows ?? []).map((row) => ({ role: row.role }))
               )
             );
@@ -198,10 +213,21 @@ export default function CoalitionDetailPage({
             projectRoleByFreelancer = new Map(
               (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.role as string])
             );
+
+            const { data: selfRow } = await supabase
+              .from("project_team_members")
+              .select("id")
+              .eq("project_id", projectData.id)
+              .eq("freelancer_id", user.id)
+              .eq("status", "active")
+              .maybeSingle();
+
+            setSelfMembership(selfRow ? { id: selfRow.id } : null);
           }
         } else {
           setProject(null);
           setTeamCompletion(null);
+          setSelfMembership(null);
         }
 
         // --------------------------------------------------
@@ -252,7 +278,7 @@ export default function CoalitionDetailPage({
           } = await supabase
             .from("profiles")
             .select(
-              "id, first_name, last_name, avatar_url, title"
+              "id, first_name, avatar_url, title"
             )
             .in("id", memberUserIds);
 
@@ -313,6 +339,29 @@ export default function CoalitionDetailPage({
     void loadCoalition();
   }, [params]);
 
+  const handleLeave = async () => {
+    if (!selfMembership) return;
+
+    setLeaving(true);
+    setLeaveError("");
+
+    const supabase = createClient();
+    const { error } = await supabase.rpc("leave_or_remove_team_member", {
+      p_member_id: selfMembership.id,
+    });
+
+    if (error) {
+      console.error("Ekipten ayrılma hatası:", error);
+      setLeaveError(
+        error.code === "P0001" ? error.message : "Ekipten ayrılırken bir hata oluştu."
+      );
+      setLeaving(false);
+      return;
+    }
+
+    router.push("/freelancers/coalitions?left=1");
+  };
+
   // --------------------------------------------------
   // Yardımcı fonksiyonlar
   // --------------------------------------------------
@@ -326,12 +375,7 @@ export default function CoalitionDetailPage({
   };
 
   const getMemberName = (member: CoalitionMember) => {
-    const firstName = member.profile?.first_name ?? "";
-    const lastName = member.profile?.last_name ?? "";
-
-    const fullName = `${firstName} ${lastName}`.trim();
-
-    return fullName || "Kullanıcı";
+    return publicDisplayName(member.profile, "Kullanıcı");
   };
 
   const isProjectOwner = (member: CoalitionMember) =>
@@ -429,6 +473,12 @@ export default function CoalitionDetailPage({
     <main className="w-full p-6">
       {/* Back */}
 
+      {leaveError && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {leaveError}
+        </div>
+      )}
+
       <div className="mb-8">
         <Link
           href="/freelancers/coalitions"
@@ -500,15 +550,25 @@ export default function CoalitionDetailPage({
                 Ekip Üyesi Öner
               </Link>
 
-              <button
-                type="button"
-                disabled
-                title="Ayrılma talebi yakında aktif olacak."
-                className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-400"
-              >
-                <LogOut size={17} />
-                Ayrılma Talebi
-              </button>
+              {selfMembership && (
+                <button
+                  type="button"
+                  disabled={leaving}
+                  onClick={() => {
+                    if (window.confirm("Bu ekipten ayrılmak istediğine emin misin?")) {
+                      void handleLeave();
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {leaving ? (
+                    <Loader2 size={17} className="animate-spin" />
+                  ) : (
+                    <LogOut size={17} />
+                  )}
+                  Ekipten Ayrıl
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -793,8 +853,8 @@ export default function CoalitionDetailPage({
                   </h3>
 
                   <p className="mt-1 text-xs leading-5 text-gray-500">
-                    Projeden ayrılmak istediğinde müşteriye
-                    ayrılma talebi gönderebilirsin.
+                    Üst kısımdaki &quot;Ekipten Ayrıl&quot; butonuyla
+                    üyeliğini sonlandırabilirsin; rolün boşa düşer.
                   </p>
                 </div>
               </div>

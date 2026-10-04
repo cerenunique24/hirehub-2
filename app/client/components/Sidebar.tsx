@@ -50,12 +50,12 @@ export default function ClientSidebar() {
       storageKey="collacrew-client-sidebar-collapsed"
       countsRole="client"
       fallbackName="Proje sahibi"
-      resolveProfile={async (supabase, user) => {
-        const { data } = await supabase
-          .from("profiles")
-          .select("first_name, last_name, avatar_url")
-          .eq("id", user.id)
-          .maybeSingle();
+      resolveProfile={async (supabase) => {
+        // `last_name` artık genel SELECT grant'inden çıkarıldığı için
+        // (bkz. 202609300012_surname_privacy.sql) kendi profilimiz bile
+        // doğrudan select ile okunamaz — get_my_full_profile() kullanılır.
+        const { data: rows } = await supabase.rpc("get_my_full_profile");
+        const data = Array.isArray(rows) ? rows[0] : undefined;
 
         if (!data) return null;
 

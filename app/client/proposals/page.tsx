@@ -13,14 +13,21 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
+import { publicDisplayName } from "@/lib/utils/displayName";
 import { calculateClientPricing, formatRatePercent, getProjectCommissionRate } from "@/lib/pricing";
 import {
   checkAndUpdateProjectReadiness,
   describeAcceptPlacementError,
+  fetchBudgetBreakdown,
   getRoleCapacity as getRoleCapacityForRoles,
   normalizeRoleName,
 } from "@/lib/projects/teamReadiness";
-import { notifyUsers } from "@/lib/notifications";
+import {
+  notifyProposalAccepted,
+  notifyProposalRejected,
+  notifyProposalShortlisted,
+  notifyUsers,
+} from "@/lib/notifications";
 
 type TopTab = "received" | "sent";
 type FilterType = "all" | "pending" | "accepted" | "rejected";
@@ -39,8 +46,7 @@ type SentInvitation = {
   project: { id: string; title: string } | null;
   freelancer: {
     id: string;
-    first_name: string | null;
-    last_name: string | null;
+    first_name: string | null;
     title: string | null;
   } | null;
 };
@@ -49,7 +55,12 @@ function filterStatusKey(status: string | null): FilterType {
   const normalized = (status ?? "").toLowerCase();
 
   if (normalized === "accepted") return "accepted";
-  if (normalized === "rejected" || normalized === "cancelled") {
+  if (
+    normalized === "rejected" ||
+    normalized === "cancelled" ||
+    normalized === "withdrawn" ||
+    normalized === "expired"
+  ) {
     return "rejected";
   }
 
@@ -78,8 +89,7 @@ function invitationStatusClass(status: string | null) {
 
 type Freelancer = {
   id: string;
-  first_name: string | null;
-  last_name: string | null;
+  first_name: string | null;
   title: string | null;
   skills: string[] | null;
   availability_status: string | null;
@@ -135,8 +145,11 @@ function getRoleCapacity(
 function statusLabel(status: string | null) {
   const labels: Record<string, string> = {
     pending: "İnceleniyor",
+    shortlisted: "Kısa listede",
     accepted: "Kabul edildi",
     rejected: "Reddedildi",
+    withdrawn: "Freelancer geri çekti",
+    expired: "Süresi doldu",
   };
 
   return labels[status ?? ""] ?? "Bilinmiyor";
@@ -149,6 +162,14 @@ function statusClass(status: string | null) {
 
   if (status === "rejected") {
     return "bg-red-50 text-red-700";
+  }
+
+  if (status === "withdrawn" || status === "expired") {
+    return "bg-gray-100 text-gray-600";
+  }
+
+  if (status === "shortlisted") {
+    return "bg-blue-50 text-blue-700";
   }
 
   return "bg-amber-50 text-amber-700";
@@ -187,11 +208,6 @@ export default function ClientProposalsPage() {
   const [invitationsError, setInvitationsError] = useState("");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    void loadSentInvitations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function loadSentInvitations() {
     setInvitationsLoading(true);
     setInvitationsError("");
@@ -228,7 +244,6 @@ export default function ClientProposalsPage() {
           freelancer:profiles!project_team_invitations_freelancer_id_fkey (
             id,
             first_name,
-            last_name,
             title
           )
         `
@@ -249,6 +264,7 @@ export default function ClientProposalsPage() {
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const normalized: SentInvitation[] = (data ?? []).map((item: any) => ({
       id: item.id,
       project_id: item.project_id,
@@ -274,6 +290,11 @@ export default function ClientProposalsPage() {
     setSentInvitations(normalized);
     setInvitationsLoading(false);
   }
+
+useEffect(() => {
+    void loadSentInvitations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function cancelInvitation(invitationId: string) {
     setCancellingId(invitationId);
@@ -389,7 +410,7 @@ export default function ClientProposalsPage() {
           error: projectsError,
         } = await supabase
           .from("projects")
-          .select("id, title, client_id, status, budget_breakdown, commission_rate")
+          .select("id, title, client_id, status, commission_rate")
           .eq("client_id", user.id);
 
         if (projectsError) {
@@ -476,7 +497,6 @@ export default function ClientProposalsPage() {
             `
               id,
               first_name,
-              last_name,
               title,
               skills,
               availability_status
@@ -491,11 +511,24 @@ export default function ClientProposalsPage() {
           );
         }
 
+        // budget_breakdown artık doğrudan sütun olarak okunamaz (bkz.
+        // supabase/migrations/202609300006_budget_breakdown_privacy.sql).
+        const budgetByProjectId = new Map(
+          await Promise.all(
+            projectIds.map(
+              async (id) => [id, await fetchBudgetBreakdown(supabase, id)] as const
+            )
+          )
+        );
+
         // Projeleri Map'e çevir
         const projectById = new Map(
           (projects ?? []).map((project) => [
             project.id,
-            project as unknown as Project,
+            {
+              ...project,
+              budget_breakdown: budgetByProjectId.get(project.id) ?? [],
+            } as unknown as Project,
           ])
         );
 
@@ -560,7 +593,7 @@ export default function ClientProposalsPage() {
 
   async function updateProposalStatus(
     proposalId: string,
-    status: "accepted" | "rejected"
+    status: "accepted" | "rejected" | "shortlisted"
   ) {
     setUpdatingId(proposalId);
     setError("");
@@ -575,6 +608,35 @@ export default function ClientProposalsPage() {
         return;
       }
 
+      // Kısa listeye alma: teklif hâlâ açıktır, ama client'ın favorisi olarak işaretlenir.
+      if (status === "shortlisted") {
+        const { error: shortlistError } = await supabase
+          .from("proposals")
+          .update({ status: "shortlisted" })
+          .eq("id", proposalId)
+          .eq("status", "pending");
+
+        if (shortlistError) {
+          console.error("TEKLİF KISA LİSTEYE ALMA HATASI:", shortlistError);
+          setError("Teklif kısa listeye alınamadı. Lütfen tekrar deneyin.");
+          return;
+        }
+
+        await notifyProposalShortlisted(supabase, {
+          freelancerId: proposal.freelancer_id,
+          proposalId,
+          projectTitle: proposal.project?.title ?? "Proje",
+        });
+
+        setProposals((current) =>
+          current.map((item) =>
+            item.id === proposalId ? { ...item, status: "shortlisted" } : item
+          )
+        );
+
+        return;
+      }
+
       // Reddetme işlemi
       if (status === "rejected") {
         const { error: proposalError } = await supabase
@@ -583,7 +645,7 @@ export default function ClientProposalsPage() {
             status: "rejected",
           })
           .eq("id", proposalId)
-          .eq("status", "pending");
+          .in("status", ["pending", "shortlisted"]);
 
         if (proposalError) {
           console.error(
@@ -592,20 +654,16 @@ export default function ClientProposalsPage() {
           );
 
           setError(
-            `Teklif reddedilemedi: ${proposalError.message}`
+            "Teklif reddedilemedi. Lütfen tekrar deneyin."
           );
           return;
         }
 
-        await notifyUsers(supabase, [
-          {
-            userId: proposal.freelancer_id,
-            type: "proposal_rejected",
-            title: "Teklifin reddedildi",
-            message: `"${proposal.project?.title ?? "Proje"}" için gönderdiğin teklif reddedildi.`,
-            link: "/freelancers/proposals",
-          },
-        ]);
+        await notifyProposalRejected(supabase, {
+          freelancerId: proposal.freelancer_id,
+          proposalId,
+          projectTitle: proposal.project?.title ?? "Proje",
+        });
 
         setProposals((current) =>
           current.map((item) =>
@@ -675,7 +733,7 @@ export default function ClientProposalsPage() {
         );
 
         setError(
-          `Mevcut ekip kontrol edilemedi: ${membersError.message}`
+          "Mevcut ekip kontrol edilemedi. Lütfen tekrar deneyin."
         );
         return;
       }
@@ -722,7 +780,29 @@ export default function ClientProposalsPage() {
       );
 
       if (acceptError) {
-        console.error("TEKLİF KABUL HATASI:", acceptError);
+        // Teşhis amaçlı genişletilmiş log — davranışı değiştirmez.
+        // PostgrestError tipinde `status`/`statusText` yok; bu alanlar
+        // yalnızca bazı network/edge hatalarında ham nesnede bulunabilir,
+        // bu yüzden güvenli bir şekilde `unknown` üzerinden okunuyor.
+        const rawError = acceptError as unknown as Record<string, unknown>;
+
+        console.error("TEKLİF KABUL HATASI:", {
+          raw: acceptError,
+          message: acceptError.message,
+          code: acceptError.code,
+          details: acceptError.details,
+          hint: acceptError.hint,
+          status: rawError.status,
+          statusText: rawError.statusText,
+          json: (() => {
+            try {
+              return JSON.stringify(acceptError);
+            } catch {
+              return "[JSON.stringify başarısız]";
+            }
+          })(),
+        });
+
         setError(describeAcceptPlacementError(acceptError.message));
         return;
       }
@@ -736,7 +816,7 @@ export default function ClientProposalsPage() {
           })
           .eq("project_id", proposal.project_id)
           .eq("role", proposal.role)
-          .eq("status", "pending")
+          .in("status", ["pending", "shortlisted"])
           .neq("id", proposal.id);
 
       if (rejectOthersError) {
@@ -769,15 +849,11 @@ export default function ClientProposalsPage() {
         );
       }
 
-      await notifyUsers(supabase, [
-        {
-          userId: proposal.freelancer_id,
-          type: "proposal_accepted",
-          title: "Teklifin kabul edildi",
-          message: `"${proposal.project?.title ?? "Proje"}" projesindeki teklifin kabul edildi.`,
-          link: "/freelancers/projects",
-        },
-      ]);
+      await notifyProposalAccepted(supabase, {
+        freelancerId: proposal.freelancer_id,
+        proposalId: proposal.id,
+        projectTitle: proposal.project?.title ?? "Proje",
+      });
 
       // Bu kabulle birlikte tüm roller ilk defa doldu (open -> ready_to_start)
       // ise client'a "Ekip hazır" bildirimi gönder — sonraki kabullerde
@@ -808,7 +884,7 @@ export default function ClientProposalsPage() {
             item.project_id === proposal.project_id &&
             normalizeRoleName(item.role ?? "") ===
               normalizeRoleName(proposal.role ?? "") &&
-            item.status === "pending"
+            (item.status === "pending" || item.status === "shortlisted")
           ) {
             return {
               ...item,
@@ -973,14 +1049,7 @@ export default function ClientProposalsPage() {
         {activeTab === "received" && !loading && !error && (
         <div className="mt-8 space-y-4">
           {filteredProposals.map((proposal) => {
-            const freelancerName = proposal.freelancer
-              ? [
-                  proposal.freelancer.first_name,
-                  proposal.freelancer.last_name,
-                ]
-                  .filter(Boolean)
-                  .join(" ") || "Freelancer"
-              : "Freelancer";
+            const freelancerName = publicDisplayName(proposal.freelancer, "Freelancer");
 
             return (
               <article
@@ -1124,8 +1193,19 @@ export default function ClientProposalsPage() {
                     </Link>
                   )}
 
-                  {proposal.status === "pending" && (
+                  {(proposal.status === "pending" || proposal.status === "shortlisted") && (
                     <>
+                      {proposal.status === "pending" && (
+                        <button
+                          type="button"
+                          disabled={updatingId === proposal.id}
+                          onClick={() => void updateProposalStatus(proposal.id, "shortlisted")}
+                          className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                        >
+                          Kısa listeye al
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         disabled={
@@ -1207,7 +1287,7 @@ export default function ClientProposalsPage() {
               </h2>
 
               <p className="mt-2 text-sm text-neutral-500">
-                Eşleşme sonuçlarından bir freelancer'ı ekibinize davet
+                Eşleşme sonuçlarından bir freelancer&apos;ı ekibinize davet
                 ettiğinizde burada görünür.
               </p>
             </div>
@@ -1216,14 +1296,7 @@ export default function ClientProposalsPage() {
         {activeTab === "sent" && !invitationsLoading && !invitationsError && (
           <div className="mt-8 space-y-4">
             {filteredSentInvitations.map((invitation) => {
-              const freelancerName = invitation.freelancer
-                ? [
-                    invitation.freelancer.first_name,
-                    invitation.freelancer.last_name,
-                  ]
-                    .filter(Boolean)
-                    .join(" ") || "Freelancer"
-                : "Freelancer";
+              const freelancerName = publicDisplayName(invitation.freelancer, "Freelancer");
 
               return (
                 <article

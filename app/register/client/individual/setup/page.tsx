@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CATEGORIES as categoryOptions } from "@/lib/categories";
 
 
 export default function IndividualSetupPage() {
@@ -13,17 +14,6 @@ export default function IndividualSetupPage() {
   const [purpose,setPurpose] = useState("");
   const [categories,setCategories] = useState<string[]>([]);
   const [budget,setBudget] = useState("");
-
-
-
-  const categoryOptions = [
-    "UI/UX Tasarım",
-    "Yazılım",
-    "Grafik Tasarım",
-    "Pazarlama",
-    "Video & Animasyon",
-    "İçerik"
-  ];
 
 
 
