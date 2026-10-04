@@ -1,4 +1,4 @@
--- HIREHUB_AUDIT_CONTEXT.md §6/§27: several SECURITY DEFINER subscription/
+-- COLLACREW_AUDIT_CONTEXT.md §6/§27: several SECURITY DEFINER subscription/
 -- entitlement RPCs were granted EXECUTE to `anon`, not just `authenticated`.
 -- None of them trust a caller-supplied user id (they all key off auth.uid()),
 -- but for an anonymous caller auth.uid() is NULL, and NULL is not rejected

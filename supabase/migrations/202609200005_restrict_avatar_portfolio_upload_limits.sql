@@ -1,4 +1,4 @@
--- HIREHUB_AUDIT_CONTEXT.md: insufficient server-side validation around
+-- COLLACREW_AUDIT_CONTEXT.md: insufficient server-side validation around
 -- uploads. All uploads go directly from the browser to Supabase Storage
 -- (no API route/service-role layer exists, and adding one would be a
 -- rewrite of the upload system, which is out of scope) — so the

@@ -1,0 +1,13 @@
+-- The availability redesign (AvailabilityCard) needs to read/show
+-- `available_from` and `availability_note` — both already exist as real
+-- columns on public.profiles, but were never included in the directory
+-- column-select allowlist from 202609200002_restrict_profile_pii_exposure.sql,
+-- so even the OWNER's own plain `select` (not the get_my_full_profile()
+-- RPC) fails with "permission denied for table profiles" (confirmed
+-- live). They're non-sensitive, freelancer-authored showcase content —
+-- exactly like the already-granted `availability_status`/`bio`/`title` —
+-- so they belong in the same cross-user directory grant, not just the
+-- owner-only RPC (a client should be able to see a freelancer's
+-- availability note/date, same as their status). Same pattern as
+-- 202609240001_grant_profiles_project_types_select.sql.
+grant select (available_from, availability_note) on public.profiles to authenticated;

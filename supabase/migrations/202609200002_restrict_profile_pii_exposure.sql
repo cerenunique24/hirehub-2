@@ -1,4 +1,4 @@
--- HIREHUB_AUDIT_CONTEXT.md §6/§27: profiles/experiences SELECT policies
+-- COLLACREW_AUDIT_CONTEXT.md §6/§27: profiles/experiences SELECT policies
 -- were `qual = true` for any authenticated (profiles) or even anonymous
 -- (experiences) user, exposing every column (email, phone,
 -- notification_preferences, profile_visibility, ...) of every profile.
