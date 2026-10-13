@@ -38,6 +38,7 @@ const MAIN_MENU: AdminMenuItem[] = [
   { name: "Şikayetler", href: "/admin/reports", icon: Flag },
   { name: "Değerlendirmeler", href: "/admin/reviews", icon: Star },
   { name: "Uyuşmazlıklar", href: "/admin/disputes", icon: Scale },
+  { name: "Öne Çıkarma", href: "/admin/visibility", icon: Star },
   { name: "Denetim Kaydı", href: "/admin/audit", icon: ScrollText },
 ];
 

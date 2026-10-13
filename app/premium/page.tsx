@@ -14,7 +14,7 @@ import {
   type PlanTier,
   type BillingCycle,
 } from "@/lib/premium";
-import { getPlansForRole, getPlanDefinition, getPlanPrice, yearlySavingsPercent } from "@/lib/plans";
+import { FREE_TRIAL_DAYS, getPlansForRole, getPlanDefinition, getPlanPrice, yearlySavingsPercent } from "@/lib/plans";
 
 function formatCurrency(value: number) {
   if (value === 0) return "₺0";
@@ -283,7 +283,7 @@ export default function PremiumPage() {
                     )}
 
                     <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                      {plan.id === "free" ? "Özellikler" : "Ek olarak"}
+                      {plan.id === "free" ? "Özellikler" : plan.id === "pro" ? "Plus’taki her şey, ayrıca:" : "Free’deki her şey, ayrıca:"}
                     </p>
 
                     <ul className="mt-3 flex-1 space-y-2.5">
@@ -343,7 +343,7 @@ export default function PremiumPage() {
             </div>
 
             <p className="mt-6 text-center text-xs text-gray-400">
-              Ödeme altyapısı henüz aktif değil. Bugün için tek yol 7 günlük ücretsiz deneme — deneme sonunda otomatik
+              Ödeme altyapısı henüz aktif değil. Bugün için tek yol {FREE_TRIAL_DAYS} günlük ücretsiz deneme — deneme sonunda otomatik
               ücretlendirme yapılmaz.
             </p>
           </>

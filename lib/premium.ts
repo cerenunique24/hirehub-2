@@ -224,7 +224,7 @@ export const FEATURE_MATRIX: Record<FeatureKey, FeatureRule> = {
   advanced_matching: { role: "freelancer", minPlan: "pro", label: "Gelişmiş AI Matching" },
   competition_insights: { role: "freelancer", minPlan: "pro", label: "Rekabet İçgörüleri" },
   advanced_profile_insights: { role: "freelancer", minPlan: "pro", label: "Gelişmiş Profil İçgörüleri" },
-  premium_visibility: { role: "freelancer", minPlan: "pro", label: "Premium Görünürlük" },
+  premium_visibility: { role: "both", minPlan: "pro", label: "Premium Görünürlük" },
   priority_ranking: { role: "freelancer", minPlan: "pro", label: "Öncelikli Eşleşme" },
   pre_proposal_messaging: { role: "freelancer", minPlan: "pro", label: "Teklif Öncesi Mesajlaşma" },
 

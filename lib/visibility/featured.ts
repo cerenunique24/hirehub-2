@@ -1,0 +1,3 @@
+export type FeaturedItem={kind:"profile"|"project";item_id:string;ends_at:string};
+export function splitFeatured<T extends {id:string}>(items:T[],activeIds:ReadonlySet<string>,limit=3) {const featured=items.filter(item=>activeIds.has(item.id)).slice(0,limit);const ids=new Set(featured.map(item=>item.id));return {featured,normal:items.filter(item=>!ids.has(item.id))};}
+export function comparePriority(a:{score:number;isEligibleForRole:boolean;id:string},b:{score:number;isEligibleForRole:boolean;id:string},priority:ReadonlySet<string>) {if(a.isEligibleForRole!==b.isEligibleForRole)return a.isEligibleForRole?-1:1;return b.score-a.score || Number(priority.has(b.id))-Number(priority.has(a.id));}

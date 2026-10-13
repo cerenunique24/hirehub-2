@@ -105,6 +105,7 @@ export const CLIENT_PLANS: PlanDefinition[] = [
       "Gelişmiş Matching",
       "Talent Pool",
       "Gelişmiş Project Analytics",
+      "Premium görünürlük · Projeyi Öne Çıkar",
     ],
   },
 ];
@@ -120,6 +121,9 @@ export function getPlanDefinition(
   const plans = getPlansForRole(role);
   return plans.find((p) => p.id === planId) ?? plans[0];
 }
+
+/** Ücretsiz deneme süresi (gün). Veritabanında start_plan_trial() içinde aynı değer kullanılır. */
+export const FREE_TRIAL_DAYS = 3;
 
 export function getPlanPrice(plan: PlanDefinition, cycle: "monthly" | "yearly"): number {
   return cycle === "monthly" ? plan.priceMonthly : plan.priceYearly;

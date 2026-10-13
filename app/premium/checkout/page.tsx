@@ -15,7 +15,7 @@ import {
   type PlanTier,
   type BillingCycle,
 } from "@/lib/premium";
-import { getPlanDefinition, getPlanPrice } from "@/lib/plans";
+import { FREE_TRIAL_DAYS, getPlanDefinition, getPlanPrice } from "@/lib/plans";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("tr-TR", {
@@ -238,7 +238,7 @@ function CheckoutContent() {
                   ? `Ödeme altyapısı hazır olana kadar, mevcut aboneliğini değiştirmen ücretsizdir. Dönemin kalan süresi (${
                       formatDate(status?.expires_at ?? null) ?? "mevcut bitiş tarihi"
                     }) korunur.`
-                  : `Ödeme altyapısı hazır olana kadar ${planDef.name} paketini 7 gün ücretsiz deneyebilirsin. Deneme sonunda otomatik ücretlendirme yapılmaz, kart bilgisi istenmez.`}
+                  : `Ödeme altyapısı hazır olana kadar ${planDef.name} paketini ${FREE_TRIAL_DAYS} gün ücretsiz deneyebilirsin. Deneme sonunda otomatik ücretlendirme yapılmaz, kart bilgisi istenmez.`}
               </p>
 
               {error && (
@@ -256,7 +256,7 @@ function CheckoutContent() {
                   <Check size={16} />
                   {canChangePlan
                     ? `Paketin ${planDef.name} (${BILLING_LABEL[billingCycle]}) olarak güncellendi.`
-                    : `7 günlük ${planDef.name} denemen başladı.`}
+                    : `${FREE_TRIAL_DAYS} günlük ${planDef.name} denemen başladı.`}
                 </div>
               ) : canChangePlan ? (
                 <button

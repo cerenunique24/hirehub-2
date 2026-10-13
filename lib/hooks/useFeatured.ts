@@ -1,0 +1,5 @@
+"use client";
+import {useEffect,useMemo,useState} from "react";
+import {createClient} from "@/lib/supabase/client";
+import type {FeaturedItem} from "@/lib/visibility/featured";
+export function useFeatured(kind:FeaturedItem["kind"]) {const supabase=useMemo(()=>createClient(),[]),[items,setItems]=useState<FeaturedItem[]>([]);useEffect(()=>{let active=true;let timer:ReturnType<typeof setTimeout>|undefined;async function load(){const {data,error}=await supabase.rpc("active_featured_items");if(!active)return;const rows=error?[]:(data??[]) as FeaturedItem[];setItems(rows);if(timer)clearTimeout(timer);const times=rows.map(item=>Date.parse(item.ends_at)-Date.now()).filter(ms=>ms>0);if(times.length)timer=setTimeout(()=>void load(),Math.min(2147483647,Math.min(...times)+10));}const refresh=()=>{void load();};void load();window.addEventListener("focus",refresh);return()=>{active=false;if(timer)clearTimeout(timer);window.removeEventListener("focus",refresh);};},[supabase]);return useMemo(()=>new Set(items.filter(item=>item.kind===kind).map(item=>item.item_id)),[items,kind]);}
