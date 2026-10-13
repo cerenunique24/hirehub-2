@@ -273,7 +273,7 @@ function ClientProjectDetailContent() {
     const confirmedAt = new Date().toISOString();
     const note = requirementsNote.trim();
 
-    const { error: startError } = await supabase
+    const { data: startedProject, error: startError } = await supabase
       .from("projects")
       .update({
         status: "in_progress",
@@ -281,7 +281,9 @@ function ClientProjectDetailContent() {
         requirements_note: note || null,
       })
       .eq("id", project.id)
-      .eq("status", "ready_to_start");
+      .eq("status", "ready_to_start")
+      .select("id")
+      .maybeSingle();
 
     if (startError) {
       console.error("Proje başlatılamadı:", startError);
@@ -290,6 +292,13 @@ function ClientProjectDetailContent() {
           ? startError.message
           : "Proje başlatılırken bir hata oluştu."
       );
+      setStarting(false);
+      return;
+    }
+
+    if (!startedProject) {
+      await loadProject();
+      setError("Proje başka bir sekmede güncellendi; son durumu yeniledik.");
       setStarting(false);
       return;
     }

@@ -75,6 +75,9 @@ export async function POST(request: Request) {
     if (projectError || !project) {
       return NextResponse.json({ error: "Proje bulunamadı." }, { status: 404 });
     }
+    if (project.status !== "open") {
+      return NextResponse.json({ error: "Teklif öncesi mesaj yalnızca açık projelerde gönderilebilir." }, { status: 409 });
+    }
 
     const { data: clientProfile, error: clientError } = await supabase
       .from("profiles")
@@ -105,6 +108,7 @@ export async function POST(request: Request) {
       .from("messages")
       .insert({
         proposal_id: null,
+        project_id: projectId,
         sender_id: freelancerId,
         receiver_id: project.client_id,
         content,
@@ -116,8 +120,10 @@ export async function POST(request: Request) {
     if (insertError) {
       console.error("[pre-proposal message] insert error:", insertError);
       return NextResponse.json(
-        { error: "Mesaj gönderilemedi." },
-        { status: 500 }
+        { error: insertError.code === "PGRST204" || insertError.code === "42703"
+          ? "Proje kapsamlı mesajlaşma için veritabanı şeması güncellenmeli."
+          : "Mesaj gönderilemedi." },
+        { status: insertError.code === "PGRST204" || insertError.code === "42703" ? 503 : 500 }
       );
     }
 

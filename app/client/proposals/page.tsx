@@ -46,7 +46,7 @@ type SentInvitation = {
   project: { id: string; title: string } | null;
   freelancer: {
     id: string;
-    first_name: string | null;
+    first_name: string | null;
     title: string | null;
   } | null;
 };
@@ -89,7 +89,7 @@ function invitationStatusClass(status: string | null) {
 
 type Freelancer = {
   id: string;
-  first_name: string | null;
+  first_name: string | null;
   title: string | null;
   skills: string[] | null;
   availability_status: string | null;
@@ -1387,7 +1387,7 @@ useEffect(() => {
 
                     {invitation.status === "accepted" && (
                       <Link
-                        href={`/client/messages?user=${invitation.freelancer_id}`}
+                        href={`/client/messages?user=${invitation.freelancer_id}&project=${invitation.project_id}`}
                         className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
                       >
                         <MessageCircle size={15} />

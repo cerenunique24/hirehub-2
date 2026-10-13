@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeSessionRole, panelHome, type SessionRole } from "@/lib/auth/roles";
 
-export type SessionRole = "freelancer" | "client";
+export type { SessionRole } from "@/lib/auth/roles";
 
 export interface AuthedSession {
   userId: string;
@@ -21,7 +22,7 @@ export interface AuthedSession {
  * içeriği oturumsuz kullanıcıya göstermez. Tek yetkilendirme sınırı olarak
  * client-side yönlendirmeye güvenilmez.
  */
-export async function requireSession(): Promise<AuthedSession> {
+export async function requireSession(expectedRole?: SessionRole): Promise<AuthedSession> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,10 +47,13 @@ export async function requireSession(): Promise<AuthedSession> {
     .eq("id", user.id)
     .maybeSingle();
 
-  const role =
-    profile?.role === "freelancer" || profile?.role === "client"
-      ? profile.role
-      : null;
+  const role = normalizeSessionRole(profile?.role);
+
+  // profiles.role is canonical; known opposite roles cannot render this panel.
+  // Unknown/special roles retain the existing behavior.
+  if (expectedRole && role && role !== expectedRole) {
+    redirect(panelHome(role));
+  }
 
   return { userId: user.id, role, supabase };
 }

@@ -229,14 +229,26 @@ export async function checkAndUpdateProjectReadiness(
   }
 
   if (projectReady) {
-    const { error: updateError } = await supabase
+    const { data: readyProject, error: updateError } = await supabase
       .from("projects")
       .update({ status: "ready_to_start" })
       .eq("id", projectId)
-      .eq("status", "open");
+      .eq("status", "open")
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
       return { projectReady: false, error: updateError.message };
+    }
+
+    if (!readyProject) {
+      const { data: latestProject, error: latestError } = await supabase
+        .from("projects")
+        .select("status")
+        .eq("id", projectId)
+        .maybeSingle();
+      if (latestError) return { projectReady: false, error: latestError.message };
+      return { projectReady: latestProject?.status === "ready_to_start" };
     }
   }
 

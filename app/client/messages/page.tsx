@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   Suspense,
@@ -27,6 +27,7 @@ import ReportButton from "@/components/safety/ReportButton";
 import BlockUserButton from "@/components/safety/BlockUserButton";
 import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
 import MessageAttachmentView from "@/components/messaging/MessageAttachmentView";
+import { messagePreview, messageSearchText } from "@/lib/messaging/conversations";
 import {
   ATTACHMENT_ACCEPT,
   deleteMessageAttachment,
@@ -51,8 +52,10 @@ type Profile = {
 type Message = {
   id: string;
   sender_id: string;
-  receiver_id: string;
-  content: string;
+  receiver_id: string | null;
+  project_id?: string | null;
+  coalition_id?: string | null;
+  content: string | null;
   proposal_id: string | null;
   attachment_url: string | null;
   attachment_name: string | null;
@@ -121,6 +124,7 @@ function ClientMessagesContent() {
 
   const [selectedProposalId, setSelectedProposalId] =
     useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -151,9 +155,11 @@ function ClientMessagesContent() {
   useEffect(() => {
     const userId = searchParams.get("user");
     const proposalId = searchParams.get("proposal");
+    const projectId = searchParams.get("project");
 
     setSelectedUserId(userId);
     setSelectedProposalId(proposalId);
+    setSelectedProjectId(projectId);
   }, [searchParams]);
 
   /*
@@ -298,6 +304,7 @@ function ClientMessagesContent() {
       const { data, error } = await supabase
         .from("messages")
         .select("*")
+        .not("receiver_id", "is", null)
         .or(
           `sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`
         )
@@ -465,6 +472,8 @@ function ClientMessagesContent() {
      * ÖNCE .on()
      * SONRA .subscribe()
      */
+
+
     const channel = supabase
       .channel(channelName)
       .on(
@@ -475,11 +484,15 @@ function ClientMessagesContent() {
           table: "messages",
         },
         async (payload) => {
+
+
           if (!active) {
+
             return;
           }
 
           const newMessage = payload.new as Message;
+          if (newMessage.receiver_id === null || newMessage.coalition_id) return;
 
           /*
            * Mesaj mevcut kullanıcıyla ilgili değilse
@@ -489,6 +502,7 @@ function ClientMessagesContent() {
             newMessage.sender_id !== currentUserId &&
             newMessage.receiver_id !== currentUserId
           ) {
+
             return;
           }
 
@@ -601,6 +615,7 @@ function ClientMessagesContent() {
      * Cleanup
      */
     return () => {
+
       active = false;
       void supabase.removeChannel(channel);
     };
@@ -644,10 +659,7 @@ function ClientMessagesContent() {
         return;
       }
 
-      const conversationKey =
-        `${otherUserId}:${
-          message.proposal_id ?? "legacy"
-        }`;
+      const conversationKey = `${otherUserId}:${message.proposal_id ?? message.project_id ?? "legacy"}`;
 
       const existing =
         conversationMap.get(
@@ -671,15 +683,8 @@ function ClientMessagesContent() {
             unread,
             proposalId:
               message.proposal_id,
-            projectId:
-              message.proposal_id
-                ? projectIds[message.proposal_id] ?? null
-                : null,
-            projectTitle: message.proposal_id
-              ? projectNames[
-                  message.proposal_id
-                ] ?? "Proje"
-              : "Genel konuşma",
+            projectId: message.project_id ?? (message.proposal_id ? projectIds[message.proposal_id] ?? null : null),
+            projectTitle: message.project_id ? "Proje konuşması" : message.proposal_id ? projectNames[message.proposal_id] ?? "Proje" : "Genel konuşma",
           }
         );
       } else {
@@ -718,8 +723,7 @@ function ClientMessagesContent() {
           (conversation) =>
             conversation.user.id ===
               selectedUserId &&
-            conversation.proposalId ===
-              selectedProposalId
+            conversation.proposalId === selectedProposalId && conversation.projectId === selectedProjectId
         );
 
       if (
@@ -728,7 +732,7 @@ function ClientMessagesContent() {
       ) {
         conversationMap.set(
           `${selectedUserId}:${
-            selectedProposalId ?? "legacy"
+            selectedProposalId ?? selectedProjectId ?? "legacy"
           }`,
           {
             user: selectedProfile,
@@ -750,10 +754,7 @@ function ClientMessagesContent() {
             unread: 0,
             proposalId:
               selectedProposalId,
-            projectId:
-              selectedProposalId
-                ? projectIds[selectedProposalId] ?? null
-                : null,
+            projectId: selectedProposalId ? projectIds[selectedProposalId] ?? null : selectedProjectId,
             projectTitle:
               selectedProposalId
                 ? projectNames[
@@ -784,6 +785,7 @@ function ClientMessagesContent() {
     projectIds,
     selectedUserId,
     selectedProposalId,
+    selectedProjectId,
   ]);
 
   /*
@@ -811,9 +813,7 @@ function ClientMessagesContent() {
             );
 
           const message =
-            conversation.lastMessage.content.toLocaleLowerCase(
-              "tr-TR"
-            );
+            messageSearchText(conversation.lastMessage);
 
           return (
             fullName.includes(query) ||
@@ -852,12 +852,10 @@ function ClientMessagesContent() {
           message.receiver_id ===
             currentUserId);
 
-      return (
-        isConversation &&
-        (!selectedProposalId ||
-          message.proposal_id ===
-            selectedProposalId)
-      );
+      if (!isConversation) return false;
+      if (selectedProposalId) return message.proposal_id === selectedProposalId;
+      if (selectedProjectId) return message.project_id === selectedProjectId && !message.proposal_id;
+      return message.proposal_id === null && !message.project_id;
     }
   );
 
@@ -969,23 +967,22 @@ function ClientMessagesContent() {
       attachment = uploaded;
     }
 
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("messages")
-      .insert({
-        sender_id: currentUserId,
-        receiver_id: selectedUserId,
-        proposal_id:
-          selectedProposalId,
-        content: text || null,
-        attachment_url: attachment?.url ?? null,
-        attachment_name: attachment?.name ?? null,
-        attachment_type: attachment?.type ?? null,
-      })
-      .select()
-      .single();
+    const response = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        receiverId: selectedUserId,
+        proposalId: selectedProposalId,
+        projectId: selectedProposalId ? projectIds[selectedProposalId] ?? null : selectedProjectId,
+        content: text,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentName: attachment?.name ?? null,
+        attachmentType: attachment?.type ?? null,
+      }),
+    });
+    const responseData = await response.json().catch(() => ({}));
+    const data = responseData.message as Message | undefined;
+    const error = response.ok ? null : { message: responseData.error as string | undefined };
 
     if (error) {
       console.error(
@@ -997,13 +994,7 @@ function ClientMessagesContent() {
         await deleteMessageAttachment(supabase, attachment.url);
       }
 
-      setSendError(
-        error.code === "42501"
-          ? "Bu kullanıcıyla mesajlaşamazsın. Kullanıcı engellenmiş olabilir."
-          : error.code === "P0001"
-            ? error.message
-            : "Mesaj gönderilemedi. Lütfen tekrar deneyin."
-      );
+      setSendError(error.message || "Mesaj gönderilemedi. Lütfen tekrar deneyin.");
 
       setSending(false);
       return;
@@ -1188,14 +1179,12 @@ function ClientMessagesContent() {
                     const profile =
                       conversation.user;
 
-                    const conversationKey =
-                      `${profile.id}-${conversation.proposalId ?? "legacy"}`;
+                    const conversationKey = `${profile.id}-${conversation.proposalId ?? conversation.projectId ?? "legacy"}`;
 
                     const isSelected =
                       selectedUserId ===
                         profile.id &&
-                      selectedProposalId ===
-                        conversation.proposalId;
+                      selectedProposalId === conversation.proposalId && selectedProjectId === conversation.projectId;
 
                     return (
                       <button
@@ -1208,9 +1197,8 @@ function ClientMessagesContent() {
                             profile.id
                           );
 
-                          setSelectedProposalId(
-                            conversation.proposalId
-                          );
+                          setSelectedProposalId(conversation.proposalId);
+                          setSelectedProjectId(conversation.proposalId ? null : conversation.projectId);
                         }}
                         className={`flex w-full gap-3 border-b border-gray-100 p-4 text-left transition ${
                           isSelected
@@ -1259,10 +1247,7 @@ function ClientMessagesContent() {
                               conversation.projectTitle
                             }{" "}
                             ·{" "}
-                            {conversation
-                              .lastMessage
-                              .content ||
-                              "Yeni konuşma"}
+                            {messagePreview(conversation.lastMessage)}
                           </p>
                         </div>
 

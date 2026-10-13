@@ -39,7 +39,7 @@ export async function getTeamMessages(
 export async function sendTeamMessage(
   supabase: SupabaseClient,
   coalitionId: string,
-  senderId: string,
+  _senderId: string,
   content: string
 ): Promise<{ error: string | null }> {
   const trimmed = content.trim();
@@ -48,12 +48,12 @@ export async function sendTeamMessage(
     return { error: "Mesaj boş olamaz." };
   }
 
-  const { error } = await supabase.from("messages").insert({
-    coalition_id: coalitionId,
-    sender_id: senderId,
-    receiver_id: null,
-    content: trimmed,
+  const response = await fetch("/api/messages/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ coalitionId, content: trimmed }),
   });
+  const result = await response.json().catch(() => ({}));
 
-  return { error: error?.message ?? null };
+  return { error: response.ok ? null : (result.error ?? "Mesaj gönderilemedi.") };
 }

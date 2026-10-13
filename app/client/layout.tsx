@@ -13,7 +13,7 @@ export default async function ClientLayout({
   // Sunucu tarafı oturum kontrolü — oturum yoksa /login'e yönlendirir.
   // Bu, sadece Sidebar'ın client-side yönlendirmesine güvenmek yerine,
   // korumalı içeriğin oturumsuz kullanıcıya hiç render edilmemesini sağlar.
-  await requireSession();
+  await requireSession("client");
 
   return (
     <MobileSidebarProvider>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -18,13 +18,13 @@ import {
 } from "lucide-react";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
 import MessageAttachmentView from "@/components/messaging/MessageAttachmentView";
+import { messagePreview, messageSearchText } from "@/lib/messaging/conversations";
 import ReportButton from "@/components/safety/ReportButton";
 import BlockUserButton from "@/components/safety/BlockUserButton";
 import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
 import {
   ATTACHMENT_ACCEPT,
   deleteMessageAttachment,
-  isImageAttachment,
   uploadMessageAttachment,
   validateAttachment,
 } from "@/lib/messaging/attachments";
@@ -46,8 +46,10 @@ type Profile = {
 type Message = {
   id: string;
   sender_id: string;
-  receiver_id: string;
-  content: string;
+  receiver_id: string | null;
+  project_id?: string | null;
+  coalition_id?: string | null;
+  content: string | null;
   proposal_id: string | null;
   attachment_url: string | null;
   attachment_name: string | null;
@@ -123,6 +125,7 @@ function FreelancerMessagesContent() {
 
   const [selectedProposalId, setSelectedProposalId] =
     useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const [messageText, setMessageText] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -172,12 +175,14 @@ function FreelancerMessagesContent() {
   useEffect(() => {
     const userId = searchParams.get("user");
     const proposalId = searchParams.get("proposal");
+    const projectId = searchParams.get("project");
 
     if (userId) {
       setSelectedUserId(userId);
     }
 
     setSelectedProposalId(proposalId);
+    setSelectedProjectId(projectId);
   }, [searchParams]);
 
   /*
@@ -533,6 +538,8 @@ function FreelancerMessagesContent() {
     const channelName =
       `freelancer-messages-${currentUserId}`;
 
+
+
     const channel = supabase
       .channel(channelName)
       .on(
@@ -543,7 +550,10 @@ function FreelancerMessagesContent() {
           table: "messages",
         },
         async (payload) => {
+
+
           if (!active) {
+
             return;
           }
 
@@ -560,6 +570,7 @@ function FreelancerMessagesContent() {
             newMessage.receiver_id !==
               currentUserId
           ) {
+
             return;
           }
 
@@ -571,8 +582,11 @@ function FreelancerMessagesContent() {
                   newMessage.id
               )
             ) {
+
               return current;
             }
+
+
 
             return [
               ...current,
@@ -684,6 +698,7 @@ function FreelancerMessagesContent() {
       .subscribe();
 
     return () => {
+
       active = false;
       void supabase.removeChannel(
         channel
@@ -739,11 +754,7 @@ function FreelancerMessagesContent() {
       /*
        * proposal_id konuşmanın parçası.
        */
-      const conversationKey =
-        `${otherUserId}:${
-          message.proposal_id ??
-          "legacy"
-        }`;
+      const conversationKey = `${otherUserId}:${message.proposal_id ?? message.project_id ?? "legacy"}`;
 
       const existing =
         map.get(conversationKey);
@@ -763,16 +774,8 @@ function FreelancerMessagesContent() {
           unread,
           proposalId:
             message.proposal_id,
-          projectId:
-            message.proposal_id
-              ? projectIds[message.proposal_id] ?? null
-              : null,
-          projectTitle:
-            message.proposal_id
-              ? projectNames[
-                  message.proposal_id
-                ] ?? "Proje"
-              : "Genel konuşma",
+          projectId: message.project_id ?? (message.proposal_id ? projectIds[message.proposal_id] ?? null : null),
+            projectTitle: message.project_id ? "Proje konuşması" : message.proposal_id ? projectNames[message.proposal_id] ?? "Proje" : "Genel konuşma",
         });
       } else {
         existing.messages.push(
@@ -816,8 +819,7 @@ function FreelancerMessagesContent() {
           (conversation) =>
             conversation.user.id ===
               selectedUserId &&
-            conversation.proposalId ===
-              selectedProposalId
+            conversation.proposalId === selectedProposalId && conversation.projectId === selectedProjectId
         );
 
       if (
@@ -826,8 +828,7 @@ function FreelancerMessagesContent() {
       ) {
         map.set(
           `${selectedUserId}:${
-            selectedProposalId ??
-            "legacy"
+            selectedProposalId ?? selectedProjectId ?? "legacy"
           }`,
           {
             user: selectedProfile,
@@ -849,10 +850,7 @@ function FreelancerMessagesContent() {
             unread: 0,
             proposalId:
               selectedProposalId,
-            projectId:
-              selectedProposalId
-                ? projectIds[selectedProposalId] ?? null
-                : null,
+            projectId: selectedProposalId ? projectIds[selectedProposalId] ?? null : selectedProjectId,
             projectTitle:
               selectedProposalId
                 ? projectNames[
@@ -883,6 +881,7 @@ function FreelancerMessagesContent() {
     projectIds,
     selectedUserId,
     selectedProposalId,
+    selectedProjectId,
   ]);
 
   /*
@@ -916,10 +915,7 @@ function FreelancerMessagesContent() {
             projectTitle.includes(
               query
             ) ||
-            conversation.lastMessage.content
-              .toLocaleLowerCase(
-                "tr-TR"
-              )
+            messageSearchText(conversation.lastMessage)
               .includes(query)
           );
         }
@@ -974,9 +970,8 @@ function FreelancerMessagesContent() {
         );
       }
 
-      return (
-        message.proposal_id === null
-      );
+      if (selectedProjectId) return message.project_id === selectedProjectId && !message.proposal_id;
+      return message.proposal_id === null && !message.project_id;
     });
 
   const hasExistingThread =
@@ -996,7 +991,7 @@ function FreelancerMessagesContent() {
       return;
     }
 
-    const key = `${selectedUserId}:${selectedProposalId ?? "none"}`;
+    const key = `${selectedUserId}:${selectedProposalId ?? selectedProjectId ?? "none"}`;
 
     let cancelled = false;
 
@@ -1028,12 +1023,18 @@ function FreelancerMessagesContent() {
           key,
           authorized: project?.client_id === selectedUserId,
         });
-      } else {
-        // Teklif öncesi / proje bağlamı olmayan yeni konuşma — Pro gerekir.
-        setNewConversationCheck({
+      } else if (selectedProjectId) {
+        const [{ data: project }, { data: membership }, { data: invitation }] = await Promise.all([
+          supabase.from("projects").select("id, client_id").eq("id", selectedProjectId).maybeSingle(),
+          supabase.from("project_team_members").select("id").eq("project_id", selectedProjectId).eq("freelancer_id", currentUserId).eq("status", "active").maybeSingle(),
+          supabase.from("project_team_invitations").select("id").eq("project_id", selectedProjectId).eq("freelancer_id", currentUserId).in("status", ["pending", "accepted"]).maybeSingle(),
+        ]);
+        if (!cancelled) setNewConversationCheck({
           key,
-          authorized: canUseMessagingFeature("pre_proposal_messaging"),
+          authorized: project?.client_id === selectedUserId && Boolean(membership || invitation),
         });
+      } else {
+        setNewConversationCheck({ key, authorized: false });
       }
     }
 
@@ -1046,13 +1047,14 @@ function FreelancerMessagesContent() {
     currentUserId,
     selectedUserId,
     selectedProposalId,
+    selectedProjectId,
     hasExistingThread,
     supabase,
     canUseMessagingFeature,
   ]);
 
   const newConversationKey = selectedUserId
-    ? `${selectedUserId}:${selectedProposalId ?? "none"}`
+    ? `${selectedUserId}:${selectedProposalId ?? selectedProjectId ?? "none"}`
     : null;
 
   const canComposeToSelected =
@@ -1173,6 +1175,7 @@ function FreelancerMessagesContent() {
       body: JSON.stringify({
         receiverId: selectedUserId,
         proposalId: selectedProposalId,
+        projectId: selectedProposalId ? projectIds[selectedProposalId] ?? null : selectedProjectId,
         content: text,
         attachmentUrl: attachment?.url ?? null,
         attachmentName: attachment?.name ?? null,
@@ -1204,6 +1207,8 @@ function FreelancerMessagesContent() {
     }
 
     const data = responseData.message as Message | undefined;
+
+
 
     if (data) {
       setMessages((current) => {
@@ -1385,24 +1390,19 @@ function FreelancerMessagesContent() {
                     const isSelected =
                       selectedUserId ===
                         profile.id &&
-                      selectedProposalId ===
-                        conversation.proposalId;
+                      selectedProposalId === conversation.proposalId && selectedProjectId === conversation.projectId;
 
                     return (
                       <button
                         type="button"
-                        key={`${profile.id}-${
-                          conversation.proposalId ??
-                          "legacy"
-                        }`}
+                        key={`${profile.id}-${conversation.proposalId ?? conversation.projectId ?? "legacy"}`}
                         onClick={() => {
                           setSelectedUserId(
                             profile.id
                           );
 
-                          setSelectedProposalId(
-                            conversation.proposalId
-                          );
+                          setSelectedProposalId(conversation.proposalId);
+                          setSelectedProjectId(conversation.proposalId ? null : conversation.projectId);
                         }}
                         className={`flex w-full gap-3 border-b border-gray-100 p-4 text-left transition ${
                           isSelected
@@ -1451,10 +1451,7 @@ function FreelancerMessagesContent() {
                               conversation.projectTitle
                             }{" "}
                             ·{" "}
-                            {conversation
-                              .lastMessage
-                              .content ||
-                              "Yeni konuşma"}
+                            {messagePreview(conversation.lastMessage)}
                           </p>
                         </div>
 

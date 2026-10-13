@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { isProtectedPanelPath, normalizeSessionRole, resolvePanelAccess } from "@/lib/auth/roles";
 
 /*
  * Bu proje Next.js 16 kullanıyor; `middleware.ts` artık deprecated ve
@@ -23,28 +24,6 @@ import { createServerClient } from "@supabase/ssr";
  * Server Function rather than relying on Proxy alone.")
  */
 
-// app/freelancers/ altındaki, gerçekten oturum gerektiren statik
-// segmentler. `/freelancers/[username]` (herkese açık profil) bu
-// listede YOK — kasıtlı olarak korumadan hariç tutuluyor.
-const FREELANCER_PROTECTED_SEGMENTS = new Set([
-  "ai",
-  "coalitions",
-  "dashboard",
-  "discover",
-  "earnings",
-  "freelancers",
-  "help",
-  "invitations",
-  "messages",
-  "notifications",
-  "performance",
-  "profile",
-  "projects",
-  "proposals",
-  "saved",
-  "settings",
-]);
-
 function isProtectedPath(pathname: string): boolean {
   if (pathname === "/client" || pathname.startsWith("/client/")) {
     return true;
@@ -57,8 +36,7 @@ function isProtectedPath(pathname: string): boolean {
   }
 
   if (pathname.startsWith("/freelancers/")) {
-    const firstSegment = pathname.split("/")[2] ?? "";
-    return FREELANCER_PROTECTED_SEGMENTS.has(firstSegment);
+    return isProtectedPanelPath(pathname);
   }
 
   return false;
@@ -116,6 +94,24 @@ export async function proxy(request: NextRequest) {
     const verifyUrl = new URL("/auth/verify-email", request.url);
     if (user.email) verifyUrl.searchParams.set("email", user.email);
     return NextResponse.redirect(verifyUrl);
+  }
+
+  if (pathname.startsWith("/client/") || pathname.startsWith("/freelancers/")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const destination = resolvePanelAccess(pathname, {
+      authenticated: true,
+      emailConfirmed: true,
+      role: normalizeSessionRole(profile?.role),
+    });
+
+    if (destination) {
+      return NextResponse.redirect(new URL(destination, request.url));
+    }
   }
 
   return response;

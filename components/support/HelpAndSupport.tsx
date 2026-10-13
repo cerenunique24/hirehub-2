@@ -16,6 +16,10 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
+  DISPUTE_REASON_LABEL,
+  DISPUTE_STATUS_LABEL,
+} from "@/lib/marketplace/labels";
+import {
   createTicket,
   fetchHelpArticles,
   fetchOwnTickets,
@@ -66,6 +70,23 @@ export default function HelpAndSupport({
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [disputes, setDisputes] = useState<
+    Array<{ id: string; reason: string; status: string; updated_at: string; projects: { title: string } | null }>
+  >([]);
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("disputes")
+      .select("id, reason, status, updated_at, projects(title)")
+      .order("updated_at", { ascending: false })
+      .then(({ data }) => {
+        if (active) setDisputes((data ?? []) as unknown as typeof disputes);
+      });
+    return () => {
+      active = false;
+    };
+  }, [supabase]);
   const [loading, setLoading] = useState(true);
 
   const [showForm, setShowForm] = useState(false);
@@ -336,6 +357,38 @@ export default function HelpAndSupport({
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3.5 py-3 text-xs text-gray-500">
               <Mail size={14} className="shrink-0" />
               Yanıtlar ve geçmiş mesajların talep detayında görünür.
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <h2 className="font-semibold text-gray-900">Uyuşmazlıklar</h2>
+            <p className="mt-1 text-xs text-gray-500">Proje, teslim veya ödemeyle ilgili resmi inceleme süreçleri.</p>
+            <div className="mt-4">
+              {disputes.length === 0 ? (
+                <p className="py-4 text-center text-sm text-gray-500">Bir uyuşmazlığın bulunmuyor.</p>
+              ) : (
+                <div className="space-y-2">
+                  {disputes.map((dispute) => (
+                    <Link
+                      key={dispute.id}
+                      href={`/${audience}/help/disputes/${dispute.id}`}
+                      className="block rounded-xl border border-gray-100 p-3.5 text-sm transition hover:border-gray-300 hover:bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate font-medium text-gray-900">{dispute.projects?.title ?? "Proje"}</p>
+                        <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
+                          {DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">{DISPUTE_REASON_LABEL[dispute.reason] ?? dispute.reason}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Son güncelleme:{" "}
+                        {new Intl.DateTimeFormat("tr-TR", { day: "2-digit", month: "long" }).format(new Date(dispute.updated_at))}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 

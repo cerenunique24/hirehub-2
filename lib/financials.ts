@@ -9,8 +9,8 @@ import { calculateFreelancerNet } from "@/lib/pricing";
  * transaction ÜRETMEZ — yalnızca mevcut proje/proposal/milestone
  * verisinden üç net, dürüst rakam hesaplar:
  *
- *  - engagementValue: bir projedeki toplam iş değeri (freelancer'ın kabul
- *    edilen teklif tutarı, ya da proje bütçesi).
+ *  - engagementValue: bir projedeki toplam iş değeri (freelancer'ın
+ *    anlaşma tutarı; client tarafında proje bütçesi).
  *  - realized: gerçekten tamamlanmış/onaylanmış kısım ("Gerçekleşen Kazanç"
  *    / freelancer tarafında, "Tamamlanan İşler" client tarafında).
  *  - pending: henüz onaylanmamış/tamamlanmamış kısım ("Bekleyen Hakediş").
@@ -67,7 +67,7 @@ export async function getFreelancerEarningsSummary(
 ): Promise<FreelancerEarningsSummary> {
   const { data: memberships } = await supabase
     .from("project_team_members")
-    .select("project_id, proposal_id")
+    .select("project_id, proposal_id, agreed_amount")
     .eq("freelancer_id", freelancerId)
     .eq("status", "active");
 
@@ -88,7 +88,7 @@ export async function getFreelancerEarningsSummary(
   const proposalIds = rows.map((r) => r.proposal_id).filter((id): id is string => Boolean(id));
 
   const [{ data: projects }, { data: proposals }, { data: milestones }] = await Promise.all([
-    supabase.from("projects").select("id, title, status, budget, budget_max").in("id", projectIds),
+    supabase.from("projects").select("id, title, status").in("id", projectIds),
     proposalIds.length > 0
       ? supabase.from("proposals").select("id, bid_amount").in("id", proposalIds)
       : Promise.resolve({ data: [] as Array<{ id: string; bid_amount: number }> }),
@@ -116,12 +116,15 @@ export async function getFreelancerEarningsSummary(
   }
 
   const bidByProposalId = new Map((proposals ?? []).map((p) => [p.id, toNumber(p.bid_amount)]));
-  const proposalIdByProjectId = new Map(rows.map((r) => [r.project_id, r.proposal_id]));
+  const membershipByProjectId = new Map(rows.map((r) => [r.project_id, r]));
 
   const lines: ProjectFinancialLine[] = (projects ?? []).map((project) => {
-    const proposalId = proposalIdByProjectId.get(project.id);
+    const membership = membershipByProjectId.get(project.id);
+    const proposalId = membership?.proposal_id;
     const bidAmount = proposalId ? bidByProposalId.get(proposalId) : undefined;
-    const engagementValue = bidAmount ?? toNumber(project.budget_max ?? project.budget ?? 0);
+    // Eski üyeliklerde anlaşma tutarı yoksa teklif tutarını kullan.
+    // Projenin toplam bütçesi tek bir freelancer'ın hakedişi değildir.
+    const engagementValue = toNumber(membership?.agreed_amount ?? bidAmount ?? 0);
 
     const projectMilestones = ownMilestones.filter((m) => m.project_id === project.id);
     const approvedFromMilestones = projectMilestones

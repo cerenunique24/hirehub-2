@@ -39,7 +39,7 @@ export default function TeamMessagesPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
-  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
 
   const nameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -71,7 +71,8 @@ export default function TeamMessagesPanel({
   }, [coalitionId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesRef.current;
+    if (container) container.scrollTop = container.scrollHeight;
   }, [messages.length]);
 
   async function handleSend() {
@@ -101,7 +102,7 @@ export default function TeamMessagesPanel({
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-white">
-      <div className="max-h-80 space-y-3 overflow-y-auto p-4">
+      <div ref={messagesRef} className="max-h-80 space-y-3 overflow-y-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-neutral-500">
             <Loader2 size={16} className="animate-spin" />
@@ -142,7 +143,7 @@ export default function TeamMessagesPanel({
           })
         )}
 
-        <div ref={bottomRef} />
+
       </div>
 
       {error && (

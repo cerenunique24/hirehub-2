@@ -58,7 +58,7 @@ export default function EarningsPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Kazançlarım</h1>
         <p className="mt-2 text-sm text-gray-500">
-          Projelerinden hesaplanan gerçek kazanç özetin — Supabase verilerinden dinamik hesaplanır.
+          Anlaşma tutarlarını, tamamlanan işleri ve bekleyen hakedişlerini buradan takip et.
         </p>
       </div>
 
@@ -173,9 +173,11 @@ export default function EarningsPage() {
                   </div>
                   <Link
                     href={
-                      project.status === "in_progress" || project.status === "completed"
-                        ? `/freelancers/projects/${project.projectId}`
-                        : `/freelancers/discover/${project.projectId}`
+                      project.status === "completed"
+                        ? `/freelancers/earnings/${project.projectId}`
+                        : project.status === "in_progress"
+                          ? `/freelancers/projects/${project.projectId}`
+                          : `/freelancers/discover/${project.projectId}`
                     }
                     className="shrink-0 rounded-xl bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
                   >
