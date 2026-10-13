@@ -1,10 +1,17 @@
 ﻿"use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { Search, Sparkles, Send } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchBudgetBreakdown, getTeamCompletion } from "@/lib/projects/teamReadiness";
+import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
+import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
+import { buttonClasses } from "@/components/ui/Button";
+import { coalitionActionSummary, coalitionWork, coalitionProjectLabel, coalitionProjectHref, type CoalitionProject, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
+import type { TeamCompletion } from "@/lib/projects/teamReadiness";
+import styles from "@/components/coalitions/Coalitions.module.css";
 import { publicDisplayName } from "@/lib/utils/displayName";
 
 type OpenCoalition = {
@@ -22,6 +29,7 @@ type Coalition = {
   status: "active" | "completed";
   created_by: string;
   created_at: string;
+  project_id: string | null;
 };
 
 type Profile = {
@@ -43,6 +51,11 @@ type CoalitionMember = {
 
 type CoalitionWithMembers = Coalition & {
   members: CoalitionMember[];
+  project?: CoalitionProject | null;
+  myProjectRole?: string | null;
+  stages?: CoalitionStage[] | null;
+  team?: TeamCompletion | null;
+  teamMemberIds?: string[];
 };
 
 type FilterType = "all" | "active" | "completed";
@@ -52,6 +65,7 @@ export default function CoalitionsPage() {
     CoalitionWithMembers[]
   >([]);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [search, setSearch] = useState("");
@@ -77,6 +91,8 @@ export default function CoalitionsPage() {
         setCoalitions([]);
         return;
       }
+
+      setCurrentUserId(user.id);
 
       /*
        * Önce freelancerın üyesi olduğu koalisyonları buluyoruz.
@@ -137,7 +153,7 @@ export default function CoalitionsPage() {
       } = await supabase
         .from("coalitions")
         .select(
-          "id, name, description, status, created_by, created_at"
+          "id, name, description, status, created_by, created_at, project_id"
         )
         .in("id", coalitionIds)
         .order("created_at", {
@@ -257,6 +273,26 @@ export default function CoalitionsPage() {
             ),
         }));
 
+      // Display-only project context, scoped to the coalition IDs already visible to this member.
+      const projectIds = [...new Set(combined.map(item=>item.project_id).filter((id): id is string=>Boolean(id)))];
+      if(projectIds.length) {
+        const [projectsResult, stagesResult, teamResult] = await Promise.all([
+          supabase.from("projects").select("id, title, status, deadline, team_required, updated_at").in("id",projectIds),
+          supabase.from("project_milestones").select("id, project_id, title, status, freelancer_id, due_date, sort_order").in("project_id",projectIds).order("sort_order",{ascending:true}),
+          supabase.from("project_team_members").select("project_id, freelancer_id, role").in("project_id",projectIds).eq("status","active"),
+        ]);
+        if(projectsResult.error || stagesResult.error || teamResult.error) console.error("Coalition context could not be fully loaded",projectsResult.error,stagesResult.error,teamResult.error);
+        await Promise.all(combined.map(async item=>{
+          const project = (projectsResult.data??[]).find(row=>row.id===item.project_id);
+          item.project = project??null;
+          item.stages = stagesResult.error ? null : ((stagesResult.data??[]).filter(row=>row.project_id===item.project_id) as CoalitionStage[]);
+          const team = (teamResult.data??[]).filter(row=>row.project_id===item.project_id);
+          item.myProjectRole = team.find(row=>row.freelancer_id===user.id)?.role??null;
+          item.teamMemberIds = team.map(row=>row.freelancer_id);
+          const roles = project && !teamResult.error ? await fetchBudgetBreakdown(supabase,project.id) : [];
+          item.team = roles.length ? getTeamCompletion(roles,team) : null;
+        }));
+      }
       setCoalitions(combined);
     } catch (error) {
       console.error(
@@ -403,6 +439,8 @@ export default function CoalitionsPage() {
       const searchableText = [
         coalition.name,
         coalition.description ?? "",
+        coalition.project?.title ?? "",
+        coalition.myProjectRole ?? "",
         ...coalition.members.map(
           (member) =>
             member.profile?.first_name ?? ""
@@ -456,27 +494,12 @@ export default function CoalitionsPage() {
   };
 
   return (
-    <main className="w-full p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Koalisyonlarım
-          </h1>
-
-          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-            <Sparkles size={13} />
-            AI destekli
-          </span>
-        </div>
-
-        <p className="mt-2 text-sm text-gray-500">
-          Dahil olduğun projelerdeki ekiplerini,
-          ekip üyelerini ve koalisyon çalışmalarını
-          buradan takip edebilirsin.
-        </p>
-      </div>
-
+    <main className={[panelRootClass, styles.page].join(" ")}>
+      <header className={styles.header}>
+        <div><span className={styles.eyebrow}>Koalisyon çalışma alanı</span><h1>Koalisyonların</h1>
+        <p>Birlikte çalıştığın ekipleri, rol dağılımını ve sıradaki adımları buradan takip et.</p></div>
+        <DashboardMascot pose="team" size={200} className={styles.teamArt} eager />
+      </header>
       {/* Search + Filters */}
       <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative w-full lg:max-w-md">
@@ -491,7 +514,8 @@ export default function CoalitionsPage() {
             onChange={(event) =>
               setSearch(event.target.value)
             }
-            placeholder="Koalisyon veya ekip üyesi ara..."
+            aria-label="Koalisyon, proje veya ekip üyesi ara"
+            placeholder="Koalisyon, proje veya ekip üyesi ara..."
             className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400"
           />
         </div>
@@ -499,6 +523,7 @@ export default function CoalitionsPage() {
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
+            aria-pressed={activeFilter === "all"}
             onClick={() => setActiveFilter("all")}
             className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "all"
@@ -511,6 +536,7 @@ export default function CoalitionsPage() {
 
           <button
             type="button"
+            aria-pressed={activeFilter === "active"}
             onClick={() => setActiveFilter("active")}
             className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "active"
@@ -523,6 +549,7 @@ export default function CoalitionsPage() {
 
           <button
             type="button"
+            aria-pressed={activeFilter === "completed"}
             onClick={() => setActiveFilter("completed")}
             className={`rounded-lg px-4 py-1.5 text-sm transition ${
               activeFilter === "completed"
@@ -575,118 +602,48 @@ export default function CoalitionsPage() {
             <p className="mt-2 text-sm text-gray-500">
               {search
                 ? "Farklı bir koalisyon adı veya ekip üyesi deneyebilirsin."
-                : "Bir projeye seçildiğinde veya bir koalisyon davetini kabul ettiğinde burada görüntülenecek."}
+                : "Ekip projelerine katıldığında burada birlikte çalıştığın koalisyonları görebilirsin."}
             </p>
+            {!search && coalitions.length === 0 && <div className={styles.emptyActions}><PanelAction href="/freelancers/discover" variant="primary">Projeleri keşfet</PanelAction><PanelAction href="/freelancers/proposals">Teklif ve davetleri gör</PanelAction></div>}
           </div>
         )}
 
-      {/* Coalition List */}
-      {!loading &&
-        !errorMessage &&
-        filteredCoalitions.length > 0 && (
-          <div className="space-y-5">
-            {filteredCoalitions.map((coalition) => (
-              <div
-                key={coalition.id}
-                className="flex w-full items-center justify-between gap-6 rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="mb-3 flex flex-wrap items-center gap-3">
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {coalition.name}
-                    </h2>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${
-                        coalition.status === "active"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      {coalition.status === "active" ? "Aktif" : "Tamamlandı"}
-                    </span>
-                  </div>
-
-                  <p className="mb-5 line-clamp-2 text-sm text-gray-500">
-                    {coalition.description || "Açıklama eklenmemiş."}
-                  </p>
-
-                  <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
-                    <div>
-                      <span className="mb-1 block text-gray-400">Ekip</span>
-
-                      <div className="flex items-center">
-                        {coalition.members.length === 0 && (
-                          <span className="font-medium text-gray-900">Henüz üye yok</span>
-                        )}
-
-                        {coalition.members.slice(0, 4).map((member, index) => {
-                          const avatar = getAvatar(member);
-
-                          return (
-                            <div
-                              key={member.id}
-                              title={getMemberName(member)}
-                              className={index > 0 ? "-ml-2" : ""}
-                            >
-                              {avatar ? (
-                                <img
-                                  src={avatar}
-                                  alt={getMemberName(member)}
-                                  className="h-7 w-7 rounded-full border-2 border-white object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-200 text-xs font-medium text-gray-600">
-                                  {getMemberName(member).charAt(0).toUpperCase()}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {coalition.members.length > 4 && (
-                          <span className="ml-2 text-xs text-gray-500">
-                            +{coalition.members.length - 4}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="mb-1 block text-gray-400">Üye Sayısı</span>
-                      <span className="font-medium text-gray-900">
-                        {coalition.members.length} kişi
-                      </span>
-                    </div>
-
-                    <div>
-                      <span className="mb-1 block text-gray-400">Oluşturulma Tarihi</span>
-                      <span className="font-medium text-gray-900">
-                        {formatDate(coalition.created_at)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex shrink-0 gap-3">
-                  <Link
-                    href={`/freelancers/coalitions/${coalition.id}`}
-                    className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-                  >
-                    Detayları Gör
-                  </Link>
-                </div>
+      {!loading && !errorMessage && filteredCoalitions.length > 0 && <div className={styles.list}>
+        {filteredCoalitions.map(coalition=>{
+          const work=coalitionWork(coalition.project??null,coalition.stages??null,currentUserId,coalition.teamMemberIds??[]);
+          const myMembership=coalition.members.find(member=>member.user_id===currentUserId);
+          return <article key={coalition.id} className={styles.card}>
+            <div className={styles.cardHeading}><div><h2>{coalition.name}</h2><p className={styles.projectName}>{coalition.project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}</p></div>
+              <div className={styles.labeledBadge}><span>Koalisyon</span><PanelBadge>{coalition.status==="active"?"Aktif":"Tamamlandı"}</PanelBadge></div>
+            </div>
+            <dl className={styles.metadata}>
+              <div><dt>Projede rolün</dt><dd>{coalition.myProjectRole || "Belirtilmedi"}</dd></div>
+              <div><dt>Koalisyon görevin</dt><dd>{myMembership?.role==="owner"?"Koalisyon yöneticisi":"Ekip üyesi"}</dd></div>
+              <div><dt>Ekip</dt><dd className={styles.avatarGroup}>{coalition.members.slice(0,4).map(member=><span key={member.id} title={getMemberName(member)}>{getAvatar(member)?<Image unoptimized src={getAvatar(member)!} width={32} height={32} alt="" />:<span className={styles.avatar}>{getMemberName(member).charAt(0)}</span>}</span>)}<span>{coalition.members.length} kişi</span></dd></div>
+              <div><dt>{coalition.project?.updated_at?"Proje güncellendi":"Koalisyon oluşturuldu"}</dt><dd>{formatDate(coalition.project?.updated_at || coalition.created_at)}</dd></div>
+            </dl>
+            <div className={styles.statusLine}>
+              {coalition.project && <><span>Proje</span><PanelBadge>{coalitionProjectLabel(coalition.project.status)}</PanelBadge></>}
+              {!coalition.team && <span>Rol kontenjanı doğrulanamadı</span>}
+              {coalition.team && <span>{coalition.team.ready ? "Tüm roller dolu" : coalition.team.filledRoles+" / "+coalition.team.totalRoles+" rol dolu"}</span>}
+              {work.currentStage && <span>Aşaman: {work.currentStage.title}</span>}
+            </div>
+            <div className={styles.cardFooter}><div><p className={styles.actionHeadline}>{coalitionActionSummary(work,coalition.project??null,coalition.stages??null)}</p>{work.currentUserMustAct && <PanelBadge tone="revision">Senden aksiyon bekleniyor</PanelBadge>}</div>
+              <div className={styles.actions}><PanelAction href={"/freelancers/coalitions/"+coalition.id} variant="primary">Ekip Alanını Aç</PanelAction>
+                <PanelAction href={"/freelancers/coalitions/"+coalition.id+"#team-messages"}>Mesajlar</PanelAction>
+                {coalition.project && <Link href={coalitionProjectHref(coalition.project)} className={styles.projectLink}>Bağlı projeyi gör</Link>}
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          </article>;
+        })}
+      </div>}
 
       {/* Diğer Aktif Koalisyonlar — henüz üyesi olmadığın, hâlâ açık
           (proje status="open") rolleri olan coalition'lar. */}
       <div className="mt-10">
         <div className="mb-4 flex items-center gap-2">
           <h2 className="text-lg font-semibold text-gray-900">
-            Diğer Aktif Koalisyonlar
+            Açık rolü olan ekipler
           </h2>
         </div>
 
@@ -699,11 +656,11 @@ export default function CoalitionsPage() {
             Şu anda açık rolü olan başka bir koalisyon yok.
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className={styles.list}>
             {openCoalitions.map((coalition) => (
               <div
                 key={coalition.id}
-                className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between"
+                className={[styles.card,styles.openCard].join(" ")}
               >
                 <div className="min-w-0">
                   <h3 className="text-base font-semibold text-gray-900">
@@ -733,7 +690,7 @@ export default function CoalitionsPage() {
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Link
                     href={`/freelancers/discover/${coalition.projectId}`}
-                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                    className={buttonClasses({variant:"secondary",size:"sm"})}
                   >
                     <Send size={15} />
                     Teklif Gönder

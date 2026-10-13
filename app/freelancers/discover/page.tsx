@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -18,10 +18,15 @@ import {
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {useFeatured} from "@/lib/hooks/useFeatured";
+import {splitFeatured} from "@/lib/visibility/featured";
 import EarlyAccessBanner from "@/components/premium/EarlyAccessBanner";
+import { selectBestEligibleRole } from "@/lib/matching/roleEligibility";
 import type { FreelancerRoleMatch } from "@/lib/ai/match-talent";
 import { getDaysRemaining } from "@/lib/utils/deadline";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { DiscoveryHero } from "@/components/discovery/DiscoveryHero";
+import styles from "@/components/discovery/Discovery.module.css";
+import { panelRootClass, PanelAction } from "@/components/dashboard/PanelPrimitives";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/Button";
@@ -358,14 +363,17 @@ function FilterSelect({
   value,
   onChange,
   children,
+  label = "Filtre seçimi",
 }: {
   value: string;
   onChange: (value: string) => void;
   children: React.ReactNode;
+  label?: string;
 }) {
   return (
     <div className="relative w-full">
       <select
+        aria-label={label}
         value={value}
         onChange={(event) =>
           onChange(event.target.value)
@@ -597,7 +605,7 @@ export default function DiscoverPage() {
           // girildiğinde AI eşleşmesi gereksiz yere tekrar hesaplanmasın.
           // Profil/skill değişikliği yeni bir tarayıcı sekmesi/oturumu
           // gerektirmeden yansısın diye süre kısa (10 dk) tutuluyor.
-          const matchCacheKey = `discover-match:${user.id}:${[...openProjectIds]
+          const matchCacheKey = `discover-match:role-relevance-v3:${user.id}:${[...openProjectIds]
             .sort()
             .join(",")}`;
           const MATCH_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -679,18 +687,11 @@ export default function DiscoverPage() {
             /*
              * Kart, gerçekten proposal gönderilebilecek (eligible)
              * bir rol varsa onu öne çıkarır; hiçbiri eligible
-             * değilse en yüksek skorlu rol yine bilgi amaçlı
-             * gösterilir (ama bütçe/süre API tarafından zaten
-             * döndürülmez).
+             * değilse uygun rol ve yüksek eşleşme gösterilmez.
              */
             const matches = matchingByProject[row.id] ?? [];
 
-            const bestMatch =
-              matches.find(
-                (match) => match.isEligibleForRole
-              ) ??
-              matches[0] ??
-              null;
+            const bestMatch = selectBestEligibleRole(matches);
 
             const memberCount =
               typeof bestMatch?.memberCount === "number"
@@ -912,6 +913,10 @@ export default function DiscoverPage() {
   /* Favorites                                                               */
   /* ---------------------------------------------------------------------- */
 
+  const featuredIds=useFeatured("project");
+  const featuredGroups=splitFeatured(filteredProjects.filter(project=>project.matchedRole!==null&&project.matchPercentage>0),featuredIds);
+  const displayProjects=[...featuredGroups.featured,...filteredProjects.filter(project=>!featuredGroups.featured.some(featured=>featured.id===project.id))];
+
   async function toggleFavorite(projectId: string) {
     if (!userId || pendingFavoriteIds.has(projectId)) return;
 
@@ -1009,33 +1014,25 @@ export default function DiscoverPage() {
   /* ---------------------------------------------------------------------- */
 
   return (
-    <div>
-      <PageHeader
-        title="Projeleri Keşfet"
-        description="Yeteneklerine uygun açık projeleri keşfet, sana uygun rollere teklif gönder."
-        action={
-          <Badge tone="neutral" className="gap-1.5 px-3 py-1.5 text-[13px]">
-            <BriefcaseBusiness className="h-3.5 w-3.5" />
-            {loading ? "Projeler aranıyor..." : `${filteredProjects.length} proje`}
-          </Badge>
-        }
-      />
+    <div className={[panelRootClass, styles.page].join(" ")}>
+      <DiscoveryHero />
 
-      <div className="mt-[var(--rhythm-header-gap)]">
-        <EarlyAccessBanner />
+      <div className={styles.content}>
+
 
         {/* ---------------------------------------------------------------- */}
         {/* Search / sort / filters                                          */}
         {/* ---------------------------------------------------------------- */}
 
-        <section className="mb-[var(--space-6)] rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-3">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        <section className={styles.toolbar} aria-label="Proje arama ve filtreleme">
+          <div className={styles.toolbarRow}>
             {/* Search */}
 
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
 
               <input
+                aria-label="Proje, kategori, rol veya yetenek ara"
                 type="text"
                 value={search}
                 onChange={(event) =>
@@ -1052,6 +1049,7 @@ export default function DiscoverPage() {
               <div className="w-full sm:w-44">
                 <FilterSelect
                   value={sortBy}
+                  label="Projeleri sırala"
                   onChange={(value) =>
                     setSortBy(
                       value as SortOption
@@ -1079,6 +1077,7 @@ export default function DiscoverPage() {
               <Button
                 variant={showFilters || hasActiveFilters ? "primary" : "secondary"}
                 aria-expanded={showFilters}
+                aria-controls="discover-filters"
                 onClick={() =>
                   setShowFilters(
                     (previous) => !previous
@@ -1105,7 +1104,7 @@ export default function DiscoverPage() {
           {/* -------------------------------------------------------------- */}
 
           {showFilters && (
-            <div className="mt-3 border-t border-[var(--color-border-subtle)] px-1 pb-1 pt-4">
+            <div id="discover-filters" className="mt-3 border-t border-[var(--color-border-subtle)] px-1 pb-1 pt-4">
               <div className="grid gap-x-3 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
                 {/* Category */}
 
@@ -1236,6 +1235,7 @@ export default function DiscoverPage() {
             </div>
           )}
         </section>
+        <div className={styles.premiumNote}><EarlyAccessBanner /></div>
 
         {/* ---------------------------------------------------------------- */}
         {/* Favorite error                                                    */}
@@ -1336,7 +1336,7 @@ export default function DiscoverPage() {
         {!loading &&
           !error &&
           filteredProjects.length > 0 && (
-            <div className="mb-4 flex items-center justify-between">
+            <div id="discover-results" className="mb-4 flex items-center justify-between">
               <p className="cc-body-sm text-[var(--color-text-secondary)]">
                 <span className="font-medium text-[var(--color-text-primary)]">
                   {filteredProjects.length}
@@ -1359,8 +1359,8 @@ export default function DiscoverPage() {
         {!loading &&
           !error &&
           filteredProjects.length > 0 && (
-            <div className="flex flex-col gap-4">
-              {filteredProjects.map((project) => {
+            <div className={styles.list}>
+              {displayProjects.map((project,index) => {
                 const daysLeft = getDaysRemaining(project.deadline);
                 const isFavorite = favorites.has(project.id);
                 const isFavoritePending = pendingFavoriteIds.has(
@@ -1368,17 +1368,21 @@ export default function DiscoverPage() {
                 );
 
                 return (
+                  <Fragment key={project.id}>
+                  {index===0&&featuredGroups.featured.length>0&&<h2>Öne Çıkan Projeler</h2>}
+                  {index===featuredGroups.featured.length&&featuredGroups.featured.length>0&&<h2>Projeler</h2>}
                   <article
                     key={project.id}
-                    className="group flex flex-col gap-5 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 transition hover:border-[var(--color-border-strong)] hover:shadow-sm sm:flex-row"
+                    className={["group", styles.projectCard].join(" ")}
                   >
                     {/* Main content */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                            {project.category && <Badge tone="neutral">{project.category}</Badge>}
-                            <Badge tone="ai" className="gap-1">
+                            {featuredGroups.featured.some(item=>item.id===project.id)&&<Badge tone="ai" className={styles.match}>Öne Çıkan</Badge>}
+                            {project.category && <Badge tone="neutral" className={styles.category}>{project.category}</Badge>}
+                            <Badge tone="ai" className={["gap-1", styles.match].join(" ")}>
                               <Sparkles className="h-3 w-3" />
                               %{project.matchPercentage} eşleşme
                             </Badge>
@@ -1390,15 +1394,6 @@ export default function DiscoverPage() {
                             </h2>
                           </Link>
 
-                          {project.matchedRole && (
-                            <p className="cc-body-sm mt-[var(--rhythm-card-secondary-gap)] flex items-center gap-1.5 text-[var(--color-text-secondary)]">
-                              <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" />
-                              Sana uygun rol:{" "}
-                              <span className="font-medium text-[var(--color-text-primary)]">
-                                {project.matchedRole}
-                              </span>
-                            </p>
-                          )}
                         </div>
 
                         <button
@@ -1406,7 +1401,8 @@ export default function DiscoverPage() {
                           onClick={() => void toggleFavorite(project.id)}
                           disabled={isFavoritePending}
                           aria-label={isFavorite ? "Favorilerden çıkar" : "Favorilere ekle"}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] transition hover:border-[var(--color-border-strong)] hover:text-[var(--color-text-primary)] disabled:opacity-50"
+                          aria-pressed={isFavorite}
+                          className={[styles.favorite, "flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] transition disabled:opacity-50"].join(" ")}
                         >
                           <Heart className={`h-4 w-4 ${isFavorite ? "fill-current text-[var(--color-text-primary)]" : ""}`} />
                         </button>
@@ -1418,37 +1414,25 @@ export default function DiscoverPage() {
                         </p>
                       )}
 
-                      {project.matchingSkills.length > 0 && (
-                        <div className="mt-[var(--rhythm-meta-gap)] flex flex-wrap gap-1.5">
-                          {project.matchingSkills.slice(0, 6).map((skill) => (
-                            <Badge key={skill} tone="neutral">
-                              {skill}
-                            </Badge>
-                          ))}
-                          {project.matchingSkills.length > 6 && (
-                            <Badge tone="neutral">+{project.matchingSkills.length - 6}</Badge>
+                      <div className={styles.projectMeta}>
+{project.matchedRole && (
+                            <p className={[styles.role, "mt-2 flex flex-wrap items-center gap-1.5 text-[var(--color-text-secondary)]"].join(" ")}>
+                              <BriefcaseBusiness className="h-3.5 w-3.5 shrink-0" />
+                              Sana uygun rol:{" "}
+                              <span className="font-medium text-[var(--color-text-primary)]">
+                                {project.matchedRole}
+                              </span>
+                            </p>
                           )}
-                        </div>
-                      )}
-
-                      <div className="cc-body-sm mt-[var(--rhythm-meta-group-gap)] flex flex-wrap items-center gap-x-4 gap-y-1 text-[var(--color-text-secondary)] empty:hidden">
-                        {project.location && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {project.location}
-                          </span>
-                        )}
-                        {project.team_required && (
-                          <span className="inline-flex items-center gap-1.5">
-                            <Users className="h-3.5 w-3.5" />
-                            Ekip projesi
-                          </span>
-                        )}
+                        {project.team_required && <span className={styles.teamMeta}><Users size={16} aria-hidden="true" />Ekip projesi</span>}
+                        {project.location && <span className={styles.locationMeta}><MapPin size={16} aria-hidden="true" />{project.location}</span>}
+                        {project.matchingSkills.slice(0, 2).map(skill => <Badge key={skill} tone="neutral" className={styles.skill}>{skill}</Badge>)}
+                        {project.matchingSkills.length > 2 && <Badge tone="neutral" className={styles.skill}>+{project.matchingSkills.length - 2}</Badge>}
                       </div>
                     </div>
 
                     {/* Metrics + action */}
-                    <div className="flex shrink-0 flex-col gap-[var(--rhythm-meta-gap)] border-t border-[var(--color-border-subtle)] pt-4 sm:w-[224px] sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
+                    <div className={styles.metrics}>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-[var(--rhythm-meta-group-gap)]">
                         <div>
                           <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
@@ -1498,14 +1482,9 @@ export default function DiscoverPage() {
                         </Badge>
                       )}
 
-                      <Link
-                        href={`/freelancers/discover/${project.id}`}
-                        className="mt-auto inline-flex h-[var(--button-height-sm)] w-full items-center justify-center gap-[var(--button-gap)] rounded-[var(--radius-button)] bg-[var(--color-primary-600)] px-[var(--button-padding-sm)] font-sans text-[length:var(--font-size-button)] font-medium leading-[var(--line-height-button)] text-white transition-colors hover:bg-[var(--color-primary-700)]"
-                      >
-                        Detayları gör
-                      </Link>
+                      <PanelAction href={`/freelancers/discover/${project.id}`} variant="primary" className="mt-auto w-full">Detayları gör<ArrowRight size={16} aria-hidden="true" /></PanelAction>
                     </div>
-                  </article>
+                  </article></Fragment>
                 );
               })}
             </div>

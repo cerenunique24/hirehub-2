@@ -1,9 +1,9 @@
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
   Check,
   ChevronDown,
-  FolderKanban,
   Search,
   ShieldCheck,
   Sparkles,
@@ -12,24 +12,18 @@ import {
 } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
 import LandingNav from "@/components/landing/LandingNav";
-import HeroMatching from "@/components/landing/HeroMatching";
+import LandingHero from "@/components/landing/LandingHero";
 import ProjectFlow from "@/components/landing/ProjectFlow";
 import FreelancerDiscovery from "@/components/landing/FreelancerDiscovery";
 import WorkspacePanel from "@/components/landing/WorkspacePanel";
 import MembershipPlans from "@/components/landing/MembershipPlans";
 import LandingFooter from "@/components/landing/LandingFooter";
 import { Reveal } from "@/components/landing/Reveal";
+import styles from "@/components/landing/LandingJourney.module.css";
 
 /* -------------------------------------------------------------------------- */
 /* Content                                                                    */
 /* -------------------------------------------------------------------------- */
-
-const VALUE_PILLARS = [
-  { icon: Sparkles, label: "AI ile doğru freelancer" },
-  { icon: FolderKanban, label: "Dakikalar içinde proje" },
-  { icon: Users, label: "Rol bazlı ekip kurma" },
-  { icon: ShieldCheck, label: "Güvenli, şeffaf çalışma" },
-];
 
 const AI_ROLES = [
   { role: "UI/UX Designer", skills: ["Figma", "Mobil tasarım", "Prototip"], focus: "Arayüz akışları ve tasarım sistemi" },
@@ -91,77 +85,17 @@ const FAQ = [
 
 export default function Home() {
   return (
-    <div className="bg-white text-[var(--color-text-primary)]">
+    <div className={styles.page}>
       <LandingNav />
 
       <main>
         {/* HERO ------------------------------------------------------------ */}
-        <section className="relative overflow-hidden">
-          <div aria-hidden className="cc-grid-bg pointer-events-none absolute inset-0" />
-
-          <div className="relative mx-auto max-w-6xl px-6 pb-16 pt-16 sm:px-10 sm:pt-24 lg:pb-24">
-            <div className="max-w-3xl">
-              <span
-                className="cc-enter inline-flex items-center gap-1.5 rounded-[var(--radius-pill)] border border-[var(--color-border-subtle)] bg-white px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]"
-                style={{ "--enter-delay": "0ms" } as React.CSSProperties}
-              >
-                <Sparkles size={12} className="text-[var(--color-primary-600)]" />
-                AI-native freelance iş birliği
-              </span>
-
-              <h1
-                className="cc-enter mt-5 text-[40px] font-semibold leading-[1.05] tracking-[-0.035em] text-[var(--color-text-primary)] sm:text-[56px] lg:text-[64px]"
-                style={{ "--enter-delay": "80ms" } as React.CSSProperties}
-              >
-                Projeni anlat.
-                <br />
-                <span className="text-[var(--color-primary-600)]">Ekibini AI kursun.</span>
-              </h1>
-
-              <p
-                className="cc-enter mt-5 max-w-xl text-[17px] leading-7 text-[var(--color-text-secondary)]"
-                style={{ "--enter-delay": "160ms" } as React.CSSProperties}
-              >
-                CollaCrew projeni analiz eder, gereken rolleri çıkarır ve seni doğru freelancerlarla tek bir çalışma
-                alanında buluşturur.
-              </p>
-
-              <div
-                className="cc-enter mt-8 flex flex-wrap items-center gap-2"
-                style={{ "--enter-delay": "240ms" } as React.CSSProperties}
-              >
-                <Link href="/register" className={buttonClasses({ variant: "primary", size: "lg" })}>
-                  Ücretsiz Başla
-                  <ArrowRight size={16} />
-                </Link>
-                <a href="#how-it-works" className={buttonClasses({ variant: "secondary", size: "lg" })}>
-                  Nasıl Çalışır?
-                </a>
-              </div>
-
-              <ul
-                className="cc-enter mt-10 grid grid-cols-2 gap-x-6 gap-y-3 sm:flex sm:flex-wrap"
-                style={{ "--enter-delay": "320ms" } as React.CSSProperties}
-              >
-                {VALUE_PILLARS.map(({ icon: Icon, label }) => (
-                  <li key={label} className="flex items-center gap-2 text-[13px] text-[var(--color-text-secondary)]">
-                    <Icon size={14} className="shrink-0 text-[var(--color-primary-600)]" />
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="cc-enter mt-14 lg:mt-16" style={{ "--enter-delay": "420ms" } as React.CSSProperties}>
-              <HeroMatching />
-            </div>
-          </div>
-        </section>
+        <LandingHero />
 
         {/* AI MATCHING / ANALYSIS ------------------------------------------ */}
-        <section id="ai-matching" className="scroll-mt-14 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/40">
+        <section id="ai-matching" className={`scroll-mt-14 ${styles.section} ${styles.analysisSection}`}>
           <span id="ai-analysis" className="sr-only" aria-hidden />
-          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 sm:px-10 lg:grid-cols-2 lg:items-center lg:gap-16 lg:py-28">
+          <div className={`mx-auto grid max-w-6xl gap-12 px-6 sm:px-10 lg:grid-cols-2 lg:items-center lg:gap-16 ${styles.analysisInner}`}>
             <div>
               <SectionEyebrow>AI proje analizi</SectionEyebrow>
               <SectionTitle>Yazdığın brief, hazır bir ekip planına dönüşür.</SectionTitle>
@@ -182,50 +116,56 @@ export default function Home() {
               </ul>
             </div>
 
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-white p-4 shadow-[var(--shadow-md)] sm:p-5">
-              <div className="rounded-[var(--radius-md)] border border-dashed border-[var(--color-border-strong)] bg-[var(--color-canvas)] p-3.5 text-sm leading-[22px] text-[var(--color-text-secondary)]">
-                &quot;Bir e-ticaret sitesi için mobil uyumlu bir arayüz ve ödeme entegrasyonuna ihtiyacım var.&quot;
-              </div>
+            <div>
+              <div className={`${styles.proof} ${styles.analysisProof}`}>
+                <div className={styles.brief}>
+                  &quot;Bir e-ticaret sitesi için mobil uyumlu bir arayüz ve ödeme entegrasyonuna ihtiyacım var.&quot;
+                </div>
 
-              <div className="my-4 flex items-center gap-2 text-xs font-medium text-[var(--color-primary-700)]">
-                <Sparkles size={13} />
-                AI analizi · 3 rol önerildi
-              </div>
+                <div className={styles.analysisLabel}>
+                  <Sparkles size={13} />
+                  AI analizi · 3 rol önerildi
+                </div>
 
-              <ul className="space-y-2">
-                {AI_ROLES.map((item, index) => (
-                  <Reveal
-                    key={item.role}
-                    as="li"
-                    variant="up"
-                    delay={index * 120}
-                    className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] px-3.5 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-[var(--color-text-primary)]">{item.role}</span>
-                      <span className="text-xs text-[var(--color-text-muted)]">Önerilen rol</span>
-                    </div>
-                    <p className="mt-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">{item.focus}</p>
-                    <div className="mt-2.5 flex flex-wrap gap-1">
-                      {item.skills.map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-[var(--radius-xs)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)]"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  </Reveal>
-                ))}
-              </ul>
+                <ul className={styles.analysisRoles}>
+                  {AI_ROLES.map((item, index) => (
+                    <Reveal
+                      key={item.role}
+                      as="li"
+                      variant="up"
+                      delay={index * 120}
+                      className={styles.analysisRow}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-semibold text-[var(--color-text-primary)]">{item.role}</span>
+                        <span className={styles.badge} data-tone="primary">Önerilen rol</span>
+                      </div>
+                      <p className="mt-1 text-[13px] leading-5 text-[var(--color-text-secondary)]">{item.focus}</p>
+                      <div className="mt-2.5 flex flex-wrap gap-1">
+                        {item.skills.map((skill) => (
+                          <span
+                            key={skill}
+                            className={styles.skill}
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </Reveal>
+                  ))}
+                </ul>
+              </div>
+              <div className={styles.aiNote}>
+                <Image src="/images/collacrew-mascot.png" alt="" width={54} height={54} sizes="54px" />
+                <span>Briefinden ekibine, ilk adım AI ile.</span>
+              </div>
             </div>
           </div>
         </section>
 
         {/* HOW IT WORKS ---------------------------------------------------- */}
-        <section id="how-it-works" className="scroll-mt-14 border-t border-[var(--color-border-subtle)]">
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
+        <section id="how-it-works" className={`scroll-mt-14 ${styles.section}`}>
+          <div className={`mx-auto max-w-6xl px-6 sm:px-10 ${styles.sectionInner}`}>
             <div className="max-w-2xl">
               <SectionEyebrow>Nasıl çalışır</SectionEyebrow>
               <SectionTitle>Briften ödemeye, tek bir akış.</SectionTitle>
@@ -235,15 +175,15 @@ export default function Home() {
               </SectionLead>
             </div>
 
-            <div className="mt-12 lg:mt-4">
+            <div className="mt-10">
               <ProjectFlow />
             </div>
           </div>
         </section>
 
         {/* FREELANCER DISCOVERY -------------------------------------------- */}
-        <section className="overflow-hidden border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/40">
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
+        <section className={`overflow-hidden ${styles.section} ${styles.discoverySection}`}>
+          <div className={`mx-auto max-w-6xl px-6 sm:px-10 ${styles.sectionInner}`}>
             <div className="max-w-2xl">
               <SectionEyebrow>Freelancer keşfi</SectionEyebrow>
               <SectionTitle>Doğru yeteneklerle iş birliği.</SectionTitle>
@@ -256,10 +196,10 @@ export default function Home() {
               <FreelancerDiscovery />
             </div>
 
-            <div className="mt-12 grid gap-px overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)] md:grid-cols-3">
+            <div className={styles.features}>
               {DISCOVERY_FEATURES.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="bg-white p-6">
-                  <Icon size={18} className="text-[var(--color-primary-600)]" />
+                <div key={title} className={styles.feature}>
+                  <span className={styles.featureIcon}><Icon size={17} aria-hidden="true" /></span>
                   <h3 className="mt-4 text-[15px] font-medium text-[var(--color-text-primary)]">{title}</h3>
                   <p className="mt-2 text-sm leading-[22px] text-[var(--color-text-secondary)]">{description}</p>
                 </div>
@@ -269,8 +209,8 @@ export default function Home() {
         </section>
 
         {/* PROJECT WORKFLOW / SAFE WORK ------------------------------------ */}
-        <section className="border-t border-[var(--color-border-subtle)]">
-          <div className="mx-auto grid max-w-6xl gap-12 px-6 py-20 sm:px-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-16 lg:py-28">
+        <section className={styles.section}>
+          <div className={`mx-auto grid max-w-6xl gap-12 px-6 sm:px-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-center lg:gap-16 ${styles.sectionInner}`}>
             <div>
               <SectionEyebrow>Proje yönetimi</SectionEyebrow>
               <SectionTitle>Güvenli çalışma, şeffaf ilerleme.</SectionTitle>
@@ -294,15 +234,15 @@ export default function Home() {
         </section>
 
         {/* MEMBERSHIP ------------------------------------------------------ */}
-        <section id="membership" className="scroll-mt-14 border-t border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/40">
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
+        <section id="membership" className={`scroll-mt-14 ${styles.section} ${styles.membershipSection}`}>
+          <div className={`mx-auto max-w-6xl px-6 sm:px-10 ${styles.sectionInner}`}>
             <MembershipPlans />
           </div>
         </section>
 
         {/* FAQ ------------------------------------------------------------- */}
-        <section id="faq" className="scroll-mt-14 border-t border-[var(--color-border-subtle)]">
-          <div className="mx-auto grid max-w-6xl gap-10 px-6 py-20 sm:px-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 lg:py-28">
+        <section id="faq" className={`scroll-mt-14 ${styles.section}`}>
+          <div className={`mx-auto grid max-w-6xl gap-10 px-6 sm:px-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16 ${styles.sectionInner}`}>
             <div>
               <SectionEyebrow>SSS</SectionEyebrow>
               <SectionTitle>Sık sorulan sorular</SectionTitle>
@@ -326,38 +266,25 @@ export default function Home() {
         </section>
 
         {/* FINAL CTA ------------------------------------------------------- */}
-        <section className="border-t border-[var(--color-border-subtle)]">
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10 lg:py-28">
-            <Reveal
-              variant="scale"
-              className="relative overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-text-primary)] px-6 py-14 text-center sm:px-12 sm:py-20"
-            >
-              <div aria-hidden className="cc-grid-bg pointer-events-none absolute inset-0 opacity-[0.08]" />
-              <div className="relative">
-                <h2 className="mx-auto max-w-2xl text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-white sm:text-4xl">
-                  Projenizi bugün AI ile analiz edin.
-                </h2>
-                <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-white/70">
-                  Ücretsiz başlayın, doğru yeteneklerle bir araya gelin.
-                </p>
-                <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
-                  <Link href="/register" className={buttonClasses({ variant: "primary", size: "lg" })}>
-                    Ücretsiz Başla
-                    <ArrowRight size={16} />
-                  </Link>
-                  <Link
-                    href="/login"
-                    className={buttonClasses({
-                      variant: "ghost",
-                      size: "lg",
-                      className: "text-white! hover:bg-white/10!",
-                    })}
-                  >
-                    Giriş Yap
-                  </Link>
-                </div>
+        <section className={styles.finalSection}>
+          <div className={styles.finalInner}>
+            <div className={styles.finalCopy}>
+              <SectionEyebrow>Birlikte başlayalım</SectionEyebrow>
+              <SectionTitle>Projenizi bugün AI ile analiz edin.</SectionTitle>
+              <SectionLead>Ücretsiz başlayın, doğru yeteneklerle bir araya gelin.</SectionLead>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link href="/register" className={buttonClasses({ variant: "primary", size: "lg" })}>
+                  Ücretsiz Başla <ArrowRight size={16} aria-hidden="true" />
+                </Link>
+                <Link href="/login" className={buttonClasses({ variant: "secondary", size: "lg" })}>
+                  Giriş Yap
+                </Link>
               </div>
-            </Reveal>
+            </div>
+            <div className={styles.finalArt} aria-hidden="true">
+              <Image src="/images/collacrew-mascot.png" alt="" width={270} height={270} sizes="(max-width: 767px) 160px, 270px" />
+              <Sparkles className={styles.finalSpark} size={22} />
+            </div>
           </div>
         </section>
       </main>
@@ -372,17 +299,17 @@ export default function Home() {
 /* -------------------------------------------------------------------------- */
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
-  return <p className="text-[13px] font-medium text-[var(--color-primary-600)]">{children}</p>;
+  return <p className={styles.eyebrow}>{children}</p>;
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h2 className="mt-3 text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-[var(--color-text-primary)] sm:text-4xl">
+    <h2 className={styles.title}>
       {children}
     </h2>
   );
 }
 
 function SectionLead({ children }: { children: React.ReactNode }) {
-  return <p className="mt-4 max-w-xl text-[15px] leading-6 text-[var(--color-text-secondary)]">{children}</p>;
+  return <p className={styles.lead}>{children}</p>;
 }

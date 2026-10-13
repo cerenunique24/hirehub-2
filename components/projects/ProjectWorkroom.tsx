@@ -47,6 +47,10 @@ import ProjectOperationsPanel from "@/components/projects/ProjectOperationsPanel
 import { DEADLINE_STATUS_LABEL, getDeadlineStatus, type DeadlineStatus } from "@/lib/utils/deadline";
 import { paymentStatusLabel } from "@/lib/payments/status";
 import { publicDisplayName } from "@/lib/utils/displayName";
+import styles from "./ProjectWorkroom.module.css";
+import { PanelBadge } from "@/components/dashboard/PanelPrimitives";
+import { Button } from "@/components/ui/Button";
+import { resolveProjectWorkflowState } from "@/lib/projects/workflow-state";
 
 export type WorkroomTeamMember = {
   teamMemberId: string;
@@ -58,6 +62,7 @@ export type WorkroomTeamMember = {
 };
 
 export type WorkroomProject = {
+  description?: string | null;
   id: string;
   client_id: string;
   title: string;
@@ -154,6 +159,7 @@ export default function ProjectWorkroom({
   onProjectChanged,
   isTeamProject = false,
   coalitionId = null,
+  initialTab = "overview",
 }: {
   project: WorkroomProject;
   teamMembers: WorkroomTeamMember[];
@@ -177,11 +183,12 @@ export default function ProjectWorkroom({
    * coalition detay sayfasındaki mesaj alanıyla AYNI konuşma.
    */
   coalitionId?: string | null;
+  initialTab?: "overview" | "milestones";
 }) {
   const supabase = useMemo(() => createClient(), []);
   const isClient = viewerRole === "client";
 
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [events, setEvents] = useState<MilestoneEvent[]>([]);
@@ -339,19 +346,18 @@ export default function ProjectWorkroom({
   const approvedCount = milestones.filter((m) => m.status === "approved").length;
   const progress = milestones.length > 0 ? Math.round((approvedCount / milestones.length) * 100) : 0;
 
-  // "Tüm aşamalar tamamlandı" — "Proje tamamlandı" değildir. Team project'te
-  // her ekip üyesinin EN AZ bir aşaması olmalı ve hepsi onaylanmış olmalı;
-  // tek freelancer projede basitçe tüm liste onaylı olmalı. Hiç aşama yoksa
-  // (proje henüz başlamamış/aşama tanımlanmamış) asla tamamlanamaz.
-  const allMilestonesApproved =
-    milestones.length > 0 &&
-    (isTeamProject
-      ? teamMembers.length > 0 &&
-        teamMembers.every((member) => {
-          const memberMilestones = milestones.filter((m) => m.freelancer_id === member.id);
-          return memberMilestones.length > 0 && memberMilestones.every((m) => m.status === "approved");
-        })
-      : milestones.every((m) => m.status === "approved"));
+  const workflowState = useMemo(
+    () => resolveProjectWorkflowState({
+      projectStatus: project.status,
+      viewerRole,
+      isTeamProject,
+      milestones,
+      currentUserId,
+      teamMemberIds: teamMembers.map((member) => member.id),
+    }),
+    [project.status, viewerRole, isTeamProject, milestones, currentUserId, teamMembers]
+  );
+  const allMilestonesApproved = workflowState.state === "Tüm aşamalar onaylandı";
 
   async function handleCompleteProject() {
     if (!window.confirm("Tüm aşamalar onaylandı. Projeyi tamamlamak istediğine emin misin? Bu işlem geri alınamaz.")) {
@@ -378,10 +384,19 @@ export default function ProjectWorkroom({
       return;
     }
 
-    // completedRow yoksa proje zaten tamamlanmıştı (ör. ikinci tıklama,
-    // bayat sekme) — güvenli no-op: tekrar bildirim göndermeye kalkışma.
+    // Filtre eşleşmediyse başka bir sekme durumu değiştirmiş olabilir.
+    // Güncel satırı doğrulamadan başarı göstermeyiz veya tekrar bildirim üretmeyiz.
     if (!completedRow) {
-      onProjectCompleted?.();
+      const { data: currentProject } = await supabase
+        .from("projects")
+        .select("status")
+        .eq("id", project.id)
+        .maybeSingle();
+      if (currentProject?.status === "completed") {
+        onProjectCompleted?.();
+      } else {
+        setError("Proje başka bir sekmede güncellendi; sayfayı yenileyip son durumu kontrol et.");
+      }
       return;
     }
 
@@ -571,81 +586,43 @@ export default function ProjectWorkroom({
     await loadMilestones();
   }
 
+  const viewerMember=teamMembers.find(member=>member.id===currentUserId);
+  const projectStatusLabel=({open:"Ekip kuruluyor",ready_to_start:"Ekip hazır · Başlamadı",in_progress:"Çalışma devam ediyor",completed:"Tamamlandı",paused:"Duraklatıldı",cancelled:"İptal edildi"} as Record<string,string>)[project.status??""]??"Tanımsız";
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap gap-2 rounded-xl bg-gray-100 p-1.5">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-              tab === t.id ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {error && <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-
-      {projectClosedMessage && (
-        <div className="rounded-xl bg-gray-100 p-4 text-sm text-gray-700">{projectClosedMessage}</div>
-      )}
-
-      {tab === "overview" && project.requirements_confirmed_at && (
-        <section className="rounded-2xl border border-green-100 bg-green-50 p-5 text-sm text-green-800">
-          <p className="font-medium">Gereksinimler hazır</p>
-          <p className="mt-1">
-            Client, işe başlanması için gerekli dosya ve bilgilerin hazır olduğunu {formatDate(project.requirements_confirmed_at)} tarihinde onayladı.
-          </p>
-          {project.requirements_note && (
-            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white/70 p-3 text-gray-700">{project.requirements_note}</p>
-          )}
-        </section>
-      )}
-
-      {tab === "overview" && !isClient && allMilestonesApproved && project.status === "in_progress" && (
-        <section className="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-sm text-blue-800">
-          Tüm aşamaların onaylandı. Client projeyi tamamladığında proje &quot;Tamamlandı&quot; durumuna
-          geçecek ve değerlendirme yapabileceksin.
-        </section>
-      )}
-
-      {tab === "overview" && isClient && allMilestonesApproved && project.status === "in_progress" && (
-        <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-green-100 bg-green-50 p-5">
-          <div>
-            <p className="font-medium text-green-900">Tüm aşamalar onaylandı</p>
-            <p className="mt-1 text-sm text-green-700">
-              İşi tamamlandı olarak işaretlemek ve değerlendirme aşamasına geçmek için projeyi tamamla.
-            </p>
+      <header className={styles.header}>
+        <div className={styles.headerTitle}><div><p className={styles.eyebrow}>Proje çalışma alanı</p><h2>{project.title}</h2></div><PanelBadge>{projectStatusLabel}</PanelBadge></div>
+        <dl className={styles.metadata}>
+          <div><dt>Senin rolün</dt><dd>{isClient ? "Proje sahibi · Client" : viewerMember?.memberRole || (currentUserId ? "Rol bilgisi bulunmuyor" : "Yükleniyor")}</dd></div>
+          <div><dt>Ekip</dt><dd>{teamMembers.length} freelancer{isTeamProject ? " · Ekip projesi" : ""}</dd></div>
+          <div><dt>Son tarih</dt><dd>{formatDate(project.deadline)}</dd></div>
+        </dl>
+      </header>
+      <section className={styles.status} data-action-required={!loading && workflowState.currentUserMustAct} aria-label="Şu anki durum" aria-live="polite">
+        <div className={styles.statusBody}>
+          <div><p className={styles.eyebrow}>Şu anki durum</p><h3>{loading ? "Durum yükleniyor" : error ? "Durum doğrulanamadı" : workflowState.state}</h3><p className={styles.nextStep}>{loading ? "Proje aşamaları kontrol ediliyor." : error ? "Aşama bilgileri alınamadı; yeniden kontrol et." : workflowState.nextStep}</p>
+            {!loading && !error && <p className={styles.actionOwner}>Aksiyon sahibi: <strong>{workflowState.currentUserMustAct ? "Sen" : workflowState.actionOwner}</strong> · {workflowState.currentUserMustAct ? "Senden işlem bekleniyor" : "Şu an senden işlem beklenmiyor"}</p>}
           </div>
-          <button
-            type="button"
-            onClick={() => void handleCompleteProject()}
-            disabled={busyId === "complete-project"}
-            className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
-          >
-            {busyId === "complete-project" && <Loader2 size={16} className="animate-spin" />}
-            Projeyi Tamamla
-          </button>
-        </section>
-      )}
+          {!loading && !error && workflowState.currentUserMustAct && (isClient && allMilestonesApproved && project.status==="in_progress" ?
+            <Button onClick={()=>void handleCompleteProject()} disabled={busyId==="complete-project"}>{busyId==="complete-project" && <Loader2 size={16} className="animate-spin" />}Projeyi Tamamla</Button> :
+            <Button onClick={()=>setTab("milestones")}>Aşamaları Aç</Button>)}
+        </div>
+        {projectClosedMessage && <p className={styles.systemMeta}>{projectClosedMessage}</p>}
+        {project.requirements_confirmed_at && <p className={styles.systemMeta}><CheckCircle2 size={15} aria-hidden="true" />Gereksinimler hazır · Client {formatDate(project.requirements_confirmed_at)} tarihinde onayladı.</p>}
+      </section>
+      <nav aria-label="Çalışma alanı bölümleri" className={styles.tabs}>
+        {TABS.map(t=><button key={t.id} type="button" onClick={()=>setTab(t.id)} aria-current={tab===t.id ? "page" : undefined} className={tab===t.id ? styles.activeTab : ""}>{t.label}</button>)}
+      </nav>
+      {error && <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {tab==="overview" && project.description && <section className={styles.context}><h3>Proje kapsamı</h3><p>{project.description}</p></section>}
+      {tab==="overview" && project.requirements_note && <section className={styles.clientNote}><h3>Client notu</h3><p>{project.requirements_note}</p></section>}
 
       {tab === "overview" && (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-medium text-gray-500">Bütçe</p>
             <p className="mt-1 font-semibold text-gray-900">{formatCurrency(Number(project.budget ?? 0))}</p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-medium text-gray-500">Teslim tarihi</p>
-            <p className="mt-1 font-semibold text-gray-900">{formatDate(project.deadline)}</p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-medium text-gray-500">Ekip</p>
-            <p className="mt-1 font-semibold text-gray-900">{teamMembers.length} freelancer</p>
           </div>
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-medium text-gray-500">Aşama ilerlemesi</p>

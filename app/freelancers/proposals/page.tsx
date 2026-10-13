@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
+import { panelRootClass, PanelBadge } from "@/components/dashboard/PanelPrimitives";
+import { buttonClasses } from "@/components/ui/Button";
+import styles from "@/components/proposals/Proposals.module.css";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
@@ -17,6 +21,7 @@ import { notifyUsers } from "@/lib/notifications";
 type Proposal = {
   id: string;
   project_id: string;
+  role: string | null;
   bid_amount: number;
   delivery_days: number;
   cover_letter: string;
@@ -50,7 +55,7 @@ type Invitation = {
 };
 
 type TopTab = "sent" | "received";
-type FilterType = "all" | "pending" | "accepted" | "rejected";
+type FilterType = "all" | "pending" | "shortlisted" | "accepted" | "rejected";
 
 function getStatusKey(status: string): FilterType {
   const normalized = status.toLowerCase();
@@ -92,30 +97,6 @@ function getStatusLabel(status: string) {
   return "Bekleyen";
 }
 
-function getStatusClass(status: string) {
-  const normalized = status.toLowerCase();
-
-  if (normalized === "cancelled" || normalized === "withdrawn" || normalized === "expired") {
-    return "bg-gray-100 text-gray-600";
-  }
-
-  if (normalized === "shortlisted") {
-    return "bg-blue-50 text-blue-700";
-  }
-
-  const key = getStatusKey(status);
-
-  if (key === "accepted") {
-    return "bg-green-50 text-green-700";
-  }
-
-  if (key === "rejected") {
-    return "bg-red-50 text-red-700";
-  }
-
-  return "bg-amber-50 text-amber-700";
-}
-
 function formatPrice(amount: number) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
@@ -144,9 +125,13 @@ export default function OffersPage() {
   // gerektirmeden, bu sayfanın mevcut yapısını değiştirmeden çalışır.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (new URLSearchParams(window.location.search).get("submitted") === "1") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tab") === "received") setActiveTab("received");
+    if (params.get("submitted") === "1") {
       setJustSubmitted(true);
-      window.history.replaceState(null, "", window.location.pathname);
+      params.delete("submitted");
+      const query = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (query ? `?${query}` : ""));
     }
   }, []);
 
@@ -190,6 +175,7 @@ export default function OffersPage() {
         `
           id,
           project_id,
+          role,
           bid_amount,
           delivery_days,
           cover_letter,
@@ -219,6 +205,7 @@ export default function OffersPage() {
     const normalizedData: Proposal[] = (data ?? []).map((item: any) => ({
       id: item.id,
       project_id: item.project_id,
+      role: item.role ?? null,
       bid_amount: Number(item.bid_amount),
       delivery_days: Number(item.delivery_days),
       cover_letter: item.cover_letter,
@@ -425,6 +412,7 @@ export default function OffersPage() {
   const proposalCounts = useMemo(() => {
     return {
       all: proposals.length,
+      shortlisted: proposals.filter(item => item.status.toLowerCase() === "shortlisted").length,
       pending: proposals.filter(
         (item) => getStatusKey(item.status) === "pending"
       ).length,
@@ -440,6 +428,7 @@ export default function OffersPage() {
   const invitationCounts = useMemo(() => {
     return {
       all: invitations.length,
+      shortlisted: 0,
       pending: invitations.filter(
         (item) => getStatusKey(item.status) === "pending"
       ).length,
@@ -454,6 +443,7 @@ export default function OffersPage() {
 
   const filteredProposals = useMemo(() => {
     if (proposalFilter === "all") return proposals;
+    if (proposalFilter === "shortlisted") return proposals.filter(item => item.status.toLowerCase() === "shortlisted");
     return proposals.filter(
       (item) => getStatusKey(item.status) === proposalFilter
     );
@@ -473,15 +463,14 @@ export default function OffersPage() {
     activeTab === "sent" ? setProposalFilter : setInvitationFilter;
 
   return (
-    <main className="w-full p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">Teklifler</h1>
-
-        <p className="mt-2 text-sm text-gray-500">
-          Gönderdiğin teklifleri ve sana gelen ekip davetlerini buradan
-          takip et.
-        </p>
-      </div>
+    <main className={[panelRootClass, styles.page].join(" ")}>
+      <header className={styles.header}>
+        <div><span className={styles.eyebrow}>Teklif merkezi</span>
+          <h1>Tekliflerin</h1>
+          <p>Gönderdiğin teklifleri takip et, gelen davetlerini incele ve yeni fırsatlara hazırlan.</p>
+        </div>
+        <DashboardMascot pose="pencil" size={130} className={styles.mascot} eager />
+      </header>
 
       {justSubmitted && (
         <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
@@ -493,6 +482,7 @@ export default function OffersPage() {
       <div className="mb-6 flex gap-2 border-b border-gray-200">
         <button
           type="button"
+          aria-pressed={activeTab === "sent"}
           onClick={() => setActiveTab("sent")}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "sent"
@@ -509,6 +499,7 @@ export default function OffersPage() {
 
         <button
           type="button"
+          aria-pressed={activeTab === "received"}
           onClick={() => setActiveTab("received")}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "received"
@@ -524,55 +515,19 @@ export default function OffersPage() {
         </button>
       </div>
 
-      {/* Alt tablar: Tümü / Bekleyen / Kabul Edilen / Reddedilen */}
-      <div className="mb-8 flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => setFilterValue("all")}
-          className={`rounded-lg px-4 py-1.5 text-sm transition ${
-            filterValue === "all"
-              ? "bg-[var(--color-primary-600)] text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Tümü ({counts.all})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterValue("pending")}
-          className={`rounded-lg px-4 py-1.5 text-sm transition ${
-            filterValue === "pending"
-              ? "bg-[var(--color-primary-600)] text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Bekleyen ({counts.pending})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterValue("accepted")}
-          className={`rounded-lg px-4 py-1.5 text-sm transition ${
-            filterValue === "accepted"
-              ? "bg-[var(--color-primary-600)] text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Kabul Edilen ({counts.accepted})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterValue("rejected")}
-          className={`rounded-lg px-4 py-1.5 text-sm transition ${
-            filterValue === "rejected"
-              ? "bg-[var(--color-primary-600)] text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-        >
-          Reddedilen ({counts.rejected})
-        </button>
+      <div className={styles.filters} role="group" aria-label="Teklif durumuna göre filtrele">
+        {[
+          { value: "all", label: "Tümü" },
+          { value: "pending", label: "Bekleyen" },
+          ...(activeTab === "sent" ? [{ value: "shortlisted", label: "Kısa Listede" }] : []),
+          { value: "accepted", label: "Kabul Edilen" },
+          { value: "rejected", label: "Reddedilen" },
+        ].map(filter => <button key={filter.value} type="button"
+          onClick={() => setFilterValue(filter.value as FilterType)}
+          aria-pressed={filterValue === filter.value}
+          className={filterValue === filter.value ? styles.selected : ""}>
+          {filter.label}<span>{counts[filter.value as FilterType]}</span>
+        </button>)}
       </div>
 
       {/* GÖNDERİLEN TEKLİFLER */}
@@ -593,7 +548,7 @@ export default function OffersPage() {
               <button
                 type="button"
                 onClick={() => void loadProposals()}
-                className="mt-5 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
+                className={buttonClasses({variant:"primary",size:"sm",className:"mt-5"})}
               >
                 Tekrar Dene
               </button>
@@ -619,7 +574,7 @@ export default function OffersPage() {
                 {proposalFilter === "all" && (
                   <Link
                     href="/freelancers/discover"
-                    className="mt-5 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
+                    className={buttonClasses({variant:"primary",size:"sm",className:"mt-5"})}
                   >
                     Projeleri Keşfet
                   </Link>
@@ -630,14 +585,14 @@ export default function OffersPage() {
           {!proposalsLoading &&
             !proposalsError &&
             filteredProposals.length > 0 && (
-              <div className="space-y-5">
+              <div className={styles.list}>
                 {filteredProposals.map((proposal) => {
                   const project = proposal.project;
 
                   return (
                     <div
                       key={proposal.id}
-                      className="flex w-full items-center justify-between gap-6 rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
+                      className={styles.proposalCard}
                     >
                       <div className="min-w-0 flex-1">
                         <div className="mb-3 flex flex-wrap items-center gap-3">
@@ -645,19 +600,14 @@ export default function OffersPage() {
                             {project?.title ?? "Proje bulunamadı"}
                           </h2>
 
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs ${getStatusClass(
-                              proposal.status
-                            )}`}
-                          >
-                            {getStatusLabel(proposal.status)}
-                          </span>
+                          <PanelBadge>{getStatusLabel(proposal.status)}</PanelBadge>
                         </div>
 
                         <p className="mb-5 text-sm text-gray-500">
-                          {project?.project_type ?? "Proje"}
+                          {proposal.role || project?.project_type || "Rol belirtilmedi"}
                         </p>
 
+                        {proposal.cover_letter && <p className={styles.summary}>{proposal.cover_letter}</p>}
                         <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
                           <div>
                             <span className="mb-1 block text-gray-400">
@@ -688,11 +638,11 @@ export default function OffersPage() {
                         </div>
                       </div>
 
-                      <div className="flex shrink-0 gap-3">
+                      <div className={styles.actions}>
                         {project?.client_id && (
                           <Link
                             href={`/freelancers/messages?user=${project.client_id}&proposal=${proposal.id}`}
-                            className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                            className={buttonClasses({variant:"primary",size:"sm",className:""})}
                           >
                             Mesajlar
                           </Link>
@@ -700,7 +650,7 @@ export default function OffersPage() {
 
                         <Link
                           href={`/freelancers/proposals/${proposal.id}`}
-                          className="rounded-xl bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
+                          className={buttonClasses({variant:"secondary",size:"sm"})}
                         >
                           Teklifimi Göster
                         </Link>
@@ -733,7 +683,7 @@ export default function OffersPage() {
               <button
                 type="button"
                 onClick={() => void loadInvitations()}
-                className="mt-5 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
+                className={buttonClasses({variant:"primary",size:"sm",className:"mt-5"})}
               >
                 Tekrar Dene
               </button>
@@ -764,22 +714,16 @@ export default function OffersPage() {
                 {filteredInvitations.map((invitation) => (
                   <div
                     key={invitation.id}
-                    className="w-full rounded-xl border border-gray-200 bg-white p-5 transition hover:shadow-sm"
+                    className={styles.invitationCard}
                   >
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className={styles.invitationRow}>
                       <div className="min-w-0 flex-1">
                         <div className="mb-3 flex flex-wrap items-center gap-3">
                           <h2 className="text-lg font-semibold text-gray-900">
                             {invitation.project?.title ?? "Proje bulunamadı"}
                           </h2>
 
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs ${getStatusClass(
-                              invitation.status
-                            )}`}
-                          >
-                            {getStatusLabel(invitation.status)}
-                          </span>
+                          <PanelBadge>{getStatusLabel(invitation.status)}</PanelBadge>
                         </div>
 
                         <p className="mb-5 text-sm text-gray-500">
@@ -820,16 +764,16 @@ export default function OffersPage() {
                         </div>
 
                         {invitation.message && (
-                          <p className="mt-4 text-sm leading-6 text-gray-600">
+                          <p className={styles.summary}>
                             {invitation.message}
                           </p>
                         )}
                       </div>
 
-                      <div className="flex shrink-0 flex-wrap gap-3">
+                      <div className={styles.actions}>
                         <Link
-                          href={`/freelancers/messages?user=${invitation.client_id}`}
-                          className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-200"
+                          href={`/freelancers/messages?user=${invitation.client_id}&project=${invitation.project_id}`}
+                          className={buttonClasses({variant:"secondary",size:"sm"})}
                         >
                           <MessageCircle className="h-4 w-4" />
                           Mesaj
@@ -846,7 +790,7 @@ export default function OffersPage() {
                                   "accepted"
                                 )
                               }
-                              className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
+                              className={buttonClasses({variant:"primary",size:"sm",className:""})}
                             >
                               {respondingId === invitation.id
                                 ? "İşleniyor..."
@@ -862,7 +806,7 @@ export default function OffersPage() {
                                   "rejected"
                                 )
                               }
-                              className="rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                              className={buttonClasses({variant:"secondary",size:"sm"})}
                             >
                               Reddet
                             </button>

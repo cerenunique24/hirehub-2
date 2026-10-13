@@ -26,7 +26,7 @@ const menuGroups: SidebarMenuItem[][] = [
   [
     { name: "Freelancerlar", href: "/client/freelancers", icon: Users },
     { name: "Projelerim", href: "/client/projects", icon: FolderKanban },
-    { name: "Tekliflerim", href: "/client/proposals", icon: FileText },
+    { name: "Teklifler / Davetler", href: "/client/proposals", icon: FileText },
     { name: "Koalisyonlar", href: "/client/coalitions", icon: UsersRound },
     { name: "Ödemeler", href: "/client/payments", icon: CreditCard },
     { name: "CollaCrew AI", href: "/client/ai", icon: Sparkles },

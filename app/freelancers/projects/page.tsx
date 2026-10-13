@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
+import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
+import styles from "@/components/projects/MyProjects.module.css";
 import {
   CalendarDays,
-  FolderKanban,
+  ArrowRight,
   Loader2,
   AlertCircle,
   Users,
@@ -41,44 +43,31 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+type ProjectTab = "all" | "active" | "waiting" | "completed";
+const filters: { value: ProjectTab; label: string }[] = [{value:"all",label:"Tümü"},{value:"active",label:"Aktif"},{value:"waiting",label:"Başlangıç Bekleyen"},{value:"completed",label:"Tamamlanan"}];
 function getStatusLabel(status: string | null) {
-  switch (status) {
-    case "in_progress":
-      return "Devam Ediyor";
-    case "completed":
-      return "Tamamlandı";
-    case "cancelled":
-      return "İptal Edildi";
-    case "paused":
-      return "Duraklatıldı";
-    case "ready_to_start":
-      return "Başlamayı Bekliyor";
-    default:
-      return "Aktif";
-  }
+ switch(status) {
+ case "in_progress": return "Çalışma devam ediyor";
+ case "completed": return "Tamamlandı";
+ case "cancelled": return "İptal edildi";
+ case "paused": return "Duraklatıldı";
+ case "ready_to_start": return "Ekip hazır · Başlamadı";
+ default: return "Tanımsız";
+ }
 }
-
-// Semantik renk sistemi: aktif/devam eden → primary blue, tamamlanan →
-// yeşil, reddedilen/iptal → kırmızı-nötr, bekleyen → amber. Diğer proje/
-// teklif status badge'leriyle (ProjectWorkroom, proposals) aynı ölçü
-// sistemi: rounded-full px-3 py-1 text-xs font-medium.
-function getStatusClass(status: string | null) {
-  switch (status) {
-    case "in_progress":
-      return "bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
-    case "completed":
-      return "bg-green-50 text-green-700";
-    case "cancelled":
-      return "bg-red-50 text-red-700";
-    case "paused":
-      return "bg-gray-100 text-gray-600";
-    case "ready_to_start":
-      return "bg-amber-50 text-amber-700";
-    default:
-      return "bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
-  }
+function nextStep(status: string | null) {
+ switch(status) {
+ case "in_progress": return "Çalışma alanında sıradaki aşamayı kontrol et.";
+ case "ready_to_start": return "Proje başlangıcı bekleniyor";
+ case "paused": return "Projenin devam etmesi bekleniyor";
+ case "completed": return "Tamamlanan çalışmanı görüntüle.";
+ case "cancelled": return "Proje iptal edildi.";
+ default: return "Proje detaylarını incele.";
+ }
 }
-
+function matchesTab(status: string | null, tab: ProjectTab) {
+ return tab === "all" || (tab === "active" && status === "in_progress") || (tab === "waiting" && status === "ready_to_start") || (tab === "completed" && status === "completed");
+}
 export default function ProjectsPage() {
   const supabase = useMemo(() => createClient(), []);
 
@@ -86,7 +75,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [tab, setTab] = useState<"all" | "active">("all");
+  const [tab, setTab] = useState<ProjectTab>("all");
 
   useEffect(() => {
     async function loadProjects() {
@@ -162,8 +151,8 @@ export default function ProjectsPage() {
     void loadProjects();
   }, [supabase]);
 
-  const activeCount = projects.filter((project) => project.status === "in_progress").length;
-  const visibleProjects = tab === "active" ? projects.filter((project) => project.status === "in_progress") : projects;
+  const visibleProjects = projects.filter(project => matchesTab(project.status, tab));
+  const isEmpty = !error && projects.length === 0;
 
   if (loading) {
     return (
@@ -172,112 +161,51 @@ export default function ProjectsPage() {
           <Loader2 size={20} className="animate-spin" />
           Projeler yükleniyor...
         </div>
-      </main>
+       <div className={styles.bottomAccent} aria-hidden="true"><DashboardMascot pose="laptop" size={130} className={styles.mascot} /></div>
+   </main>
     );
   }
 
   return (
-    <main className="p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">Projelerim</h1>
-        <p className="mt-2 text-sm text-gray-500">
-          Ekibine dahil olduğun ve üzerinde çalıştığın projeleri buradan yönetebilirsin.
-        </p>
-      </div>
-
-      {error && (
-        <div className="mb-6 flex gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-          <AlertCircle size={18} className="mt-0.5 shrink-0" />
-          <p>{error}</p>
-        </div>
-      )}
-
-      <div className="mb-8 flex gap-2 rounded-xl bg-gray-100 p-1.5 w-fit">
-        <button
-          type="button"
-          onClick={() => setTab("all")}
-          className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-            tab === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
-          }`}
-        >
-          Tüm Projeler ({projects.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("active")}
-          className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-            tab === "active" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-800"
-          }`}
-        >
-          Aktif Projeler ({activeCount})
-        </button>
-      </div>
-
-      {!error && visibleProjects.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
-          <FolderKanban size={36} className="mx-auto text-gray-400" />
-          <h2 className="mt-4 text-lg font-semibold text-gray-900">
-            {tab === "active" ? "Henüz aktif bir projen yok" : "Henüz bir projen yok"}
-          </h2>
-          <p className="mt-2 text-sm text-gray-500">
-            {tab === "active"
-              ? "Bir proje başlatıldığında burada görünecek."
-              : "Gönderdiğin bir teklif kabul edildiğinde proje burada görünecek."}
-          </p>
-          <Link
-            href="/freelancers/discover"
-            className="mt-6 inline-flex rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white"
-          >
-            Projeleri keşfet
-          </Link>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-        {visibleProjects.map((project) => {
-          const href =
-            project.status === "in_progress" || project.status === "completed"
-              ? `/freelancers/projects/${project.id}`
-              : `/freelancers/discover/${project.id}`;
-
-          return (
-            <Link
-              key={project.id}
-              href={href}
-              className="group rounded-xl border border-gray-200 bg-white p-5 transition hover:border-gray-300 hover:shadow-sm"
-            >
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <h2 className="font-semibold text-gray-900">{project.title}</h2>
-                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${getStatusClass(project.status)}`}>
-                  {getStatusLabel(project.status)}
-                </span>
-              </div>
-
-              <p className="mb-5 line-clamp-2 text-sm text-gray-500">
-                {project.description || "Proje açıklaması bulunmuyor."}
-              </p>
-
-              {project.membership.role && (
-                <div className="mb-4 rounded-xl bg-gray-50 p-4">
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <Users size={15} />
-                    <span>Projede Rolün</span>
-                  </div>
-                  <p className="mt-1 text-sm font-semibold text-gray-900">{project.membership.role}</p>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between border-t border-gray-100 pt-4 text-sm">
-                <span className="flex items-center gap-2 text-gray-500">
-                  <CalendarDays size={16} />
-                  Teslim tarihi
-                </span>
-                <span className="font-medium text-gray-900">{formatDate(project.deadline)}</span>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </main>
+   <main className={[panelRootClass, styles.page].join(" ")}>
+    <header className={styles.header}>
+     <div className={styles.intro}>
+      <h1>Projelerim</h1>
+      <p>Aktif, bekleyen ve tamamlanan projelerini tek yerden takip et.</p>
+     </div>
+     <PanelAction href="/freelancers/discover">Projeleri Keşfet<ArrowRight size={16} /></PanelAction>
+    </header>
+    {error && <div className={styles.error} role="alert"><AlertCircle size={18} /><p>{error}</p></div>}
+    {!error && <div className={styles.filters} role="group" aria-label="Proje durumuna göre filtrele">
+     {filters.map(filter => <button key={filter.value} type="button" aria-pressed={tab === filter.value} onClick={() => setTab(filter.value)} className={tab === filter.value ? styles.selected : ""}>
+      {filter.label}<span>{projects.filter(project => matchesTab(project.status, filter.value)).length}</span>
+     </button>)}
+    </div>}
+    {!error && visibleProjects.length === 0 && <section className={styles.empty}>
+     <h2>{isEmpty ? "Henüz aktif projen yok" : "Bu durumda bir projen yok"}</h2>
+     <p>{isEmpty ? "Sana uygun projeleri keşfedebilir veya gelen davetleri inceleyebilirsin." : "Diğer durumları görmek için proje filtresini değiştirebilirsin."}</p>
+     {isEmpty && <PanelAction href="/freelancers/discover" variant="primary">Projeleri keşfet</PanelAction>}
+    </section>}
+    <div className={styles.list}>
+     {visibleProjects.map(project => {
+      const workspace = project.status === "in_progress" || project.status === "completed";
+      const href = workspace ? "/freelancers/projects/" + project.id : "/freelancers/discover/" + project.id;
+      return <article key={project.id} className={styles.card}>
+       <div className={styles.cardHeading}><h2>{project.title}</h2><PanelBadge>{getStatusLabel(project.status)}</PanelBadge></div>
+       <p className={styles.description}>{project.description || "Proje açıklaması bulunmuyor."}</p>
+       <dl className={styles.metadata}>
+        <div><dt><Users size={16} />Projede rolün</dt><dd>{project.membership.role || "Belirtilmedi"}</dd></div>
+        <div><dt><CalendarDays size={16} />Teslim tarihi</dt><dd>{formatDate(project.deadline)}</dd></div>
+       </dl>
+       <div className={styles.cardFooter}><div><span>Sıradaki adım</span><p>{nextStep(project.status)}</p></div>
+        <PanelAction href={href} variant={project.status === "in_progress" ? "primary" : "secondary"}>
+         {project.status === "in_progress" ? "Çalışma alanını aç" : project.status === "completed" ? "Projeyi görüntüle" : "Detayları gör"}<ArrowRight size={16} />
+        </PanelAction>
+       </div>
+      </article>;
+     })}
+    </div>
+    <div className={styles.bottomAccent} aria-hidden="true"><DashboardMascot pose="laptop" size={130} className={styles.mascot} /></div>
+   </main>
   );
 }

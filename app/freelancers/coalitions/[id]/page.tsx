@@ -1,20 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
-  CalendarDays,
   Loader2,
   MessageSquare,
-  Users,
   UserPlus,
   LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchBudgetBreakdown, getTeamCompletion, type TeamCompletion } from "@/lib/projects/teamReadiness";
 import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+import { panelRootClass, PanelBadge, PanelAction, PanelSection } from "@/components/dashboard/PanelPrimitives";
+import { Button } from "@/components/ui/Button";
+import { coalitionDetailSummary, coalitionActivity, coalitionWork, coalitionProjectLabel, coalitionProjectHref, coalitionStageLabel, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
+import styles from "@/components/coalitions/Coalitions.module.css";
 import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Coalition = {
@@ -35,6 +38,7 @@ type Project = {
   created_at: string;
   deadline: string | null;
   estimated_duration: string | null;
+  team_required: boolean | null;
   budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
 };
 
@@ -66,12 +70,15 @@ export default function CoalitionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const router = useRouter();
+  const overviewRef=useRef<HTMLElement | null>(null);
   const [coalition, setCoalition] = useState<Coalition | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [teamCompletion, setTeamCompletion] = useState<TeamCompletion | null>(null);
   const [members, setMembers] = useState<CoalitionMember[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selfMembership, setSelfMembership] = useState<SelfMembership | null>(null);
+  const [stages, setStages] = useState<CoalitionStage[] | null>(null);
+  const [projectMemberIds, setProjectMemberIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [leaving, setLeaving] = useState(false);
@@ -173,7 +180,7 @@ export default function CoalitionDetailPage({
           } = await supabase
             .from("projects")
             .select(
-              "id, title, description, status, created_at, deadline, estimated_duration"
+              "id, title, description, status, created_at, deadline, estimated_duration, team_required"
             )
             .eq("id", coalitionData.project_id)
             .maybeSingle();
@@ -197,18 +204,25 @@ export default function CoalitionDetailPage({
           setProject(projectData ? { ...projectData, budget_breakdown: budgetBreakdown } : null);
 
           if (projectData) {
-            const { data: teamMemberRows } = await supabase
+            const { data: teamMemberRows, error: teamMemberError } = await supabase
               .from("project_team_members")
               .select("freelancer_id, role")
               .eq("project_id", projectData.id)
               .eq("status", "active");
 
+            if (teamMemberError) {
+              setErrorMessage("Ekip rolleri yüklenemedi. Lütfen sayfayı yenile.");
+              return;
+            }
+
             setTeamCompletion(
-              getTeamCompletion(
+              budgetBreakdown.length ? getTeamCompletion(
                 budgetBreakdown,
                 (teamMemberRows ?? []).map((row) => ({ role: row.role }))
-              )
+              ) : null
             );
+
+            setProjectMemberIds((teamMemberRows ?? []).map(row=>row.freelancer_id));
 
             projectRoleByFreelancer = new Map(
               (teamMemberRows ?? []).map((row) => [row.freelancer_id, row.role as string])
@@ -322,6 +336,14 @@ export default function CoalitionDetailPage({
           });
 
         setMembers(normalizedMembers);
+        if(coalitionData.project_id) {
+          const result = await supabase.from("project_milestones")
+            .select("id, project_id, title, status, freelancer_id, due_date, sort_order, submitted_at, approved_at, revision_requested_at")
+            .eq("project_id",coalitionData.project_id).order("sort_order",{ascending:true});
+          if(result.error) console.error("Coalition milestones could not be loaded",result.error);
+          setStages(result.error ? null : result.data as CoalitionStage[]);
+        } else setStages([]);
+
       } catch (error) {
         console.error(
           "Coalition detail page error:",
@@ -338,6 +360,15 @@ export default function CoalitionDetailPage({
 
     void loadCoalition();
   }, [params]);
+
+  useEffect(() => {
+    if (loading || errorMessage) return;
+    const frame=requestAnimationFrame(() => {
+      if(window.location.hash==="#team-messages") document.getElementById("team-messages")?.scrollIntoView({block:"start"});
+      else overviewRef.current?.scrollIntoView({block:"start"});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading,errorMessage]);
 
   const handleLeave = async () => {
     if (!selfMembership) return;
@@ -382,11 +413,6 @@ export default function CoalitionDetailPage({
     member.role === "owner" ||
     (coalition !== null && member.user_id === coalition.created_by);
 
-  const getMemberTitle = (member: CoalitionMember) => {
-    if (isProjectOwner(member)) return "Proje Sahibi";
-    return member.profile?.title || "Freelancer";
-  };
-
   const getInitial = (member: CoalitionMember) => {
     return getMemberName(member)
       .charAt(0)
@@ -397,32 +423,13 @@ export default function CoalitionDetailPage({
     return member.user_id === currentUserId;
   };
 
-  const getProjectStatusLabel = (status: string) => {
-    switch (status) {
-      case "open":
-        return "Açık";
-
-      case "in_progress":
-        return "Devam ediyor";
-
-      case "completed":
-        return "Tamamlandı";
-
-      case "cancelled":
-        return "İptal edildi";
-
-      default:
-        return status;
-    }
-  };
-
   // --------------------------------------------------
   // Loading
   // --------------------------------------------------
 
   if (loading) {
     return (
-      <main className="w-full p-6">
+      <main className={[panelRootClass, styles.page].join(" ")}>
         <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
           <Loader2
             size={24}
@@ -443,7 +450,7 @@ export default function CoalitionDetailPage({
 
   if (errorMessage || !coalition) {
     return (
-      <main className="w-full p-6">
+      <main className={[panelRootClass, styles.page].join(" ")}>
         <Link
           href="/freelancers/coalitions"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
@@ -469,433 +476,79 @@ export default function CoalitionDetailPage({
   // Main
   // --------------------------------------------------
 
+  const work=coalitionWork(project,stages,currentUserId,projectMemberIds);
+  const statusSummary=coalitionDetailSummary(work,project,stages);
+  const stagesHref=project ? coalitionProjectHref(project)+"?tab=milestones" : "";
+  const ownMember=members.find(member=>isCurrentUser(member));
+  const roleCapacityKnown=Boolean(project?.budget_breakdown?.length);
+  const events=coalitionActivity(coalition.created_at,members.map(member=>({id:member.id,joined_at:member.joined_at,name:getMemberName(member)})),stages);
+
   return (
-    <main className="w-full p-6">
-      {/* Back */}
-
-      {leaveError && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {leaveError}
-        </div>
-      )}
-
-      <div className="mb-8">
-        <Link
-          href="/freelancers/coalitions"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
-        >
-          <ArrowLeft size={16} />
-          Koalisyonlarım
-        </Link>
-      </div>
-
-      {/* Coalition Header */}
-
-      <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold text-gray-900">
-                {coalition.name}
-              </h1>
-
-              <span
-                className={
-                  coalition.status === "active"
-                    ? "rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700"
-                    : "rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700"
-                }
-              >
-                {coalition.status === "active"
-                  ? "Aktif"
-                  : "Tamamlandı"}
-              </span>
-            </div>
-
-            {coalition.description && (
-              <p className="max-w-3xl text-sm leading-6 text-gray-500">
-                {coalition.description}
-              </p>
-            )}
-
-            <div className="mt-5 flex flex-wrap items-center gap-5 text-sm text-gray-400">
-              <div className="flex items-center gap-2">
-                <CalendarDays size={16} />
-
-                <span>
-                  {formatDate(coalition.created_at)} tarihinde
-                  oluşturuldu
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Users size={16} />
-
-                <span>
-                  {members.length} ekip üyesi
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Actions */}
-
-          {coalition.status === "active" && (
-            <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-              <Link
-                href={`/freelancers/freelancers?coalitionId=${coalition.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-              >
-                <UserPlus size={17} />
-                Ekip Üyesi Öner
-              </Link>
-
-              {selfMembership && (
-                <button
-                  type="button"
-                  disabled={leaving}
-                  onClick={() => {
-                    if (window.confirm("Bu ekipten ayrılmak istediğine emin misin?")) {
-                      void handleLeave();
-                    }
-                  }}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {leaving ? (
-                    <Loader2 size={17} className="animate-spin" />
-                  ) : (
-                    <LogOut size={17} />
-                  )}
-                  Ekipten Ayrıl
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Project */}
-
-      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+    <main ref={overviewRef} className={[panelRootClass,styles.page].join(" ")}>
+      <Link href="/freelancers/coalitions" className={styles.back}><ArrowLeft size={16} />Koalisyonların</Link>
+      {leaveError && <div className={styles.error} role="alert">{leaveError}</div>}
+      <header className={styles.detailHeader}>
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">
-            Proje
-          </h2>
-
-          <p className="mt-1 text-sm text-gray-500">
-            Bu koalisyon bir proje kapsamında çalışır.
-          </p>
+          <span className={styles.eyebrow}>Ekip koordinasyon alanı</span>
+          <div className={styles.cardHeading}><h1>{coalition.name}</h1><div className={styles.labeledBadge}><span>Koalisyon</span><PanelBadge>{coalition.status==="active"?"Aktif":"Tamamlandı"}</PanelBadge></div></div>
+          <p className={styles.projectName}>{project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}</p>
+          <p className={styles.secondary}>Senin rolün: {ownMember?.projectRole || "Proje rolü belirtilmedi"} · {members.length} ekip üyesi</p>
+          {project && <div className={styles.statusLine}><span>Proje</span><PanelBadge>{coalitionProjectLabel(project.status)}</PanelBadge></div>}
         </div>
-
-        {project ? (
-          <div className="mt-6 rounded-xl border border-gray-100 bg-gray-50 p-5">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold text-gray-900">
-                  {project.title}
-                </h3>
-
-                {project.description && (
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-500">
-                    {project.description}
-                  </p>
-                )}
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-600">
-                    {getProjectStatusLabel(project.status)}
-                  </span>
-
-                  {project.estimated_duration && (
-                    <span className="rounded-full bg-white px-3 py-1 text-xs text-gray-500">
-                      {project.estimated_duration}
-                    </span>
-                  )}
-
-                  {project.deadline && (
-                    <span className="rounded-full bg-white px-3 py-1 text-xs text-gray-500">
-                      Son tarih: {formatDate(project.deadline)}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white">
-                <BriefcaseIcon />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="mt-6 rounded-xl bg-gray-50 p-6">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
-                <BriefcaseIcon />
-              </div>
-
-              <h3 className="mt-4 text-sm font-medium text-gray-900">
-                Proje bağlantısı bulunmuyor
-              </h3>
-
-              <p className="mt-2 max-w-md text-sm leading-6 text-gray-500">
-                Bu koalisyon henüz bir projeye bağlanmamış.
-              </p>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* Team Status */}
-
-      {teamCompletion && (
-        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Ekip Durumu
-              </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                {teamCompletion.ready
-                  ? "Tüm ekip üyeleri projeye dahil oldu."
-                  : `${teamCompletion.filledRoles} / ${teamCompletion.totalRoles} rol tamamlandı.`}
-              </p>
-            </div>
-
-            <span
-              className={
-                teamCompletion.ready
-                  ? "w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700"
-                  : "w-fit rounded-full bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700"
-              }
-            >
-              {teamCompletion.ready ? "Ekip hazır" : "Ekip oluşturuluyor"}
-            </span>
-          </div>
-
-          {teamCompletion.roles.length > 0 && (
-            <div className="mt-5 space-y-2">
-              {teamCompletion.roles.map((role) => (
-                <div
-                  key={role.role}
-                  className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5 text-sm text-gray-700"
-                >
-                  <span>{role.role}</span>
-                  <span className="text-xs text-gray-500">
-                    {role.filled} / {role.capacity}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Team Messages */}
-
-      {currentUserId && (
-        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-            <MessageSquare size={18} />
-            Ekip Mesajları
-          </h2>
-
-          <p className="mt-1 text-sm text-gray-500">
-            Proje başlamadan önce ekiple burada hazırlık yapabilirsin.
-          </p>
-
-          <div className="mt-4">
-            <TeamMessagesPanel
-              coalitionId={coalition.id}
-              currentUserId={currentUserId}
-              memberLabels={members.map((member) => ({
-                id: member.user_id,
-                name: getMemberName(member),
-              }))}
-            />
-          </div>
-        </section>
-      )}
-
-      {/* Team Members */}
-
-      <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Ekip Üyeleri
-            </h2>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Bu projede aktif olarak birlikte çalışan
-              freelancerlar.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Users size={17} />
-            {members.length} kişi
-          </div>
+        <div className={styles.actions}>
+          {currentUserId && <PanelAction href="#team-messages"><MessageSquare size={16} />Mesajlara git</PanelAction>}
+          {project && <PanelAction href={coalitionProjectHref(project)}>Bağlı projeyi gör</PanelAction>}
         </div>
-
-        {members.length === 0 ? (
-          <div className="rounded-xl bg-gray-50 p-6 text-center">
-            <Users
-              size={24}
-              className="mx-auto text-gray-400"
-            />
-
-            <p className="mt-3 text-sm text-gray-500">
-              Henüz aktif ekip üyesi yok.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {members.map((member) => (
-              <div
-                key={member.id}
-                className="flex flex-col gap-4 rounded-xl border border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex items-center gap-4">
-                  {member.profile?.avatar_url ? (
-                    <img
-                      src={member.profile.avatar_url}
-                      alt={getMemberName(member)}
-                      className="h-11 w-11 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-600">
-                      {getInitial(member)}
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900">
-                        {getMemberName(member)}
-                      </p>
-
-                      {isCurrentUser(member) && (
-                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
-                          Siz
-                        </span>
-                      )}
-                    </div>
-
-                    <p className="mt-1 text-xs text-gray-500">
-                      {getMemberTitle(member)}
-                    </p>
-                  </div>
-                </div>
-
-                <span className="w-fit rounded-full bg-gray-50 px-3 py-1 text-xs text-gray-500">
-                  {isProjectOwner(member)
-                    ? "Proje Sahibi"
-                    : member.projectRole || "Ekip Üyesi"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+      </header>
+      <section className={styles.coordinationSummary} data-action-required={work.currentUserMustAct} aria-labelledby="workflow-heading">
+        <div className={styles.workflowTop}>
+          <div><p className={styles.eyebrow}>Şu anki durum</p><h2 id="workflow-heading">{statusSummary.headline}</h2></div>
+          <PanelBadge tone={statusSummary.tone}>{work.state}</PanelBadge>
+        </div>
+        <p className={styles.nextStep}>{work.nextStep}</p>
+        <dl className={styles.coordinationFacts}>
+          <div><dt>Aksiyon sahibi</dt><dd>{work.currentUserMustAct ? "Sen" : work.actionOwner}</dd></div>
+          <div><dt>Senin aşaman</dt><dd>{stages===null ? "Doğrulanamadı" : work.currentStage?.title || (work.total>0 && work.approved===work.total ? "Aşamalar onaylandı" : "Sana atanmış açık aşama yok")}</dd></div>
+          <div><dt>Deadline</dt><dd>{work.currentStage?.due_date ? formatDate(work.currentStage.due_date) : project?.deadline ? formatDate(project.deadline) : "Belirtilmedi"}</dd></div>
+        </dl>
+        {project && work.currentUserMustAct && <PanelAction href={stagesHref} variant="primary">{work.currentStage?.status==="revision" ? "Revizyonu Aç" : "Aşamaları Yönet"}</PanelAction>}
       </section>
-
-      {/* Team Rules / Future Actions */}
-
-      {coalition.status === "active" && (
-        <section className="mt-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">
-              Koalisyon Yönetimi
-            </h2>
-
-            <p className="mt-1 text-sm leading-6 text-gray-500">
-              Ekip değişiklikleri proje ve müşteri onayı
-              üzerinden yürütülür. Bir ekip üyesinin
-              ayrılması veya yeni bir freelancerın eklenmesi
-              tek taraflı olarak gerçekleşmez.
-            </p>
+      <PanelSection title="Ekip ve rol dağılımı" className={styles.section}>
+        <div className={styles.sectionBody}>
+          <div className={styles.statusLine}><span>{members.length} aktif koalisyon üyesi</span>
+            {teamCompletion && roleCapacityKnown ? <PanelBadge tone="warning">{teamCompletion.ready ? "Tüm roller dolu" : teamCompletion.filledRoles+" / "+teamCompletion.totalRoles+" rol dolu"}</PanelBadge> : <span>Rol kontenjanı bilgisi bulunmuyor</span>}
           </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
-                  <UserPlus
-                    size={17}
-                    className="text-gray-700"
-                  />
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">
-                    Ekip Üyesi Öner
-                  </h3>
-
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    İhtiyaç duyulan bir rol için platformdaki
-                    başka bir freelancerı önerebilirsin.
-                  </p>
-                </div>
+          {members.length===0 ? <p className={styles.secondary}>Henüz aktif ekip üyesi yok.</p> : members.map(member=><div key={member.id} className={isCurrentUser(member)?styles.selfRow:styles.memberRow}>
+            <div className={styles.memberIdentity}>
+              {member.profile?.avatar_url ? <Image unoptimized src={member.profile.avatar_url} width={32} height={32} alt="" className={styles.avatar} /> : <span className={styles.avatar}>{getInitial(member)}</span>}
+              <div><div className={styles.statusLine}><strong>{getMemberName(member)}</strong>{isCurrentUser(member)&&<PanelBadge tone="info">Sen</PanelBadge>}</div>
+                <p>{member.projectRole || "Proje rolü belirtilmedi"}</p>
+                {isProjectOwner(member)&&<span className={styles.metaLabel}>Koalisyon yöneticisi</span>}
               </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
-                  <LogOut
-                    size={17}
-                    className="text-gray-700"
-                  />
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">
-                    Projeden Ayrılma
-                  </h3>
-
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    Üst kısımdaki &quot;Ekipten Ayrıl&quot; butonuyla
-                    üyeliğini sonlandırabilirsin; rolün boşa düşer.
-                  </p>
-                </div>
-              </div>
-            </div>
+            </div><PanelBadge>Aktif</PanelBadge>
+          </div>)}
+          {teamCompletion && roleCapacityKnown && <div className={styles.roleCapacity}><h3>Rol kontenjanları</h3>{teamCompletion.roles.map(role=><div key={role.role} className={styles.roleRow}><span>{role.role}</span><span>{role.filled} / {role.capacity} kişi</span></div>)}</div>}
+        </div>
+      </PanelSection>
+        <PanelSection title="Proje ilerlemesi" className={styles.section}>
+          <div className={styles.sectionBody}>
+            {stages===null ? <p className={styles.secondary}>Aşama bilgileri alınamadı. Çalışma alanını kontrol edebilirsin.</p> : stages.length===0 ? <p className={styles.secondary}>Henüz proje aşaması tanımlanmadı.</p> : <>
+              <div className={styles.progressLabel}><span>{work.approved} / {work.total} aşama onaylandı</span><span>{Math.round(work.approved/work.total*100)}%</span></div>
+              <progress className={styles.progress} max={work.total} value={work.approved} aria-label="Onaylanan ekip aşamaları" />
+              {stages.slice(0,3).map(stage=><div key={stage.id} className={styles.stageRow}><div><strong>{stage.title}</strong><p className={styles.secondary}>{stage.freelancer_id ? (members.find(member=>member.user_id===stage.freelancer_id) ? getMemberName(members.find(member=>member.user_id===stage.freelancer_id)!) : "Sorumlu üye bilgisi görünmüyor") : "Sorumlu atanmadı"}{stage.due_date && " · "+formatDate(stage.due_date)}</p></div><PanelBadge>{coalitionStageLabel(stage.status)}</PanelBadge></div>)}
+            </>}
+            {project && <Link href={stagesHref} className={styles.projectLink}>Tüm aşamaları projede gör{stages && stages.length>3 ? " · "+stages.length+" aşama" : ""}</Link>}
           </div>
-        </section>
-      )}
+        </PanelSection>
+        <PanelSection title="Son hareketler" className={styles.section}><ol className={styles.activity}>{events.map(event=><li key={event.id}><p>{event.text}</p><time dateTime={event.date}>{formatDate(event.date)}</time></li>)}</ol>{stages===null && <p className={styles.sectionBody}>Teslim ve revizyon hareketleri alınamadı.</p>}</PanelSection>
+      {currentUserId && <PanelSection title="Ekip iletişimi" className={styles.section}><div id="team-messages" className={styles.sectionBody}><p className={styles.secondary}>Rol paylaşımı ve proje koordinasyonunu ekibinle burada konuş.</p><div className={styles.messageBody}><TeamMessagesPanel coalitionId={coalition.id} currentUserId={currentUserId} memberLabels={members.map(member=>({id:member.user_id,name:getMemberName(member)}))} /></div></div></PanelSection>}
+      {coalition.status==="active" && <section className={styles.management} aria-label="Koalisyon yönetimi">
+        <div><h2>Koalisyon yönetimi</h2><p className={styles.secondary}>Üye önerilerini ve ekipten ayrılma işlemini buradan yönet.</p></div>
+        <div className={styles.actions}>
+          <PanelAction href={"/freelancers/freelancers?coalitionId="+coalition.id}><UserPlus size={16} />Ekip üyesi öner</PanelAction>
+          {selfMembership && <Button size="sm" variant="secondary" disabled={leaving} onClick={()=>{if(window.confirm("Bu ekipten ayrılmak istediğine emin misin?")) void handleLeave();}}>{leaving?<Loader2 size={16} className="animate-spin" />:<LogOut size={16} />}Ekipten ayrıl</Button>}
+        </div>
+      </section>}
     </main>
-  );
-}
-
-function BriefcaseIcon() {
-  return (
-    <svg
-      width="21"
-      height="21"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="text-gray-500"
-      aria-hidden="true"
-    >
-      <path
-        d="M9 7V6C9 4.89543 9.89543 4 11 4H13C14.1046 4 15 4.89543 15 6V7"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-
-      <path
-        d="M5 7H19C20.1046 7 21 7.89543 21 9V18C21 19.1046 20.1046 20H5C3.89543 20 3 19.1046 3 18V9C3 7.89543 3.89543 7 5 7Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-
-      <path
-        d="M3 12H21"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }

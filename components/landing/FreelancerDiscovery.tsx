@@ -2,6 +2,7 @@
 
 import { Sparkles, UserRound } from "lucide-react";
 import { useInView } from "./Reveal";
+import styles from "./LandingJourney.module.css";
 
 /**
  * Freelancer discovery — cards slide in horizontally with a small stagger
@@ -30,16 +31,16 @@ export default function FreelancerDiscovery() {
         {FREELANCERS.map((freelancer, index) => (
           <li
             key={freelancer.role}
-            className="cc-reveal w-[260px] shrink-0 snap-start rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4 transition-colors hover:border-[var(--color-border-strong)] lg:w-auto"
+            className={`cc-reveal w-[260px] shrink-0 snap-start lg:w-auto ${styles.candidate}`}
             data-variant="right"
             data-visible={inView ? "true" : "false"}
             style={{ "--reveal-delay": `${index * 110}ms` } as React.CSSProperties}
           >
             <div className="flex items-start justify-between gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
+              <span className={styles.avatar}>
                 <UserRound size={18} />
               </span>
-              <span className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--color-primary-50)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary-700)]">
+              <span className={styles.badge} data-tone="primary">
                 <Sparkles size={11} />%{freelancer.score} eşleşme
               </span>
             </div>
@@ -51,7 +52,7 @@ export default function FreelancerDiscovery() {
               {freelancer.skills.map((skill) => (
                 <span
                   key={skill}
-                  className="rounded-[var(--radius-xs)] bg-[var(--color-surface-2)] px-1.5 py-0.5 text-xs text-[var(--color-text-secondary)]"
+                  className={styles.skill}
                 >
                   {skill}
                 </span>

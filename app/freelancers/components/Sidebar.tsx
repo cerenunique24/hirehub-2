@@ -23,7 +23,7 @@ const menuGroups: SidebarMenuItem[][] = [
   [
     { name: "Projeleri Keşfet", href: "/freelancers/discover", icon: Compass },
     { name: "Projelerim", href: "/freelancers/projects", icon: BriefcaseBusiness },
-    { name: "Tekliflerim", href: "/freelancers/proposals", icon: FileText },
+    { name: "Teklifler / Davetler", href: "/freelancers/proposals", icon: FileText },
     { name: "Favorilerim", href: "/freelancers/saved", icon: Heart },
     { name: "Koalisyonlar", href: "/freelancers/coalitions", icon: UsersRound },
     { name: "Freelancerlar", href: "/freelancers/freelancers", icon: UsersRound },

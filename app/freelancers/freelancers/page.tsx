@@ -1,7 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
+import { DirectoryFreelancerCard } from "@/components/freelancers/DirectoryFreelancerCard";
+import { useFeatured } from "@/lib/hooks/useFeatured";
+import { splitFeatured } from "@/lib/visibility/featured";
+import { directoryReturnHref } from "@/components/freelancers/directoryPresentation";
+import { panelRootClass } from "@/components/dashboard/PanelPrimitives";
+import { buttonClasses } from "@/components/ui/Button";
+import styles from "@/components/freelancers/FreelancerDirectory.module.css";
 import { useSearchParams } from "next/navigation";
 import {
   Search,
@@ -14,12 +20,12 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { CATEGORIES } from "@/lib/categories";
-import { FreelancerCard } from "@/components/freelancers/FreelancerCard";
+
 import { publicDisplayName, displayInitial } from "@/lib/utils/displayName";
 
 type Profile = {
   id: string;
-  first_name: string | null;
+  first_name: string | null;
   avatar_url: string | null;
   role: string | null;
   title: string | null;
@@ -28,6 +34,7 @@ type Profile = {
   skills: string[] | null;
   city: string | null;
   availability: string | null;
+  availability_status: string | null;
   experience: string | null;
   expertise: string | null;
   project_types: string[] | null;
@@ -42,14 +49,15 @@ type CoalitionMember = {
 };
 
 function FreelancersContent() {
-  const supabase = createClient();
+  const supabase = useMemo(()=>createClient(),[]);
   const searchParams = useSearchParams();
 
+  const featuredIds=useFeatured("profile");
   const coalitionId = searchParams.get("coalitionId");
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("Tümü");
+  const [search, setSearch] = useState(searchParams.get("q")??"");
+  const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category")??"Tümü");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +68,7 @@ function FreelancersContent() {
     CoalitionMember[]
   >([]);
 
+  const [membersLoaded,setMembersLoaded]=useState(false);
   const [selectedProfile, setSelectedProfile] =
     useState<Profile | null>(null);
 
@@ -72,6 +81,8 @@ function FreelancersContent() {
     const loadFreelancers = async () => {
       setLoading(true);
       setError(null);
+      setCoalitionMembers([]);
+      setMembersLoaded(false);
 
       const {
         data: {
@@ -101,6 +112,7 @@ function FreelancersContent() {
             skills,
             city,
             availability,
+            availability_status,
             experience,
             expertise,
             project_types,
@@ -139,6 +151,7 @@ function FreelancersContent() {
           );
         } else {
           setCoalitionMembers(memberData ?? []);
+          setMembersLoaded(true);
         }
       }
 
@@ -181,6 +194,14 @@ function FreelancersContent() {
     });
   }, [profiles, search, categoryFilter]);
 
+  useEffect(()=>{
+    if(loading) return;
+    const frame=requestAnimationFrame(()=>{try{const key="directory-scroll:"+directoryReturnHref(coalitionId,search,categoryFilter);const saved=sessionStorage.getItem(key);if(saved!==null){sessionStorage.removeItem(key);window.scrollTo({top:Number(saved)||0});}}catch{}});
+    return ()=>cancelAnimationFrame(frame);
+  },[loading,coalitionId,search,categoryFilter]);
+
+  const featuredGroups=splitFeatured(filteredProfiles,featuredIds);
+  const orderedProfiles=[...featuredGroups.featured,...featuredGroups.normal];
   const getFullName = (profile: Profile) => publicDisplayName(profile, "İsimsiz Freelancer");
 
   const getInitials = (profile: Profile) => displayInitial(profile);
@@ -192,7 +213,7 @@ function FreelancersContent() {
   };
 
   const canSuggest = (profile: Profile) => {
-    if (!coalitionId || !currentUserId) {
+    if (!coalitionId || !currentUserId || !membersLoaded) {
       return false;
     }
 
@@ -205,23 +226,16 @@ function FreelancersContent() {
     return !status;
   };
 
-  const getButtonText = (profile: Profile) => {
-    if (profile.id === currentUserId) {
-      return "Sen";
-    }
-
-    const status = getMemberStatus(profile.id);
-
-    if (status === "active") {
-      return "Ekipte";
-    }
-
-    if (status === "pending") {
-      return "Önerildi";
-    }
-
-    return "Ekip Üyesi Öner";
-  };
+  useEffect(()=>{
+    if(!selectedProfile) return;
+    const previous=document.activeElement as HTMLElement|null;
+    const dialog=document.getElementById("suggest-dialog");
+    const controls=()=>Array.from(dialog?.querySelectorAll<HTMLElement>("button:not(:disabled),input:not(:disabled),a[href]")??[]);
+    controls()[0]?.focus();
+    const handleKey=(event:KeyboardEvent)=>{if(event.key==="Escape" && !suggesting)setSelectedProfile(null);if(event.key==="Tab"){const items=controls(),first=items[0],last=items[items.length-1];if(event.shiftKey && document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first?.focus();}}};
+    document.addEventListener("keydown",handleKey);
+    return ()=>{document.removeEventListener("keydown",handleKey);previous?.focus();};
+  },[selectedProfile,suggesting]);
 
   const handleSuggest = async () => {
     if (!selectedProfile || !coalitionId || !currentUserId) {
@@ -307,9 +321,9 @@ function FreelancersContent() {
   };
 
   return (
-    <main className="w-full p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
+    <main className={[panelRootClass,styles.page].join(" ")}>
+      <div>
+        <div className={styles.header}>
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-2xl font-semibold text-gray-900">
@@ -360,6 +374,7 @@ function FreelancersContent() {
                 type="text"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
+                aria-label="Freelancer veya beceri ara"
                 placeholder="Freelancer, uzmanlık veya yetenek ara..."
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400 focus:bg-white"
               />
@@ -371,7 +386,7 @@ function FreelancersContent() {
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
               />
 
-              <select
+              <select aria-label="Proje kategorisi"
                 value={categoryFilter}
                 onChange={(event) =>
                   setCategoryFilter(event.target.value)
@@ -412,33 +427,38 @@ function FreelancersContent() {
             </div>
 
             <h2 className="font-medium text-gray-900">
-              Freelancer bulunamadı
+              Henüz uygun freelancer bulunamadı
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
               Arama veya filtre kriterlerini değiştirmeyi dene.
             </p>
+            {(search || categoryFilter!=="Tümü") && <button type="button" className={buttonClasses({variant:"secondary",size:"sm",className:"mt-4"})} onClick={()=>{setSearch("");setCategoryFilter("Tümü");}}>Filtreleri temizle</button>}
           </div>
         )}
 
         {!loading && !error && filteredProfiles.length > 0 && (
-          <div className="flex flex-col gap-4">
-            {filteredProfiles.map((profile) => {
+          <div className={styles.grid}>
+            {orderedProfiles.map((profile,index) => {
               const memberStatus = getMemberStatus(profile.id);
               const suggestionAllowed = canSuggest(profile);
 
               return (
-                <FreelancerCard
+                <Fragment key={profile.id}>
+                {index===0&&featuredGroups.featured.length>0&&<h2 className={styles.featuredHeading}>Öne Çıkan Freelancerlar</h2>}
+                {index===featuredGroups.featured.length&&featuredGroups.featured.length>0&&<h2 className={styles.featuredHeading}>Freelancerlar</h2>}
+                <DirectoryFreelancerCard
+                  featured={featuredIds.has(profile.id)}
                   key={profile.id}
-                  freelancer={profile}
-                  viewerRole="freelancer"
+                  profile={profile}
+                  returnTo={directoryReturnHref(coalitionId,search,categoryFilter)}
                   action={
                     coalitionId ? (
                       <button
                         type="button"
                         disabled={!suggestionAllowed}
                         onClick={() => setSelectedProfile(profile)}
-                        className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary-600)] text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                        className={buttonClasses({variant:"ghost",size:"sm"})}
                       >
                         {memberStatus === "pending" ? (
                           <>
@@ -458,7 +478,7 @@ function FreelancersContent() {
                       </button>
                     ) : undefined
                   }
-                />
+                /></Fragment>
               );
             })}
           </div>
@@ -467,10 +487,10 @@ function FreelancersContent() {
 
       {selectedProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+          <div id="suggest-dialog" role="dialog" aria-modal="true" aria-labelledby="suggest-title" className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 id="suggest-title" className="text-lg font-semibold text-gray-900">
                   Ekip üyesi öner
                 </h2>
 
@@ -481,6 +501,7 @@ function FreelancersContent() {
               </div>
 
               <button
+                aria-label="Öneri penceresini kapat"
                 type="button"
                 onClick={() => {
                   if (!suggesting) {
@@ -566,7 +587,7 @@ export default function FreelancersPage() {
   return (
     <Suspense
       fallback={
-        <main className="w-full p-6">
+        <main className={[panelRootClass,styles.page].join(" ")}>
           <div className="mx-auto flex min-h-[300px] max-w-7xl items-center justify-center rounded-2xl border border-gray-200 bg-white">
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Loader2 size={18} className="animate-spin" />

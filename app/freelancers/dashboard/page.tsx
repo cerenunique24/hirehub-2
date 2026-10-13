@@ -1,385 +1,170 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Briefcase, Clock3, MessageSquare, Send, UserRound } from "lucide-react";
-
 import { createClient } from "@/lib/supabase/client";
-import { formatDeadlineDate, formatRemainingTime } from "@/lib/utils/deadline";
-import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
-import PerformanceTeaserCard from "@/components/freelancers/PerformanceTeaserCard";
+import { projectWork, knownAmount, type DashboardMilestone } from "@/lib/projects/dashboard";
+import { DashboardStatus } from "@/components/dashboard/Workspace";
+import {
+  FreelancerDashboardView,
+  type DashboardPerson,
+  type FreelancerDashboardData,
+  type FreelancerProject,
+  type FreelancerOpportunity,
+} from "@/components/dashboard/FreelancerDashboardView";
 
-type Profile = {
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url: string | null;
-  expertise: string | null;
-  skills: string[] | null;
-  profile_completion: number | null;
-  availability_status: string | null;
-  availability_note: string | null;
-  available_from: string | null;
-  availability_updated_at: string | null;
-};
-
-type Proposal = {
-  id: string;
-  project_id: string;
-  status: string | null;
-  created_at: string;
-};
-
-type Project = {
-  id: string;
-  title: string;
-  status: string | null;
-};
-
-type Milestone = {
-  id: string;
-  project_id: string;
-  title: string;
-  due_date: string | null;
-  status: string | null;
-  sort_order: number | null;
-};
-
-type ActiveProject = Project & {
-  role: string | null;
-  deadline: string | null;
-  currentMilestone: Milestone | null;
-};
-
-type DashboardData = {
-  profile: Profile | null;
-  activeProjects: ActiveProject[];
-  pendingProposals: number;
-  unreadMessages: number;
-  recentProposals: Array<Proposal & { project: Project | null }>;
-};
+type Proposal = { id: string; project_id: string; status: string | null; bid_amount: number | string | null; created_at: string };
+type Project = { id: string; title: string; status: string | null; deadline: string | null; team_required: boolean; client_id: string | null };
+type Membership = { project_id: string; freelancer_id: string; role: string | null; proposal_id: string | null; agreed_amount: number | string | null };
+type Opportunity = FreelancerOpportunity;
+type RoleMatch = { role: string; score: number; isEligibleForRole: boolean; budgetPerPerson?: number | null; duration?: string | null };
 
 export default function FreelancerDashboard() {
   const supabase = useMemo(() => createClient(), []);
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<FreelancerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [opportunityError, setOpportunityError] = useState("");
+  const [opportunitiesLoading, setOpportunitiesLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-
     async function loadDashboard() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        if (active) setError("Paneli görüntülemek için giriş yapmanız gerekiyor.");
-        return;
-      }
-
-      const [profileResult, proposalResult, messageResult, membershipResult] = await Promise.all([
-        // `last_name` artık genel SELECT grant'inden çıkarıldığı için (bkz.
-        // 202609300012_surname_privacy.sql) kendi profilimiz bile doğrudan
-        // select ile okunamaz — get_my_full_profile() kullanılır.
-        supabase.rpc("get_my_full_profile").then(({ data, error }) => ({
-          data: Array.isArray(data) ? data[0] ?? null : null,
-          error,
-        })),
-        supabase.from("proposals").select("id, project_id, status, created_at").eq("freelancer_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("messages").select("id", { count: "exact", head: true }).eq("receiver_id", user.id).is("read_at", null),
-        supabase.from("project_team_members").select("project_id, role").eq("freelancer_id", user.id).eq("status", "active"),
+      setLoading(true); setError("");
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) { if (active) setError("Paneli görüntülemek için giriş yapmanız gerekiyor."); return; }
+      const [profileResult, proposalResult, membershipResult, invitationResult] = await Promise.all([
+        supabase.rpc("get_my_full_profile").then(({ data, error }) => ({ data: Array.isArray(data) ? data[0] ?? null : null, error })),
+        supabase.from("proposals").select("id, project_id, status, bid_amount, created_at").eq("freelancer_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("project_team_members").select("project_id, freelancer_id, role, proposal_id, agreed_amount").eq("freelancer_id", user.id).eq("status", "active"),
+        supabase.from("project_team_invitations").select("id", { count: "exact", head: true }).eq("freelancer_id", user.id).eq("status", "pending"),
       ]);
-
-      if (proposalResult.error) {
-        if (active) setError(`Teklifler yüklenemedi: ${proposalResult.error.message}`);
-        return;
-      }
-
+      if (profileResult.error || proposalResult.error || membershipResult.error || invitationResult.error) { if (active) setError("Panel verilerin yüklenemedi. Lütfen tekrar dene."); return; }
       const proposals = (proposalResult.data ?? []) as Proposal[];
-      const projectIds = [...new Set(proposals.map((proposal) => proposal.project_id))];
-      const projectResult = projectIds.length
-        ? await supabase.from("projects").select("id, title, status, deadline").in("id", projectIds)
-        : { data: [], error: null };
-
-      if (projectResult.error) {
-        if (active) setError(`Projeler yüklenemedi: ${projectResult.error.message}`);
-        return;
-      }
-
-      type ProjectWithDeadline = Project & { deadline: string | null };
-
-      const projectById = new Map(
-        ((projectResult.data ?? []) as ProjectWithDeadline[]).map((project) => [project.id, project]),
-      );
-
-      // Ekip üyeliği (project_team_members), hem proposal hem invitation ile
-      // katılan freelancer'ları kapsar. "Aktif proje" burada ürün kuralına
-      // göre projects.status === 'in_progress' olan, gerçekten ekipte
-      // olunan projeler anlamına gelir.
-      type Membership = { project_id: string; role: string | null };
       const memberships = (membershipResult.data ?? []) as Membership[];
-      const roleByProjectId = new Map(memberships.map((row) => [row.project_id, row.role]));
-      const membershipProjectIds = [...new Set(memberships.map((row) => row.project_id))];
-
-      const memberProjectsMissing = membershipProjectIds.filter((pid) => !projectById.has(pid));
-      const extraProjects = memberProjectsMissing.length
-        ? await supabase.from("projects").select("id, title, status, deadline").in("id", memberProjectsMissing)
-        : { data: [] as Array<Project & { deadline: string | null }> };
-
-      for (const extra of extraProjects.data ?? []) {
-        projectById.set(extra.id, extra as ProjectWithDeadline);
-      }
-
-      const activeProjectIds = membershipProjectIds.filter((pid) => projectById.get(pid)?.status === "in_progress");
-
-      const milestoneResult = activeProjectIds.length
-        ? await supabase
-            .from("project_milestones")
-            .select("id, project_id, title, due_date, status, sort_order")
-            .in("project_id", activeProjectIds)
-            .order("sort_order", { ascending: true })
-        : { data: [] as Milestone[] };
-
-      const milestonesByProject = new Map<string, Milestone[]>();
-      for (const milestone of (milestoneResult.data ?? []) as Milestone[]) {
-        const list = milestonesByProject.get(milestone.project_id) ?? [];
-        list.push(milestone);
-        milestonesByProject.set(milestone.project_id, list);
-      }
-
-      function pickCurrentMilestone(projectId: string): Milestone | null {
-        const milestones = milestonesByProject.get(projectId) ?? [];
-
-        return (
-          milestones.find((milestone) => milestone.status === "active") ??
-          milestones.find((milestone) => milestone.status !== "approved") ??
-          null
-        );
-      }
-
-      const activeProjects: ActiveProject[] = activeProjectIds
-        .map((pid) => {
-          const project = projectById.get(pid);
-
-          if (!project) {
-            return null;
+      const projectIds = [...new Set([...proposals.map(p => p.project_id), ...memberships.map(m => m.project_id)])];
+      const projectResult = projectIds.length ? await supabase.from("projects").select("id, title, status, deadline, team_required, client_id").in("id", projectIds) : { data: [], error: null };
+      if (projectResult.error) { if (active) setError("Projelerin yüklenemedi. Lütfen tekrar dene."); return; }
+      const projects = (projectResult.data ?? []) as Project[];
+      const memberIds = [...new Set(memberships.map(m => m.project_id))];
+      const [milestoneResult, teamResult] = await Promise.all([
+        memberIds.length ? supabase.from("project_milestones").select("id, project_id, title, due_date, status, sort_order, freelancer_id, budget, approved_at").in("project_id", memberIds).order("sort_order", { ascending: true }) : Promise.resolve({ data: [], error: null }),
+        memberIds.length ? supabase.from("project_team_members").select("project_id, freelancer_id").in("project_id", memberIds).eq("status", "active") : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (milestoneResult.error || teamResult.error) { if (active) setError("Proje aşamaların yüklenemedi. Lütfen tekrar dene."); return; }
+      const milestones = (milestoneResult.data ?? []) as DashboardMilestone[];
+      // Optional display-only enrichment: missing profile visibility never blocks work data.
+      const participantIds = [...new Set([
+        ...projects.filter(project => memberIds.includes(project.id)).flatMap(project => project.client_id ? [project.client_id] : []),
+        ...(teamResult.data ?? []).map(member => member.freelancer_id),
+      ])];
+      const people = new Map<string, DashboardPerson>();
+      if (participantIds.length) {
+        try {
+          const profileResult = await supabase.from("profiles")
+            .select("id, first_name, last_name, avatar_url").in("id", participantIds);
+          if (!profileResult.error) {
+            for (const person of profileResult.data ?? []) {
+              people.set(person.id, {
+                id: person.id,
+                name: [person.first_name, person.last_name].filter(Boolean).join(" ") || null,
+                avatarUrl: person.avatar_url ?? null,
+              });
+            }
           }
-
-          return {
-            ...project,
-            role: roleByProjectId.get(pid) ?? null,
-            deadline: project.deadline ?? null,
-            currentMilestone: pickCurrentMilestone(pid),
-          };
-        })
-        .filter((project): project is ActiveProject => project !== null);
-
-      if (active) {
-        setData({
-          profile: (profileResult.data as Profile | null) ?? null,
-          activeProjects,
-          pendingProposals: proposals.filter((proposal) => proposal.status === "pending").length,
-          unreadMessages: messageResult.error ? 0 : messageResult.count ?? 0,
-          recentProposals: proposals.slice(0, 5).map((proposal) => ({ ...proposal, project: projectById.get(proposal.project_id) ?? null })),
-        });
+        } catch {
+          // Initials/generic participant labels are enough when avatars cannot be fetched.
+        }
       }
+      const cards = memberships.flatMap(member => {
+        const p = projects.find(p => p.id === member.project_id);
+        if (!p) return [];
+        const work = projectWork({ status: p.status, teamRequired: Boolean(p.team_required), viewer: "freelancer", userId: user.id,
+          memberIds: (teamResult.data ?? []).filter(m => m.project_id === p.id).map(m => m.freelancer_id),
+          milestones: milestones.filter(m => m.project_id === p.id) });
+        return [{
+          ...p, role: member.role,
+          amount: knownAmount(member.agreed_amount ?? proposals.find(proposal => proposal.id === member.proposal_id)?.bid_amount),
+          work, currentMilestone: work.currentMilestone,
+          client: p.client_id ? people.get(p.client_id) ?? { id: p.client_id, name: null, avatarUrl: null } : null,
+          team: (teamResult.data ?? []).filter(teamMember => teamMember.project_id === p.id).map(teamMember =>
+            people.get(teamMember.freelancer_id) ?? { id: teamMember.freelancer_id, name: null, avatarUrl: null }),
+        } satisfies FreelancerProject];
+      });
+      const earnings = { monthly: 0, approved: 0, remaining: 0, completed: 0, missingAmounts: false };
+      for (const p of cards.filter(p => p.status === "in_progress" || p.status === "completed" || p.status === "paused")) {
+        if (p.amount === null) { earnings.missingAmounts = true; continue; }
+        if (p.status === "completed") { earnings.completed += p.amount; continue; }
+        const ownApproved = milestones.filter(m => m.project_id === p.id && m.status === "approved" && (!p.team_required || m.freelancer_id === user.id));
+        if (ownApproved.some(m => knownAmount(m.budget) === null)) { earnings.missingAmounts = true; continue; }
+        const approved = Math.min(p.amount, ownApproved.reduce((sum, m) => sum + (knownAmount(m.budget) ?? 0), 0));
+        earnings.approved += approved; earnings.remaining += Math.max(0, p.amount - approved);
+      }
+      const now = new Date();
+      for (const milestone of milestones) {
+        const project = projects.find(p => p.id === milestone.project_id);
+        if (!project || milestone.status !== "approved" || (project.team_required && milestone.freelancer_id !== user.id) || !milestone.approved_at) continue;
+        const approvedAt = new Date(milestone.approved_at);
+        if (approvedAt.getFullYear() === now.getFullYear() && approvedAt.getMonth() === now.getMonth()) {
+          const amount = knownAmount(milestone.budget);
+          if (amount === null) earnings.missingAmounts = true;
+          else earnings.monthly += amount;
+        }
+      }
+      if (active) setData({
+        profile: profileResult.data as FreelancerDashboardData["profile"],
+        activeProjects: cards.filter(p => p.status === "in_progress" || p.status === "paused"),
+        waitingProjects: cards.filter(p => p.status === "open" || p.status === "ready_to_start"),
+        pendingInvitations: invitationResult.count ?? 0,
+        pendingProposals: proposals.filter(p => p.status === "pending" || p.status === "shortlisted").length,
+        shortlistedProposals: proposals.filter(p => p.status === "shortlisted").length,
+        recentProposals: proposals.filter(p => p.status === "pending" || p.status === "shortlisted").slice(0, 3).map(p => ({ ...p, project: projects.find(project => project.id === p.project_id) ?? null })),
+        appliedProjectIds: proposals.map(p => p.project_id),
+        deliveries: milestones.flatMap(milestone => {
+          const project = cards.find(card => card.id === milestone.project_id && (card.status === "in_progress" || card.status === "paused"));
+          if (!project || (project.team_required && milestone.freelancer_id !== user.id)) return [];
+          return [{ milestone, projectId: project.id, projectTitle: project.title }];
+        }),
+        earnings,
+      });
     }
-
-    void loadDashboard().finally(() => {
-      if (active) setLoading(false);
-    });
+    void loadDashboard().catch(() => { if (active) setError("Panel yüklenemedi. Lütfen tekrar dene."); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [supabase]);
+  }, [supabase, reloadKey]);
 
-  if (loading) return <div className="flex min-h-[60vh] items-center justify-center text-sm text-gray-500">Panel yükleniyor...</div>;
-  if (error) return <div className="m-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>;
+  useEffect(() => {
+    if (!data) return;
+    let active = true;
+    const abort = new AbortController();
+    async function loadOpportunities() {
+      setOpportunitiesLoading(true); setOpportunityError("");
+      const result = await supabase.from("projects").select("id, title").eq("status", "open").order("created_at", { ascending: false }).limit(12);
+      if (result.error) throw result.error;
+      const excluded = new Set([...data!.waitingProjects.map(p => p.id), ...data!.appliedProjectIds]);
+      const candidates = (result.data ?? []).filter(p => !excluded.has(p.id));
+      if (!candidates.length) { if (active) setOpportunities([]); return; }
+      const response = await fetch("/api/ai/match-talent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectIds: candidates.map(p => p.id) }), signal: abort.signal });
+      if (!response.ok) throw new Error("Eşleşmeler yüklenemedi");
+      const body = await response.json() as { matching?: Record<string, RoleMatch[]> };
+      const previews = candidates.flatMap(p => {
+        const best = (body.matching?.[p.id] ?? []).filter(m => m.isEligibleForRole && m.score >= 75).sort((a, b) => b.score - a.score)[0];
+        return best ? [{ id: p.id, title: p.title, role: best.role, score: best.score, budgetPerPerson: best.budgetPerPerson ?? null, duration: best.duration ?? null }] : [];
+      }).sort((a, b) => b.score - a.score).slice(0, 3);
+      if (active) setOpportunities(previews);
+    }
+    void loadOpportunities().catch(() => { if (active) setOpportunityError("Eşleşmeler şu anda yüklenemedi. Fırsatları keşfet sayfasından inceleyebilirsin."); }).finally(() => { if (active) setOpportunitiesLoading(false); });
+    return () => { active = false; abort.abort(); };
+  }, [data, supabase]);
 
-  const profile = data?.profile;
-  const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || "Freelancer";
-  const initials = name.charAt(0).toLocaleUpperCase("tr-TR") || "F";
-
+  if (loading || error) return <DashboardStatus loading={loading} error={error} retry={() => setReloadKey(k => k + 1)} />;
+  if (!data) return null;
   return (
-    <main className="mx-auto max-w-7xl">
-      <header className="mb-[var(--rhythm-header-gap)] flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {profile?.avatar_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.avatar_url} alt={name} className="h-14 w-14 rounded-full object-cover" />
-          ) : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-lg font-semibold text-white">{initials}</div>}
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Hoş geldin, {name}</h1>
-            <p className="mt-[var(--rhythm-title-gap)] text-sm text-gray-500">
-              Tekliflerini, projelerini ve mesajlarını buradan takip edebilirsin.
-            </p>
-          </div>
-        </div>
-        <Link href="/freelancers/discover" className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white hover:bg-[var(--color-primary-700)]">Proje keşfet</Link>
-      </header>
-
-      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] md:grid-cols-3">
-        <Metric icon={<Briefcase size={19} />} label="Aktif projeler" value={data?.activeProjects.length ?? 0} detail="Ekibinde olduğun, tamamlanmamış projeler" />
-        <Metric icon={<Clock3 size={19} />} label="Bekleyen teklifler" value={data?.pendingProposals ?? 0} detail="Müşteri değerlendirmesini bekliyor" />
-        <Metric icon={<MessageSquare size={19} />} label="Okunmamış mesajlar" value={data?.unreadMessages ?? 0} detail="Yeni gelen mesajlar" />
-      </section>
-
-      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-gray-900">Aktif projeler</h2>
-              <p className="mt-1 text-sm text-gray-500">Ekibinde olduğun, devam eden projeler</p>
-            </div>
-            <Link href="/freelancers/proposals" className="text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]">Tekliflerim</Link>
-          </div>
-
-          {data?.activeProjects.length ? (
-            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
-              {data.activeProjects.map((project) => {
-                const remaining = formatRemainingTime(project.deadline);
-                const deadlineDate = formatDeadlineDate(project.deadline);
-                const milestoneRemaining = project.currentMilestone
-                  ? formatRemainingTime(project.currentMilestone.due_date)
-                  : null;
-
-                return (
-                  <Link
-                    key={project.id}
-                    href={`/freelancers/projects/${project.id}`}
-                    className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-gray-900">{project.title}</p>
-                        {project.role && <p className="mt-0.5 text-sm text-gray-500">{project.role}</p>}
-                      </div>
-                      <span
-                        className={
-                          "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium " +
-                          (remaining.overdue ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-600")
-                        }
-                      >
-                        {remaining.label}
-                      </span>
-                    </div>
-
-                    {deadlineDate && (
-                      <p className="mt-2 text-xs text-gray-400">Teslim tarihi: {deadlineDate}</p>
-                    )}
-
-                    {project.currentMilestone && milestoneRemaining && (
-                      <p className="mt-1 text-xs text-gray-500">
-                        Mevcut aşama: <span className="font-medium text-gray-700">{project.currentMilestone.title}</span>{" "}
-                        · {milestoneRemaining.label}
-                      </p>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          ) : (
-            <Empty text="Henüz ekibinde olduğun devam eden bir proje yok." />
-          )}
-        </div>
-        <div className="rounded-xl border border-gray-200 bg-white p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-gray-900">Son teklifler</h2>
-              <p className="mt-1 text-sm text-gray-500">Gerçek teklif hareketlerin</p>
-            </div>
-            <Send size={18} className="text-gray-400" />
-          </div>
-          {data?.recentProposals.length ? (
-            <div className="mt-[var(--rhythm-group-gap)] space-y-[var(--rhythm-row-gap)]">
-              {data.recentProposals.map((proposal) => (
-                <Link
-                  key={proposal.id}
-                  href={`/freelancers/proposals/${proposal.id}`}
-                  className="block rounded-xl border border-gray-100 p-4 hover:bg-gray-50"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium text-gray-900">
-                      {proposal.project?.title ?? "Proje bilgisi bulunamadı"}
-                    </p>
-                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
-                      {statusLabel(proposal.status)}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-400">
-                    {new Date(proposal.created_at).toLocaleDateString("tr-TR")}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <Empty text="Henüz teklif göndermedin." />
-          )}
-        </div>
-      </section>
-
-      <section className="mb-[var(--rhythm-section-gap)] grid gap-[var(--rhythm-card-gap)] lg:grid-cols-2">
-        <AvailabilityCard
-          status={profile?.availability_status ?? null}
-          activeProjectCount={data?.activeProjects.length ?? 0}
-          availableFrom={profile?.available_from ?? null}
-          availabilityNote={profile?.availability_note ?? null}
-          availabilityUpdatedAt={profile?.availability_updated_at ?? null}
-        />
-        <PerformanceTeaserCard />
-      </section>
-
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-gray-900">Profil özeti</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Profili tamamlamak, keşfet ekranındaki görünürlüğünü iyileştirir.
-            </p>
-          </div>
-          <Link
-            href="/freelancers/profile"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-[var(--color-text-primary)]"
-          >
-            <UserRound size={16} />
-            Profili düzenle
-          </Link>
-        </div>
-
-        <div className="mt-[var(--rhythm-group-gap)]">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Profil tamamlanma</span>
-            <span className="font-medium text-gray-900">{profile?.profile_completion ?? 0}%</span>
-          </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-            <div
-              className="h-full rounded-full bg-[var(--color-primary-600)]"
-              style={{ width: `${Math.max(0, Math.min(100, profile?.profile_completion ?? 0))}%` }}
-            />
-          </div>
-          {profile?.expertise && <p className="mt-[var(--rhythm-group-gap)] text-sm text-gray-700">{profile.expertise}</p>}
-          {profile?.skills?.length ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {profile.skills.map((skill) => (
-                <span key={skill} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
-                  {skill}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-gray-500">Henüz yetenek eklenmemiş.</p>
-          )}
-        </div>
-      </section>
-    </main>
+    <FreelancerDashboardView
+      data={data}
+      opportunities={opportunities}
+      opportunitiesLoading={opportunitiesLoading}
+      opportunityError={opportunityError}
+    />
   );
-}
-
-function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: number; detail: string }) {
-  return <div className="rounded-2xl border border-gray-200 bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-3xl font-semibold text-gray-900">{value}</p><p className="mt-2 text-xs text-gray-400">{detail}</p></div><div className="rounded-xl bg-gray-100 p-3 text-gray-700">{icon}</div></div></div>;
-}
-
-function Empty({ text }: { text: string }) { return <p className="mt-5 rounded-xl bg-gray-50 p-5 text-sm text-gray-500">{text}</p>; }
-
-function statusLabel(status: string | null) {
-  if (status === "accepted") return "Kabul edildi";
-  if (status === "rejected") return "Reddedildi";
-  if (status === "in_progress") return "Devam ediyor";
-  if (status === "completed") return "Tamamlandı";
-  return "İnceleniyor";
 }

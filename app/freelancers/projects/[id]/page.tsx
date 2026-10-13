@@ -192,16 +192,9 @@ function FreelancerWorkroomContent() {
           )}
         </div>
 
-        <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-gray-900">{project.title}</h1>
-          {project.description && (
-            <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-gray-600">
-              {project.description}
-            </p>
-          )}
-        </section>
-
         <ProjectWorkroom
+          key={searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
+          initialTab={searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
           project={project}
           teamMembers={teamMembers}
           viewerRole="freelancer"

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { FREELANCER_PLANS, CLIENT_PLANS } from "@/lib/plans";
 import { Reveal } from "./Reveal";
+import styles from "./LandingJourney.module.css";
 
 export default function MembershipPlans() {
   const [role, setRole] = useState<"freelancer" | "client">("freelancer");
@@ -13,11 +14,11 @@ export default function MembershipPlans() {
     <>
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-xl">
-          <p className="text-[13px] font-medium text-[var(--color-primary-600)]">Üyelikler</p>
-          <h2 className="mt-3 text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-[var(--color-text-primary)] sm:text-4xl">
+          <p className={styles.eyebrow}>Üyelikler</p>
+          <h2 className={styles.title}>
             İhtiyacına uygun üyelik planını seç
           </h2>
-          <p className="mt-3 text-[15px] leading-6 text-[var(--color-text-secondary)]">
+          <p className={styles.lead}>
             Ücretsiz başla, ihtiyaçların büyüdükçe daha gelişmiş AI özelliklerinin kilidini aç.
           </p>
         </div>
@@ -51,13 +52,13 @@ export default function MembershipPlans() {
         </div>
       </div>
 
-      <div className="mt-10 grid gap-px overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)] md:grid-cols-3">
+      <div className={styles.plans}>
         {plans.map((plan, index) => (
-          <Reveal key={`${role}-${plan.id}`} variant="up" delay={index * 90} className="bg-white p-6">
+          <Reveal key={`${role}-${plan.id}`} variant="up" delay={index * 90} className={styles.plan}>
             <div className="flex items-center justify-between">
               <h3 className="text-[15px] font-semibold text-[var(--color-text-primary)]">{plan.name}</h3>
               {plan.recommended && (
-                <span className="rounded-[var(--radius-pill)] bg-[var(--color-primary-50)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary-700)]">
+                <span className={styles.badge} data-tone="primary">
                   Önerilen
                 </span>
               )}
@@ -70,7 +71,8 @@ export default function MembershipPlans() {
               )}
             </p>
 
-            <ul className="mt-5 space-y-2.5 border-t border-[var(--color-border-subtle)] pt-5 text-sm text-[var(--color-text-secondary)]">
+            {plan.id!=="free" && <p className="mt-4 text-sm font-medium">{plan.id==="pro" ? "Plus’taki her şey, ayrıca:" : "Free’deki her şey, ayrıca:"}</p>}
+            <ul className={`space-y-2.5 text-sm text-[var(--color-text-secondary)] ${styles.planFeatures}`}>
               {plan.addedFeatures.map((feature) => (
                 <li key={feature} className="flex items-start gap-2">
                   <Check size={15} className="mt-0.5 shrink-0 text-[var(--color-primary-600)]" />

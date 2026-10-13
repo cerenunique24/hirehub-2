@@ -6,6 +6,7 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    files: ["**/*.{ts,tsx}"],
     rules: {
       // Bu proje veriyi sayfa/bileşen içinde `useEffect` + istemci Supabase
       // çağrısıyla yükler (bkz. COLLACREW_AUDIT_CONTEXT.md §1). React

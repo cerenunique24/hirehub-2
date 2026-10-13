@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Circle, FileText, Loader2, MessageSquare } from "lucide-react";
 import { useInView } from "./Reveal";
+import styles from "./LandingJourney.module.css";
 
 /**
  * Client project workspace — the panel rises into place on scroll, then the
@@ -36,18 +37,18 @@ export default function WorkspacePanel() {
   return (
     <div
       ref={ref}
-      className="cc-reveal rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-canvas)] p-2 shadow-[var(--shadow-lg)]"
+      className={`cc-reveal ${styles.proof} ${styles.workspace}`}
       data-variant="panel"
       data-visible={inView ? "true" : "false"}
     >
-      <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white">
+      <div>
         {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3">
+        <div className={`flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-subtle)] px-5 py-4 ${styles.workspaceHeader}`}>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-[var(--color-text-primary)]">E-ticaret mobil uygulaması</p>
             <p className="text-xs text-[var(--color-text-muted)]">3 kişilik ekip · 6 hafta</p>
           </div>
-          <span className="rounded-[var(--radius-pill)] bg-[var(--color-primary-50)] px-2 py-0.5 text-xs font-medium text-[var(--color-primary-700)]">
+          <span className={styles.badge} data-tone="primary">
             Devam ediyor
           </span>
         </div>
@@ -79,11 +80,12 @@ export default function WorkspacePanel() {
         {/* Views */}
         <div className="grid p-4 [&>*]:col-start-1 [&>*]:row-start-1">
           <ViewPane active={view === "milestones"}>
-            <ul className="space-y-2">
+            <ul className={styles.workspaceRows}>
               {MILESTONES.map((milestone, index) => (
                 <li
                   key={milestone.title}
-                  className="cc-reveal flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] px-3 py-2.5"
+                  data-status={milestone.status}
+                  className={`cc-reveal ${styles.workspaceRow}`}
                   data-variant="up"
                   data-visible={inView ? "true" : "false"}
                   style={{ "--reveal-delay": `${300 + index * 90}ms` } as React.CSSProperties}
@@ -96,27 +98,30 @@ export default function WorkspacePanel() {
                     <Circle size={16} className="shrink-0 text-[var(--color-border-strong)]" />
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium leading-[18px] text-[var(--color-text-primary)]">
+                    <p className={`truncate ${styles.itemTitle}`}>
                       {milestone.title}
                     </p>
-                    <p className="truncate text-xs text-[var(--color-text-muted)]">{milestone.owner}</p>
+                    <p className={`truncate ${styles.metadata}`}>{milestone.owner}</p>
                   </div>
-                  <span className="shrink-0 text-[13px] font-medium tabular-nums text-[var(--color-text-primary)]">
-                    {milestone.amount}
-                  </span>
+                  <div className={styles.workspaceStatus}>
+                    <span className="text-[13px] font-semibold tabular-nums text-[var(--color-text-primary)]">{milestone.amount}</span>
+                    <span className={styles.badge} data-tone={milestone.status === "done" ? "success" : milestone.status === "progress" ? "primary" : "neutral"}>
+                      {milestone.status === "done" ? "Tamamlandı" : milestone.status === "progress" ? "Devam ediyor" : "Sırada"}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
           </ViewPane>
 
           <ViewPane active={view === "budget"}>
-            <div className="grid grid-cols-3 gap-3">
+            <div className={styles.budgetGrid}>
               {[
                 ["Toplam bütçe", "₺85.000"],
                 ["Onaylanan", "₺18.000"],
                 ["Bekleyen", "₺28.000"],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] p-3">
+                <div key={label} className={styles.budgetStat}>
                   <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
                   <p className="mt-1 text-base font-semibold tabular-nums text-[var(--color-text-primary)]">{value}</p>
                 </div>
@@ -146,7 +151,7 @@ export default function WorkspacePanel() {
                 const Icon = item.icon;
                 return (
                   <li key={item.text} className="flex items-start gap-3">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)]">
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-primary-50)] text-[var(--color-text-secondary)]">
                       <Icon size={14} />
                     </span>
                     <div className="min-w-0">
