@@ -4,7 +4,8 @@ import type { ProjectAnalysis } from "@/types/ai";
 
 import { matchSkills } from "@/lib/matching";
 import { normalizeStringArray } from "@/lib/utils/normalizeStringArray";
-import { computeRoleEligibility } from "@/lib/matching/roleEligibility";
+import { detectCanonicalRoles, calculateRoleTextScore, getRoleRelevance, scoreRoleRelevance, boundRoleRelevanceScore, isDirectRoleRelevance, type RoleRelevance } from "@/lib/matching/roleRelevance";
+import { computeRoleEligibility, detectRoleFamilies, freelancerFamilyText } from "@/lib/matching/roleEligibility";
 import { getServerSigningSecret } from "@/lib/server/trust";
 import { publicDisplayName } from "@/lib/utils/displayName";
 import {
@@ -164,6 +165,7 @@ export type RoleMatching = {
 };
 
 export type FreelancerRoleMatch = {
+  relevance?: RoleRelevance;
   roleId: string;
   role: string;
   score: number;
@@ -198,6 +200,7 @@ export type FreelancerRoleMatch = {
 };
 
 type MatchCalculation = {
+  relevance?: RoleRelevance;
   score: number;
   reason: string;
   matchingSkills: string[];
@@ -229,16 +232,7 @@ export async function matchTalent(
     roles
   );
 
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      "[MATCH DEBUG] category:",
-      analysis?.category,
-      "rolesCount:",
-      rolesToMatch.length,
-      "roles:",
-      rolesToMatch.map((role) => role.name)
-    );
-  }
+
 
   if (rolesToMatch.length === 0) {
     return [];
@@ -259,12 +253,7 @@ export async function matchTalent(
     throw profilesError;
   }
 
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      "[MATCH DEBUG] candidates:",
-      profiles.length
-    );
-  }
+
 
   type PendingSemanticReview = {
     pairId: string;
@@ -374,7 +363,7 @@ export async function matchTalent(
         budgetPerPerson,
         budget,
         isEligibleForRole:
-          eligibility.isEligibleForRole,
+          eligibility.isEligibleForRole && (!result.relevance || isDirectRoleRelevance(result.relevance)),
         bio: profile.bio || undefined,
         experience:
           typeof profile.experience === "string" &&
@@ -399,7 +388,7 @@ export async function matchTalent(
       if (
         result.score >= SEMANTIC_REVIEW_MIN_SCORE &&
         result.score < SEMANTIC_REVIEW_MAX_SCORE &&
-        eligibility.familyCompatible
+        eligibility.familyCompatible && (!result.relevance || isDirectRoleRelevance(result.relevance))
       ) {
         pendingReviews.push({
           pairId: String(pendingReviews.length),
@@ -534,9 +523,11 @@ export async function matchTalent(
 
         if (!verdict) continue;
 
-        review.target.score = verdict.score;
+        review.target.score = review.calculation.relevance ? boundRoleRelevanceScore(verdict.score, review.calculation.relevance) : verdict.score;
         review.target.reason = verdict.reason;
-        review.target.isEligibleForRole = verdict.isMatch;
+        review.target.isEligibleForRole = verdict.isMatch && computeRoleEligibility(
+          review.target.score, review.roleInput.name, buildFreelancerFamilyText(review.profile)
+        ).isEligibleForRole && (!review.calculation.relevance || isDirectRoleRelevance(review.calculation.relevance));
       }
 
       for (const roleMatching of roleMatchings) {
@@ -579,16 +570,7 @@ export async function matchTalent(
     );
   }
 
-  if (process.env.NODE_ENV === "development") {
-    console.log(
-      "[MATCH DEBUG] finalMatches per role:",
-      roleMatchings.map((role) => ({
-        role: role.role,
-        totalEligibleCount: role.totalEligibleCount,
-        returned: role.freelancers.length,
-      }))
-    );
-  }
+
 
   return roleMatchings;
 }
@@ -888,7 +870,9 @@ export async function matchFreelancerToProjectRoles(
      */
     const eligibility = computeRoleEligibility(
       calculation.score,
-      roleName,
+      projectRole.roleId === "fallback-single-role"
+        ? (detectRoleFamilies(project.category).size > 0 ? project.category : projectSkills.join(" "))
+        : roleName,
       buildFreelancerFamilyText(profile)
     );
 
@@ -898,6 +882,7 @@ export async function matchFreelancerToProjectRoles(
         `budget-role-${index}`,
 
       role: roleName,
+      relevance: calculation.relevance,
 
       score:
         calculation.score,
@@ -906,7 +891,7 @@ export async function matchFreelancerToProjectRoles(
         calculation.reason,
 
       isEligibleForRole:
-        eligibility.isEligibleForRole,
+        eligibility.isEligibleForRole && (!calculation.relevance || isDirectRoleRelevance(calculation.relevance)),
 
       memberCount:
         budgetInfo.memberCount ??
@@ -920,7 +905,7 @@ export async function matchFreelancerToProjectRoles(
        * döndürülür. Eğer client bütçe girmemişse normalizeMoney() zaten
        * 0 döndürür — o durumda budgetPerPerson/budget hiç eklenmez.
        */
-      ...(eligibility.isEligibleForRole
+      ...(eligibility.isEligibleForRole && (!calculation.relevance || isDirectRoleRelevance(calculation.relevance))
         ? {
             budgetPerPerson:
               budgetInfo.budgetPerPerson || undefined,
@@ -951,7 +936,7 @@ export async function matchFreelancerToProjectRoles(
     if (
       calculation.score >= SEMANTIC_REVIEW_MIN_SCORE &&
       calculation.score < SEMANTIC_REVIEW_MAX_SCORE &&
-      eligibility.familyCompatible
+      eligibility.familyCompatible && (!calculation.relevance || isDirectRoleRelevance(calculation.relevance))
     ) {
       pendingReviews.push({
         resultIndex: results.length - 1,
@@ -1053,11 +1038,17 @@ export async function matchFreelancerToProjectRoles(
 
         const target = results[review.resultIndex];
 
-        target.score = verdict.score;
+        target.score = review.calculation.relevance ? boundRoleRelevanceScore(verdict.score, review.calculation.relevance) : verdict.score;
         target.reason = verdict.reason;
-        target.isEligibleForRole = verdict.isMatch;
+        target.isEligibleForRole = verdict.isMatch && computeRoleEligibility(
+          target.score,
+          review.projectRole.roleId === "fallback-single-role"
+            ? (detectRoleFamilies(project.category).size > 0 ? project.category : projectSkills.join(" "))
+            : review.roleName,
+          buildFreelancerFamilyText(profile)
+        ).isEligibleForRole && (!review.calculation.relevance || isDirectRoleRelevance(review.calculation.relevance));
 
-        if (verdict.isMatch) {
+        if (target.isEligibleForRole) {
           target.budgetPerPerson =
             review.budgetInfo.budgetPerPerson || undefined;
           target.budget = review.budgetInfo.budget || undefined;
@@ -1097,6 +1088,15 @@ export async function matchFreelancerToProjectRoles(
  * so a role requiring "Interior Design" scored low against an interior
  * architect whose expertise listed exactly that.
  */
+function scopedRoleSkills(requiredRole: string, profile: Profile): string[] {
+ const families = detectRoleFamilies(requiredRole);
+ return buildFreelancerSkillPool(profile).filter(skill => {
+  if (detectCanonicalRoles(skill).length > 0 && !isDirectRoleRelevance(getRoleRelevance(requiredRole, [skill]))) return false;
+  const skillFamilies = detectRoleFamilies(skill);
+  return skillFamilies.size === 0 || [...skillFamilies].some(family => families.has(family));
+ });
+}
+
 function buildFreelancerSkillPool(profile: Profile): string[] {
   return uniqueStrings([
     ...normalizeSkills(profile.skills),
@@ -1159,8 +1159,14 @@ function calculateFreelancerProjectRoleMatch({
   const isGeneralProjectRole =
     roleData.roleId === "fallback-single-role";
 
-  const freelancerSkills =
-    buildFreelancerSkillPool(profile);
+  const familyText = isGeneralProjectRole
+    ? (detectRoleFamilies(project.category).size > 0 ? project.category : projectSkills.join(" "))
+    : roleName;
+  if (!computeRoleEligibility(100, familyText, buildFreelancerFamilyText(profile)).familyCompatible) {
+    return { score: 0, reason: "Profilinle doğrudan eşleşen rol bulunamadı.", matchingSkills: [] };
+  }
+
+  const freelancerSkills = isGeneralProjectRole ? buildFreelancerSkillPool(profile) : scopedRoleSkills(roleName, profile);
 
   const projectTypeMatch =
     hasProjectTypeMatch(profile, project.category);
@@ -1199,8 +1205,6 @@ function calculateFreelancerProjectRoleMatch({
   const roleTexts = [
     profile.title,
     profile.expertise,
-    profile.bio,
-    ...(profile.project_types ?? []),
   ].filter(
     (
       value
@@ -1213,11 +1217,8 @@ function calculateFreelancerProjectRoleMatch({
   /* Role score                                                              */
   /* ---------------------------------------------------------------------- */
 
-  const roleScore =
-    calculateRoleTextScore(
-      roleName,
-      roleTexts
-    );
+  const relevance = isGeneralProjectRole ? undefined : getRoleRelevance(roleName, roleTexts);
+  const roleScore = relevance?.roleScore ?? 0;
 
   /* ---------------------------------------------------------------------- */
   /* Role skills                                                             */
@@ -1398,95 +1399,9 @@ function calculateFreelancerProjectRoleMatch({
    * anlamsızdır ve skoru gereksiz yere seyreltir. Bu durumda ağırlık
    * neredeyse tamamen skill uyumuna ve deneyime verilir.
    */
-  let score = isGeneralProjectRole
-    ? weightedSkillScore * 0.9 +
-      experienceScore * 0.1
-    : weightedSkillScore * 0.35 +
-      roleScore * 0.30 +
-      responsibilityScore * 0.15 +
-      portfolioRoleScore * 0.15 +
-      experienceScore * 0.05;
-
-  // Declared project-type compatibility only ever adds a little, and never
-  // on its own (a role signal must already exist).
-  if (projectTypeMatch && score > 0) {
-    score += 5;
-  }
-
-  /**
-   * Çok güçlü profil + role-specific skill.
-   */
-  if (
-    roleScore >= 80 &&
-    roleSkillMatch.percentage >= 70
-  ) {
-    score = Math.max(
-      score,
-      90
-    );
-  }
-
-  /**
-   * Güçlü profil + portfolyo uyumu.
-   */
-  if (
-    roleScore >= 70 &&
-    portfolioRoleScore >= 70
-  ) {
-    score = Math.max(
-      score,
-      80
-    );
-  }
-
-  /**
-   * Role-specific skill çok güçlüyse profil başlığının
-   * birebir aynı olması şart değil.
-   */
-  if (
-    roleSkillMatch.percentage >= 80
-  ) {
-    score = Math.max(
-      score,
-      75
-    );
-  }
-
-  /**
-   * Hiçbir temel role sinyali yoksa kesinlikle eşleşme yok.
-   *
-   * ÖNEMLİ: burada roleSkillMatch (SADECE role-specific requiredSkills/
-   * skills alanına bakar) değil, weightedSkillScore kontrol edilir.
-   * roleData.requiredSkills/skills boşsa (client bir role için beceri
-   * girmeden projeyi yayınlayabiliyor — bkz. app/client/create-project)
-   * roleSkillMatch.percentage HER ZAMAN 0'dır, ama weightedSkillScore bu
-   * durumda zaten projectSkillMatch'e (projenin genel beceri listesi)
-   * düşer (bkz. yukarıdaki "else if (projectSkills.length > 0)" dalı).
-   * Eskiden roleSkillMatch.percentage kontrol edildiği için, sırf o rol
-   * için beceri tanımlanmamış diye — freelancer'ın genel proje
-   * becerileriyle güçlü örtüşmesi olsa bile — skor sıfırlanıyordu. Bu,
-   * "veri alanı eksikliği gerçekten uyan bir freelancer'ı %0 yapmamalı"
-   * kuralını ihlal ediyordu. calculateMatch() (aşağıda) zaten aynı sinyali
-   * doğru şekilde weightedSkillScore üzerinden kontrol ediyor — burası
-   * ona tutarlı hale getirildi.
-   */
-  if (
-    roleScore === 0 &&
-    weightedSkillScore === 0 &&
-    portfolioRoleScore === 0 &&
-    responsibilityScore === 0
-  ) {
-    score = 0;
-  }
-
-  const finalScore =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        Math.round(score)
-      )
-    );
+  const finalScore = relevance
+    ? scoreRoleRelevance(relevance, weightedSkillScore, portfolioRoleScore, experienceScore)
+    : Math.min(100, Math.round(weightedSkillScore * .9 + experienceScore * .1 + (projectTypeMatch ? 5 : 0)));
 
   /**
    * For a named role, only the role's own skills are reported as "matching"
@@ -1527,6 +1442,7 @@ function calculateFreelancerProjectRoleMatch({
 
   return {
     score: finalScore,
+    relevance,
     reason,
     matchingSkills,
   };
@@ -1535,988 +1451,6 @@ function calculateFreelancerProjectRoleMatch({
 /* -------------------------------------------------------------------------- */
 /* Role matching                                                              */
 /* -------------------------------------------------------------------------- */
-
-function calculateRoleTextScore(
-  requiredRole: string,
-  candidateTexts: string[]
-): number {
-  const required =
-    normalizeText(
-      requiredRole
-    );
-
-  if (!required) {
-    return 0;
-  }
-
-  const aliases =
-    getRoleAliases(required);
-
-  const roleCandidates = [
-    required,
-    ...aliases,
-  ];
-
-  let bestScore = 0;
-
-  for (
-    const candidateRole of roleCandidates
-  ) {
-    const requiredWords =
-      getMeaningfulWords(
-        candidateRole
-      );
-
-    if (
-      requiredWords.length === 0
-    ) {
-      continue;
-    }
-
-    for (
-      const candidateText of candidateTexts
-    ) {
-      const normalizedCandidate =
-        normalizeText(
-          candidateText
-        );
-
-      if (!normalizedCandidate) {
-        continue;
-      }
-
-      /**
-       * Birebir rol ifadesi varsa en güçlü eşleşme.
-       */
-      if (
-        normalizedCandidate.includes(
-          candidateRole
-        )
-      ) {
-        bestScore = Math.max(
-          bestScore,
-          100
-        );
-
-        continue;
-      }
-
-      const candidateWords =
-        getMeaningfulWords(
-          normalizedCandidate
-        );
-
-      const matchingWords =
-        requiredWords.filter(
-          (word) =>
-            candidateWords.includes(
-              word
-            )
-        );
-
-      if (
-        matchingWords.length === 0
-      ) {
-        continue;
-      }
-
-      const percentage =
-        (matchingWords.length /
-          requiredWords.length) *
-        100;
-
-      bestScore = Math.max(
-        bestScore,
-        percentage
-      );
-    }
-  }
-
-  /**
-   * İkinci geçiş: eş anlamlı olmayan ama gerçekten ilişkili roller
-   * (bkz. getRelatedRoles). Sadece birebir/substring eşleşmesi
-   * kontrol edilir (word-overlap uygulanmaz) ve katkı
-   * RELATED_ROLE_SCORE ile sınırlıdır — bu yüzden "Yazar" rolü
-   * isteyen bir proje, unvanı "Senarist" olan bir freelancer'ı artık
-   * roleScore=0 yüzünden otomatik elemez, ama bu tek başına da
-   * "birebir eşleşme" gücünde sayılmaz.
-   */
-  if (bestScore < RELATED_ROLE_SCORE) {
-    for (
-      const relatedRole of getRelatedRoles(
-        required
-      )
-    ) {
-      for (
-        const candidateText of candidateTexts
-      ) {
-        const normalizedCandidate =
-          normalizeText(
-            candidateText
-          );
-
-        if (
-          normalizedCandidate &&
-          normalizedCandidate.includes(
-            relatedRole
-          )
-        ) {
-          bestScore = Math.max(
-            bestScore,
-            RELATED_ROLE_SCORE
-          );
-        }
-      }
-    }
-  }
-
-  if (
-    bestScore >
-      RELATED_ROLE_SCORE &&
-    isQualifierDowngrade(
-      required,
-      candidateTexts
-    )
-  ) {
-    bestScore =
-      RELATED_ROLE_SCORE;
-  }
-
-  return Math.round(
-    Math.min(
-      100,
-      bestScore
-    )
-  );
-}
-
-/**
- * Bazı compound/qualifier rol adları ("İç Mimar" = "İç" + "Mimar",
- * "Product Photographer" = "Product" + "Photographer") temel
- * substring/word-overlap kontrolünde KAÇINILMAZ OLARAK ana rolün
- * kendisini içerir — bu yüzden hiçbir alias/related listesi
- * eklenmese bile normalde 100 (exact) puan alırlardı. Ama bunlar
- * GERÇEKTE farklı bir uzmanlık (bkz. matching audit: "Mimar ↔ İç
- * Mimar exact değil, closely related olmalı").
- *
- * Bu, substring/word-overlap MEKANİZMASINI değiştirmez — sadece bu
- * bilinen, açıkça listelenmiş çiftlerin SONUCUNU RELATED_ROLE_SCORE'a
- * sınırlar (calculateRoleTextScore'un sonunda uygulanır).
- */
-const QUALIFIER_DOWNGRADE_PAIRS: [
-  string,
-  string
-][] = [
-  ["mimar", "ic mimar"],
-  ["architect", "interior architect"],
-  ["photographer", "product photographer"],
-  ["photographer", "fashion photographer"],
-  ["photographer", "event photographer"],
-  ["fotografci", "urun fotografcisi"],
-  ["fotografci", "moda fotografcisi"],
-  ["fotografci", "etkinlik fotografcisi"],
-];
-
-function isQualifierDowngrade(
-  required: string,
-  candidateTexts: string[]
-): boolean {
-  return candidateTexts.some(
-    (text) => {
-      const candidate =
-        normalizeText(text);
-
-      return QUALIFIER_DOWNGRADE_PAIRS.some(
-        ([a, b]) =>
-          (required === a &&
-            candidate.includes(
-              b
-            )) ||
-          (required === b &&
-            candidate.includes(
-              a
-            ))
-      );
-    }
-  );
-}
-
-/**
- * EXACT / SYNONYM roller.
- *
- * Bu liste SADECE gerçekten "aynı işin farklı adı" olan çiftler
- * içindir — aynı meslek, farklı dil (TR/EN) ya da yaygın yazım
- * varyasyonu (bkz. matching audit — role relationship matrisi).
- *
- * "Product Designer", "UI Designer", "UX Designer" gibi GERÇEKTE
- * FARKLI uzmanlıklar (birbiriyle örtüşse de aynı iş değil) burada
- * DEĞİL — getRelatedRoles()'ta, sınırlı puanla. Bu ayrım kasıtlı:
- * "Mimar ↔ İç Mimar", "Photographer ↔ Product Photographer" gibi
- * çiftlerin exact/100 puan almasını önlemek için.
- */
-function getRoleAliases(
-  role: string
-): string[] {
-  const normalized =
-    normalizeText(role);
-
-  const aliasGroups: Record<
-    string,
-    string[]
-  > = {
-    /* ---- UI/UX & Web Tasarım — sadece aynı işin TR/EN adı ---- */
-    "ui ux tasarim": ["ui ux designer"],
-    "ui ux designer": ["ui ux tasarim"],
-    "ui designer": ["arayuz tasarimcisi", "arayuz tasarimi"],
-    "arayuz tasarimcisi": ["ui designer"],
-    "ux designer": ["kullanici deneyimi tasarimcisi"],
-    "kullanici deneyimi tasarimcisi": ["ux designer"],
-    "product designer": ["urun tasarimcisi"],
-    "urun tasarimcisi": ["product designer"],
-    "web tasarim": ["web designer", "web design"],
-    "web designer": ["web tasarim", "web design"],
-    "web design": ["web tasarim", "web designer"],
-
-    /* ---- Frontend / Backend geliştirme (değiştirilmedi) ---- */
-    "frontend gelistirme": [
-      "frontend developer",
-      "front end developer",
-      "web developer",
-      "frontend engineer",
-    ],
-
-    "frontend developer": [
-      "frontend gelistirme",
-      "front end developer",
-      "web developer",
-      "frontend engineer",
-    ],
-
-    "backend gelistirme": [
-      "backend developer",
-      "back end developer",
-      "backend engineer",
-    ],
-
-    "backend developer": [
-      "backend gelistirme",
-      "back end developer",
-      "backend engineer",
-    ],
-
-    /* ---- Grafik / Marka — sadece aynı işin TR/EN adı ---- */
-    "grafik tasarim": ["graphic designer", "grafik tasarimci"],
-    "graphic designer": ["grafik tasarim", "grafik tasarimci"],
-    "grafik tasarimci": ["graphic designer", "grafik tasarim"],
-    "marka tasarimi": ["brand designer", "marka tasarimcisi"],
-    "brand designer": ["marka tasarimi", "marka tasarimcisi"],
-    "marka tasarimcisi": ["brand designer", "marka tasarimi"],
-    "logo tasarimi": ["logo designer"],
-    "logo designer": ["logo tasarimi"],
-
-    "mobil uygulama": [
-      "mobile developer",
-      "mobile app developer",
-      "ios developer",
-      "android developer",
-      "react native developer",
-      "flutter developer",
-    ],
-
-    "mobile developer": [
-      "mobil uygulama",
-      "mobile app developer",
-      "ios developer",
-      "android developer",
-      "react native developer",
-      "flutter developer",
-    ],
-
-    "yazilim gelistirme": [
-      "software developer",
-      "software engineer",
-      "developer",
-    ],
-
-    "software developer": [
-      "yazilim gelistirme",
-      "software engineer",
-      "developer",
-    ],
-
-    /*
-     * Dijital Pazarlama — "seo specialist"/"social media specialist"
-     * ARTIK bu listede değil: SEO ya da sosyal medya uzmanlığı,
-     * genel dijital pazarlamacılıkla aynı iş değil, ilişkili ama ayrı
-     * bir uzmanlık (bkz. getRelatedRoles).
-     */
-    "dijital pazarlama": [
-      "digital marketing",
-      "digital marketing specialist",
-      "digital marketer",
-      "marketing specialist",
-      "dijital pazarlama uzmani",
-    ],
-
-    "dijital pazarlama uzmani": [
-      "digital marketing",
-      "digital marketing specialist",
-      "digital marketer",
-      "marketing specialist",
-      "dijital pazarlama",
-    ],
-
-    "digital marketing": [
-      "dijital pazarlama",
-      "dijital pazarlama uzmani",
-      "digital marketing specialist",
-      "digital marketer",
-      "marketing specialist",
-    ],
-
-    "seo": [
-      "seo specialist",
-      "seo uzmani",
-      "search engine optimization",
-    ],
-
-    "social media": [
-      "social media specialist",
-      "social media manager",
-      "sosyal medya uzmani",
-      "sosyal medya yoneticisi",
-    ],
-
-    "sosyal medya": [
-      "social media specialist",
-      "social media manager",
-      "social media",
-    ],
-
-    "icerik uretimi": [
-      "content creator",
-      "content writer",
-      "copywriter",
-      "content specialist",
-      "content",
-    ],
-
-    "content creator": [
-      "icerik uretimi",
-      "content writer",
-      "copywriter",
-      "content specialist",
-    ],
-
-    "content": [
-      "content creator",
-      "content writer",
-      "copywriter",
-      "content specialist",
-      "icerik uretimi",
-    ],
-
-    "ui ux": [
-      "ui ux designer",
-      "ui ux tasarim",
-    ],
-
-    "frontend": [
-      "frontend developer",
-      "frontend gelistirme",
-      "front end developer",
-      "web developer",
-    ],
-
-    "backend": [
-      "backend developer",
-      "backend gelistirme",
-      "back end developer",
-    ],
-
-    /* ---- Yazarlık / İçerik — sadece aynı işin TR/EN adı ---- */
-    senarist: ["senaryo yazari", "screenwriter"],
-    "senaryo yazari": ["senarist", "screenwriter"],
-    screenwriter: ["senarist", "senaryo yazari"],
-
-    /* ---- Çeviri — writing'den AYRI, kendi exact grubu ---- */
-    translator: ["cevirmen", "tercuman"],
-    cevirmen: ["translator", "tercuman"],
-    tercuman: ["translator", "cevirmen"],
-
-    /* ---- 3D Tasarım ---- */
-    "3d artist": ["3d sanatci"],
-    "3d sanatci": ["3d artist"],
-    "3d modeler": ["3d modelleyici"],
-    "3d modelleyici": ["3d modeler"],
-
-    /* ---- Mimari & İç Mekân — sadece aynı işin TR/EN adı ---- */
-    mimar: ["architect"],
-    architect: ["mimar"],
-    "ic mimar": ["interior architect"],
-    "interior architect": ["ic mimar"],
-    "peyzaj mimari": ["landscape architect"],
-    "landscape architect": ["peyzaj mimari"],
-
-    /* ---- Video & Animasyon ---- */
-    "video editor": ["video editoru"],
-    "video editoru": ["video editor"],
-    "video producer": ["video yapimcisi"],
-    "video yapimcisi": ["video producer"],
-
-    /* ---- Fotoğraf ---- */
-    photographer: ["fotografci"],
-    fotografci: ["photographer"],
-
-    /* ---- Ses & Müzik ---- */
-    "sound designer": ["ses tasarimcisi"],
-    "ses tasarimcisi": ["sound designer"],
-    "music producer": ["muzik produktoru"],
-    "muzik produktoru": ["music producer"],
-
-    /* ---- İş & Yönetim ---- */
-    "project manager": ["proje yoneticisi"],
-    "proje yoneticisi": ["project manager"],
-  };
-
-  return (
-    aliasGroups[normalized] ??
-    []
-  );
-}
-
-/**
- * "Yakın ama eş anlamlı DEĞİL" roller.
- *
- * getRoleAliases() içindeki gruplar (ör. UI/UX Designer ↔ Product
- * Designer) gerçek eş anlamlılardır — birebir alias eşleşmesi 100 puan
- * alır. Ama "Yazar" ile "Senarist" ya da "İçerik Yazarı" öyle değil:
- * gerçekten ilişkili meslekler ama birbirinin otomatik yerine geçmemeli
- * (bkz. matching audit — "Kitap yazma projesi + Senarist" senaryosu).
- *
- * Bu liste calculateRoleTextScore()'da SADECE RELATED_ROLE_SCORE ile
- * sınırlı (aliaslardaki 100 potansiyeline göre daha düşük) bir katkı
- * sağlar — nihai skoru tek başına belirlemez, diğer sinyallerle
- * (skill/responsibility/experience) birlikte eşik karşılaştırmasına
- * girer.
- */
-function getRelatedRoles(
-  role: string
-): string[] {
-  const normalized =
-    normalizeText(role);
-
-  const relatedGroups: Record<
-    string,
-    string[]
-  > = {
-    /* ---- UI/UX — birbiriyle örtüşen ama AYNI iş olmayan uzmanlıklar ---- */
-    "ui ux tasarim": [
-      "ui designer",
-      "ux designer",
-      "product designer",
-      "interaction designer",
-      "ux researcher",
-      "web designer",
-      "design system designer",
-      "urun tasarimcisi",
-    ],
-    "ui ux designer": [
-      "ui designer",
-      "ux designer",
-      "product designer",
-      "interaction designer",
-      "ux researcher",
-      "web designer",
-      "design system designer",
-      "urun tasarimcisi",
-    ],
-    "product designer": [
-      "ui designer",
-      "ux designer",
-      "interaction designer",
-      "ux researcher",
-      "ui ux designer",
-      "ui ux tasarim",
-    ],
-    "urun tasarimcisi": [
-      "ui designer",
-      "ux designer",
-      "interaction designer",
-      "ux researcher",
-      "ui ux designer",
-      "ui ux tasarim",
-    ],
-    "ui designer": [
-      "ux designer",
-      "product designer",
-      "ui ux designer",
-      "ui ux tasarim",
-      "interaction designer",
-    ],
-    "ux designer": [
-      "ui designer",
-      "product designer",
-      "ux researcher",
-      "ui ux designer",
-      "ui ux tasarim",
-      "interaction designer",
-    ],
-    "ux researcher": [
-      "ux designer",
-      "product designer",
-      "ui ux designer",
-      "ui ux tasarim",
-    ],
-    "kullanici arastirmacisi": [
-      "ux designer",
-      "product designer",
-      "ui ux designer",
-    ],
-    "interaction designer": [
-      "ui designer",
-      "ux designer",
-      "product designer",
-      "ui ux designer",
-    ],
-    "etkilesim tasarimcisi": [
-      "ui designer",
-      "ux designer",
-      "product designer",
-    ],
-    "design system designer": [
-      "ui designer",
-      "product designer",
-      "ui ux designer",
-    ],
-    "web tasarim": [
-      "ui designer",
-      "product designer",
-      "ui ux designer",
-      "ux designer",
-    ],
-    "web design": [
-      "ui designer",
-      "product designer",
-      "ui ux designer",
-      "ux designer",
-    ],
-    "web designer": [
-      "ui designer",
-      "product designer",
-      "ui ux designer",
-      "ux designer",
-    ],
-
-    /* ---- Grafik / Marka — birbiriyle örtüşen ama AYNI iş olmayan uzmanlıklar ---- */
-    "grafik tasarim": [
-      "visual designer",
-      "brand designer",
-      "illustrator",
-      "art director",
-      "creative designer",
-      "logo designer",
-    ],
-    "grafik tasarimci": [
-      "visual designer",
-      "brand designer",
-      "illustrator",
-      "art director",
-      "creative designer",
-      "logo designer",
-    ],
-    "graphic designer": [
-      "visual designer",
-      "brand designer",
-      "illustrator",
-      "art director",
-      "creative designer",
-      "logo designer",
-    ],
-    "marka tasarimi": [
-      "graphic designer",
-      "visual designer",
-      "art director",
-      "creative designer",
-      "grafik tasarim",
-    ],
-    "marka tasarimcisi": [
-      "graphic designer",
-      "visual designer",
-      "art director",
-      "creative designer",
-      "grafik tasarim",
-    ],
-    "brand designer": [
-      "graphic designer",
-      "visual designer",
-      "art director",
-      "creative designer",
-      "grafik tasarim",
-    ],
-    "visual designer": [
-      "graphic designer",
-      "brand designer",
-      "illustrator",
-      "grafik tasarim",
-    ],
-    "gorsel tasarimci": [
-      "graphic designer",
-      "brand designer",
-      "illustrator",
-    ],
-    "art director": [
-      "graphic designer",
-      "brand designer",
-      "creative designer",
-      "illustrator",
-    ],
-    "sanat yonetmeni": [
-      "graphic designer",
-      "brand designer",
-      "creative designer",
-    ],
-    illustrator: [
-      "graphic designer",
-      "visual designer",
-      "creative designer",
-    ],
-    "creative designer": [
-      "graphic designer",
-      "brand designer",
-      "art director",
-    ],
-    "yaratici tasarimci": [
-      "graphic designer",
-      "brand designer",
-      "art director",
-    ],
-    "logo designer": [
-      "graphic designer",
-      "brand designer",
-    ],
-
-    /* ---- Yazılım geliştirme — mevcut exact gruplara ek, geniş sektör terimleri ---- */
-    "frontend gelistirme": [
-      "react developer",
-      "typescript developer",
-      "javascript developer",
-      "full stack developer",
-    ],
-    "frontend developer": [
-      "react developer",
-      "typescript developer",
-      "javascript developer",
-      "full stack developer",
-    ],
-    frontend: [
-      "react developer",
-      "typescript developer",
-      "javascript developer",
-      "full stack developer",
-    ],
-    "yazilim gelistirme": [
-      "full stack developer",
-      "backend developer",
-      "react developer",
-    ],
-    "software developer": [
-      "full stack developer",
-      "backend developer",
-      "react developer",
-    ],
-
-    /* ---- Dijital Pazarlama — genel pazarlama ile alt-uzmanlıklar arası ---- */
-    "dijital pazarlama": [
-      "seo specialist",
-      "social media specialist",
-      "social media manager",
-      "content strategist",
-      "advertising specialist",
-      "performance marketer",
-      "growth marketer",
-    ],
-    "dijital pazarlama uzmani": [
-      "seo specialist",
-      "social media specialist",
-      "social media manager",
-      "content strategist",
-      "advertising specialist",
-    ],
-    "digital marketing": [
-      "seo specialist",
-      "social media specialist",
-      "social media manager",
-      "content strategist",
-      "advertising specialist",
-      "performance marketer",
-      "growth marketer",
-    ],
-    seo: ["dijital pazarlama", "digital marketing"],
-    "social media": ["dijital pazarlama", "digital marketing"],
-    "sosyal medya": ["dijital pazarlama", "digital marketing"],
-
-    /*
-     * ---- Yazarlık / İçerik ----
-     * "senarist" ↔ "senaryo yazari" artık BURADA DEĞİL — exact/synonym
-     * olarak getRoleAliases()'a taşındı (bkz. audit düzeltmesi).
-     */
-    yazar: [
-      "senarist",
-      "senaryo yazari",
-      "kitap yazari",
-      "icerik yazari",
-      "metin yazari",
-      "hikaye yazari",
-      "roman yazari",
-      "copywriter",
-      "content writer",
-    ],
-    "kitap yazari": [
-      "yazar",
-      "senarist",
-      "senaryo yazari",
-      "hikaye yazari",
-      "roman yazari",
-    ],
-    senarist: [
-      "yazar",
-      "kitap yazari",
-      "hikaye yazari",
-    ],
-    "senaryo yazari": [
-      "yazar",
-      "hikaye yazari",
-      "kitap yazari",
-    ],
-    "hikaye yazari": [
-      "yazar",
-      "senarist",
-      "senaryo yazari",
-      "kitap yazari",
-      "icerik yazari",
-    ],
-    "icerik yazari": [
-      "yazar",
-      "metin yazari",
-      "kitap yazari",
-      "hikaye yazari",
-      "copywriter",
-      "content writer",
-    ],
-    "metin yazari": [
-      "icerik yazari",
-      "yazar",
-      "copywriter",
-      "content writer",
-    ],
-
-    /* ---- 3D Tasarım ---- */
-    "3d artist": [
-      "3d modeler",
-      "character designer",
-      "motion designer",
-      "game designer",
-    ],
-    "3d sanatci": [
-      "3d modeler",
-      "character designer",
-      "motion designer",
-      "game designer",
-    ],
-    "3d modeler": [
-      "3d artist",
-      "character designer",
-      "cad designer",
-    ],
-    "3d modelleyici": [
-      "3d artist",
-      "character designer",
-      "cad designer",
-    ],
-
-    /* ---- Mimari & İç Mekân — farklı ama gerçekten ilişkili uzmanlıklar ---- */
-    mimar: [
-      "ic mimar",
-      "interior architect",
-      "landscape architect",
-      "architectural visualizer",
-      "mimari gorsellestirici",
-      "cad designer",
-      "technical designer",
-    ],
-    architect: [
-      "ic mimar",
-      "interior architect",
-      "landscape architect",
-      "architectural visualizer",
-      "mimari gorsellestirici",
-      "cad designer",
-      "technical designer",
-    ],
-    "ic mimar": [
-      "mimar",
-      "architect",
-      "architectural visualizer",
-      "mimari gorsellestirici",
-    ],
-    "interior architect": [
-      "mimar",
-      "architect",
-      "architectural visualizer",
-      "mimari gorsellestirici",
-    ],
-    "architectural visualizer": [
-      "mimar",
-      "ic mimar",
-      "architect",
-      "interior architect",
-    ],
-    "mimari gorsellestirici": [
-      "mimar",
-      "ic mimar",
-      "architect",
-      "interior architect",
-    ],
-    "cad designer": [
-      "mimar",
-      "ic mimar",
-      "technical designer",
-    ],
-    "cad tasarimcisi": [
-      "mimar",
-      "ic mimar",
-      "technical designer",
-    ],
-
-    /* ---- Video & Animasyon ---- */
-    "video editor": [
-      "motion designer",
-      "video producer",
-      "videographer",
-      "post production specialist",
-      "animator",
-    ],
-    "video editoru": [
-      "motion designer",
-      "video producer",
-      "videographer",
-      "post production specialist",
-      "animator",
-    ],
-    "motion designer": [
-      "video editor",
-      "animator",
-      "3d artist",
-    ],
-    "hareketli grafik tasarimcisi": [
-      "video editor",
-      "animator",
-      "3d artist",
-    ],
-    videographer: [
-      "video editor",
-      "video producer",
-    ],
-    animator: [
-      "motion designer",
-      "3d artist",
-      "character animator",
-    ],
-
-    /* ---- Fotoğraf — farklı ama gerçekten ilişkili uzmanlıklar ---- */
-    photographer: [
-      "product photographer",
-      "fashion photographer",
-      "event photographer",
-      "photo editor",
-      "retoucher",
-    ],
-    fotografci: [
-      "product photographer",
-      "fashion photographer",
-      "event photographer",
-      "photo editor",
-      "retoucher",
-    ],
-    "product photographer": [
-      "photographer",
-      "fashion photographer",
-      "event photographer",
-    ],
-    "urun fotografcisi": [
-      "photographer",
-      "fashion photographer",
-      "event photographer",
-    ],
-    "fashion photographer": [
-      "photographer",
-      "product photographer",
-      "event photographer",
-    ],
-    "event photographer": [
-      "photographer",
-      "product photographer",
-      "fashion photographer",
-    ],
-    "photo editor": [
-      "photographer",
-      "retoucher",
-    ],
-    retoucher: [
-      "photographer",
-      "photo editor",
-    ],
-
-    /* ---- Ses & Müzik ---- */
-    "ses tasarimcisi": [
-      "muzik produktoru",
-      "ses muhendisi",
-      "podcast produktoru",
-    ],
-    "sound designer": [
-      "music producer",
-      "sound engineer",
-      "podcast producer",
-    ],
-    "muzik produktoru": [
-      "ses tasarimcisi",
-      "ses muhendisi",
-      "dublaj sanatcisi",
-    ],
-    "music producer": [
-      "sound designer",
-      "sound engineer",
-      "voice actor",
-    ],
-
-    /* ---- İş & Yönetim ---- */
-    "proje yoneticisi": [
-      "business analyst",
-      "business consultant",
-      "operations manager",
-      "virtual assistant",
-    ],
-    "project manager": [
-      "business analyst",
-      "business consultant",
-      "operations manager",
-      "virtual assistant",
-    ],
-  };
-
-  return (
-    relatedGroups[normalized] ??
-    []
-  );
-}
-
-/**
- * related (eş anlamlı olmayan ama ilişkili) rol eşleşmesinin alabileceği
- * en yüksek puan — tam alias/birebir eşleşmenin (100) altında, gerçek
- * ilişkisizliğin (0) üstünde.
- */
-const RELATED_ROLE_SCORE = 65;
 
 /* -------------------------------------------------------------------------- */
 /* Client matching helpers                                                    */
@@ -2537,6 +1471,10 @@ function calculateMatch({
   responsibilities: string[];
   freelancerSkills: string[];
 }): MatchCalculation {
+  if (!computeRoleEligibility(100, requiredRole, buildFreelancerFamilyText(profile)).familyCompatible) {
+    return { score: 0, reason: "Profilinle doğrudan eşleşen rol bulunamadı.", matchingSkills: [] };
+  }
+  freelancerSkills = scopedRoleSkills(requiredRole, profile);
   const skillMatch =
     requiredSkills.length > 0
       ? matchSkills(
@@ -2576,11 +1514,8 @@ function calculateMatch({
       preferredSkillMatch.percentage;
   }
 
-  const roleScore =
-    calculateRoleScore(
-      requiredRole,
-      profile
-    );
+  const relevance = getRoleRelevance(requiredRole, [profile.title, profile.expertise].filter((text): text is string => Boolean(text)));
+  const roleScore = relevance.roleScore;
 
   const responsibilityScore =
     calculateResponsibilityScore(
@@ -2594,38 +1529,7 @@ function calculateMatch({
       profile.experience
     );
 
-  let score =
-    weightedSkillScore * 0.45 +
-    roleScore * 0.25 +
-    responsibilityScore * 0.15 +
-    experienceScore * 0.15;
-
-  if (
-    weightedSkillScore === 0 &&
-    roleScore === 0 &&
-    responsibilityScore === 0
-  ) {
-    score = 0;
-  }
-
-  if (
-    roleScore >= 80 &&
-    weightedSkillScore >= 80
-  ) {
-    score = Math.max(
-      score,
-      85
-    );
-  }
-
-  const finalScore =
-    Math.min(
-      100,
-      Math.max(
-        0,
-        Math.round(score)
-      )
-    );
+  const finalScore = scoreRoleRelevance(relevance, weightedSkillScore, 0, experienceScore);
 
   const matchingSkills =
     uniqueStrings([
@@ -2652,31 +1556,10 @@ function calculateMatch({
 
   return {
     score: finalScore,
+    relevance,
     reason,
     matchingSkills,
   };
-}
-
-function calculateRoleScore(
-  requiredRole: string,
-  profile: Profile
-): number {
-  const candidateTexts = [
-    profile.title,
-    profile.expertise,
-    profile.bio,
-  ].filter(
-    (
-      value
-    ): value is string =>
-      typeof value === "string" &&
-      value.trim().length > 0
-  );
-
-  return calculateRoleTextScore(
-    requiredRole,
-    candidateTexts
-  );
 }
 
 function calculateResponsibilityScore(
@@ -3241,21 +2124,11 @@ async function getFreelancerProfiles(
 /**
  * Role family tespiti için kullanılan freelancer metni.
  *
- * title + expertise + skills birleşimi kullanılır: title tek başına
- * yetersiz kalabilir (ör. "Freelancer"), skills ise family sinyalini
- * güçlendirir.
+ * Declared title/expertise establish the occupation; skills are used only
+ * when these fields cannot identify any family.
  */
 function buildFreelancerFamilyText(profile: Profile): string {
-  const skills = Array.isArray(profile.skills)
-    ? profile.skills.join(" ")
-    : "";
-
-  return [profile.title, profile.expertise, skills]
-    .filter(
-      (value): value is string =>
-        typeof value === "string" && value.trim().length > 0
-    )
-    .join(" ");
+  return freelancerFamilyText(profile);
 }
 
 /* -------------------------------------------------------------------------- */

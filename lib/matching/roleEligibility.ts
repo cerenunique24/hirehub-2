@@ -1,3 +1,4 @@
+import { detectCanonicalRoles, isDirectRoleRelevance, type RoleRelevance } from "@/lib/matching/roleRelevance";
 import { normalizeMatchText } from "@/lib/utils/normalizeMatchText";
 
 /**
@@ -22,7 +23,7 @@ import { normalizeMatchText } from "@/lib/utils/normalizeMatchText";
  */
 export const ELIGIBILITY_MATCH_THRESHOLD = 40;
 
-type RoleFamily =
+export type RoleFamily =
   | "architecture"
   | "engineering_civil"
   | "engineering_mechanical"
@@ -214,6 +215,8 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
   ],
 
   marketing: [
+    "performance marketer", "growth marketer", "social media specialist", "content marketer",
+    "marketing", "pazarlama",
     "digital marketing",
     "dijital pazarlama",
     "marketing specialist",
@@ -319,6 +322,7 @@ const ROLE_FAMILY_KEYWORDS: Record<RoleFamily, string[]> = {
   ],
 
   writing: [
+    "book writer", "novelist", "creative writer", "story writer", "senaryo", "hikaye",
     "copywriter",
     "copywriting",
     "content writer",
@@ -583,7 +587,7 @@ export function detectRoleFamilies(
       .join(" ")
   );
 
-  const families = new Set<RoleFamily>();
+  const families = new Set<RoleFamily>(detectCanonicalRoles(...texts).map(role=>role.family));
 
   if (!normalized) {
     return families;
@@ -593,7 +597,7 @@ export function detectRoleFamilies(
     [RoleFamily, string[]]
   >) {
     for (const keyword of keywords) {
-      if (normalized.includes(normalizeText(keyword))) {
+      if ((" " + normalized + " ").includes(" " + normalizeText(keyword) + " ")) {
         families.add(family);
         break;
       }
@@ -607,16 +611,14 @@ export function detectRoleFamilies(
  * Role family sinyali açısından iki metin uyumlu mu?
  *
  * - İki taraf da tanınan bir aileye sahipse: kesişim şart.
- * - Taraflardan biri tanınmıyorsa (bilinmeyen/özel rol adı, çok kısa
- *   profil vb.): family gate uygulanmaz — bu durumda tek sinyal
- *   matchScore eşiği olur.
+ * - Taraflardan biri tanınmıyorsa uygunluk doğrulanamaz; gate kapalı kalır.
  */
 export function isRoleFamilyCompatible(
   roleFamilies: Set<RoleFamily>,
   freelancerFamilies: Set<RoleFamily>
 ): boolean {
   if (roleFamilies.size === 0 || freelancerFamilies.size === 0) {
-    return true;
+    return false;
   }
 
   for (const family of roleFamilies) {
@@ -643,8 +645,7 @@ export type RoleEligibilityResult = {
  *
  * isEligibleForRole:
  * - matchScore >= ELIGIBILITY_MATCH_THRESHOLD
- * - VE role family uyumlu (ya kesişiyor ya da taraflardan biri
- *   tanınmıyor)
+ * - VE iki tarafın tanınan role family kümeleri kesişiyor
  */
 export function computeRoleEligibility(
   matchScore: number,
@@ -660,8 +661,20 @@ export function computeRoleEligibility(
     familyCompatible && matchScore >= ELIGIBILITY_MATCH_THRESHOLD;
 
   return {
-    matchScore,
+    matchScore: familyCompatible ? matchScore : 0,
     isEligibleForRole,
     familyCompatible,
   };
+}
+
+/** Declared occupations take priority; tool tags cannot add unrelated families. */
+export function freelancerFamilyText(profile: { title?: string | null; expertise?: string | null; skills?: string[] | null }): string {
+ const declared = [profile.title, profile.expertise].filter(Boolean).join(" ");
+ return detectRoleFamilies(declared).size > 0 ? declared : (profile.skills ?? []).join(" ");
+}
+
+/** Discovery and API consumers select only eligible roles; no positional fallback. */
+export function selectBestEligibleRole<T extends { isEligibleForRole: boolean; score: number; relevance?: RoleRelevance }>(matches: readonly T[]): T | null {
+ return matches.reduce<T | null>((best, match) =>
+  match.isEligibleForRole && (!match.relevance || isDirectRoleRelevance(match.relevance)) && (!best || match.score > best.score) ? match : best, null);
 }
