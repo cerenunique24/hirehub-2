@@ -1,7 +1,9 @@
 "use client";
 
+import { Input } from "@/components/ui/Input";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -373,7 +375,7 @@ useEffect(() => {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
-        <div className="flex items-center gap-3 text-sm text-neutral-500">
+        <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
           <Loader2 className="h-5 w-5 animate-spin" />
           Proje yükleniyor...
         </div>
@@ -385,7 +387,7 @@ useEffect(() => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-canvas)]">
         <div className="text-center">
-          <p className="text-lg font-semibold text-neutral-900">
+          <p className="text-lg font-semibold text-[var(--color-text-primary)]">
             Proje bulunamadı
           </p>
 
@@ -403,11 +405,11 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-[var(--color-canvas)]">
-      <main className="mx-auto w-full max-w-[1180px] px-6 py-8">
+      <main className="w-full">
         <div className="mb-8 flex items-center justify-between gap-4">
           <Link
             href={"/client/projects/" + project.id}
-            className="inline-flex items-center gap-2 text-sm font-medium text-neutral-600 transition hover:text-neutral-950"
+            className="inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft className="h-4 w-4" />
             Projeye dön
@@ -418,7 +420,7 @@ useEffect(() => {
               type="button"
               onClick={updateProjectStatus}
               disabled={statusUpdating}
-              className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-neutral-300 hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {statusUpdating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -438,7 +440,7 @@ useEffect(() => {
               onClick={() =>
                 setShowDeleteModal(true)
               }
-              className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+              className="inline-flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-white px-4 py-2.5 text-sm font-medium text-[var(--color-error-600)] transition hover:bg-[var(--color-error-50)]"
             >
               <Trash2 className="h-4 w-4" />
               Sil
@@ -446,18 +448,18 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="mb-8">
-          <div className="mb-2 flex items-center gap-2 text-sm text-neutral-500">
+        <div className={pageHeaderClass}>
+          <div className="mb-2 flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
             <span>Projeler</span>
             <ChevronRight className="h-4 w-4" />
             <span>Düzenle</span>
           </div>
 
-          <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-950">
+          <h1 className="cc-page-title font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
             Proje bilgilerini düzenle
           </h1>
 
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-500">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-secondary)]">
             Projenin mevcut bilgilerini,
             yeteneklerini, gereksinimlerini ve
             teslimatlarını güncelleyebilirsin.
@@ -465,48 +467,48 @@ useEffect(() => {
         </div>
 
         {error && (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-6 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-600)]">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-6 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <div className="mb-6 flex items-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-success-600)]/20 bg-[var(--color-success-50)] px-4 py-3 text-sm text-[var(--color-success-600)]">
             <Check className="h-4 w-4 shrink-0" />
             {success}
           </div>
         )}
 
         <div className="grid gap-6">
-          <section className="rounded-xl border border-neutral-200 bg-white p-5">
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
             <div className="mb-6">
-              <h2 className="text-base font-semibold text-neutral-950">
+              <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                 Proje bilgileri
               </h2>
 
-              <p className="mt-1 text-sm text-neutral-500">
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 Mevcut proje bilgilerini güncelle.
               </p>
             </div>
 
             <div className="space-y-5">
               <div>
-                <label className="mb-2 block text-sm font-medium text-neutral-800">
+                <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                   Proje adı
                 </label>
 
-                <input
+                <Input
                   value={title}
                   onChange={(event) =>
                     setTitle(event.target.value)
                   }
-                  className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-900"
+                  className="w-full rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-neutral-900"
                   placeholder="Örn. Mobil uygulama UI/UX tasarımı"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-neutral-800">
+                <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                   Proje açıklaması
                 </label>
 
@@ -516,37 +518,37 @@ useEffect(() => {
                     setDescription(event.target.value)
                   }
                   rows={7}
-                  className="w-full resize-none rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-6 text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-900"
+                  className="w-full resize-none rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 text-sm leading-6 text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-neutral-900"
                   placeholder="Projenizi, hedefinizi ve neye ihtiyaç duyduğunuzu anlatın..."
                 />
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-neutral-800">
+                  <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                     Bütçe
                   </label>
 
                   <div className="relative">
-                    <input
+                    <Input
                       type="number"
                       min="0"
                       value={budget}
                       onChange={(event) =>
                         setBudget(event.target.value)
                       }
-                      className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 pr-16 text-sm text-neutral-900 outline-none transition focus:border-neutral-900"
+                      className="w-full rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 pr-16 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-neutral-900"
                       placeholder="50000"
                     />
 
-                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-neutral-400">
+                    <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[var(--color-text-muted)]">
                       TL
                     </span>
                   </div>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-neutral-800">
+                  <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                     Son teslim tarihi
                   </label>
 
@@ -556,20 +558,20 @@ useEffect(() => {
                     onChange={(event) =>
                       setDeadline(event.target.value)
                     }
-                    className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-neutral-900"
+                    className="w-full rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-neutral-900"
                   />
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="rounded-xl border border-neutral-200 bg-white p-5">
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
             <div className="mb-5">
-              <h2 className="text-base font-semibold text-neutral-950">
+              <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                 Proje ihtiyaçları
               </h2>
 
-              <p className="mt-1 text-sm text-neutral-500">
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 Projede ihtiyaç duyulan yetenekleri
                 ve gereksinimleri manuel olarak
                 güncelleyebilirsin.
@@ -577,12 +579,12 @@ useEffect(() => {
             </div>
 
             <div className="mb-6">
-              <label className="mb-2 block text-sm font-medium text-neutral-800">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                 Gerekli yetenekler
               </label>
 
               <div className="flex gap-2">
-                <input
+                <Input
                   value={skillInput}
                   onChange={(event) =>
                     setSkillInput(event.target.value)
@@ -593,14 +595,14 @@ useEffect(() => {
                       addSkill();
                     }
                   }}
-                  className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-neutral-900"
+                  className="min-w-0 flex-1 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 py-3 text-sm outline-none focus:border-neutral-900"
                   placeholder="Örn. Figma"
                 />
 
                 <button
                   type="button"
                   onClick={addSkill}
-                  className="rounded-xl border border-neutral-200 px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
                 >
                   Ekle
                 </button>
@@ -611,7 +613,7 @@ useEffect(() => {
                   {skills.map((skill) => (
                     <span
                       key={skill}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)]"
                     >
                       {skill}
 
@@ -620,7 +622,7 @@ useEffect(() => {
                         onClick={() =>
                           removeSkill(skill)
                         }
-                        className="text-neutral-400 transition hover:text-neutral-800"
+                        className="text-[var(--color-text-muted)] transition hover:text-[var(--color-text-primary)]"
                         aria-label={
                           skill + " kaldır"
                         }
@@ -634,7 +636,7 @@ useEffect(() => {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-neutral-800">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                 Gereksinimler
               </label>
 
@@ -644,14 +646,14 @@ useEffect(() => {
                     (requirement) => (
                       <div
                         key={requirement}
-                        className="rounded-xl bg-neutral-50 px-4 py-3 text-sm text-neutral-700"
+                        className="rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3 text-sm text-[var(--color-text-secondary)]"
                       >
                         {requirement}
                       </div>
                     )
                   )
                 ) : (
-                  <div className="rounded-xl border border-dashed border-neutral-200 px-4 py-4 text-sm text-neutral-400">
+                  <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] px-4 py-4 text-sm text-[var(--color-text-muted)]">
                     Henüz özel bir gereksinim eklenmemiş.
                   </div>
                 )}
@@ -659,20 +661,20 @@ useEffect(() => {
             </div>
           </section>
 
-          <section className="rounded-xl border border-neutral-200 bg-white p-5">
+          <section className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
             <div className="mb-5">
-              <h2 className="text-base font-semibold text-neutral-950">
+              <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                 Teslimatlar
               </h2>
 
-              <p className="mt-1 text-sm text-neutral-500">
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                 Proje sonunda ortaya çıkmasını
                 beklediğin çıktılar.
               </p>
             </div>
 
             <div className="flex gap-2">
-              <input
+              <Input
                 value={deliverableInput}
                 onChange={(event) =>
                   setDeliverableInput(
@@ -685,14 +687,14 @@ useEffect(() => {
                     addDeliverable();
                   }
                 }}
-                className="min-w-0 flex-1 rounded-xl border border-neutral-200 px-4 py-3 text-sm outline-none focus:border-neutral-900"
+                className="min-w-0 flex-1 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 py-3 text-sm outline-none focus:border-neutral-900"
                 placeholder="Örn. Figma tasarım dosyası"
               />
 
               <button
                 type="button"
                 onClick={addDeliverable}
-                className="rounded-xl border border-neutral-200 px-4 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50"
+                className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
               >
                 Ekle
               </button>
@@ -704,9 +706,9 @@ useEffect(() => {
                   (deliverable) => (
                     <div
                       key={deliverable}
-                      className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3"
                     >
-                      <span className="text-sm text-neutral-700">
+                      <span className="text-sm text-[var(--color-text-secondary)]">
                         {deliverable}
                       </span>
 
@@ -717,7 +719,7 @@ useEffect(() => {
                             deliverable
                           )
                         }
-                        className="text-neutral-400 transition hover:text-red-600"
+                        className="text-[var(--color-text-muted)] transition hover:text-[var(--color-error-600)]"
                         aria-label={
                           deliverable + " kaldır"
                         }
@@ -732,10 +734,10 @@ useEffect(() => {
           </section>
         </div>
 
-        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-neutral-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-[var(--color-border-subtle)] pt-6 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href={"/client/projects/" + project.id}
-            className="inline-flex items-center justify-center rounded-xl px-4 py-3 text-sm font-medium text-neutral-600 transition hover:bg-white hover:text-neutral-900"
+            className="inline-flex items-center justify-center rounded-[var(--radius-card)] px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-white hover:text-[var(--color-text-primary)]"
           >
             Vazgeç
           </Link>
@@ -744,7 +746,7 @@ useEffect(() => {
             type="button"
             onClick={saveProject}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-error-600)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-error-600)]/90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-card)] bg-[var(--color-error-600)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--color-error-600)]/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -761,12 +763,12 @@ useEffect(() => {
 
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
-            <h2 className="text-lg font-semibold text-neutral-950">
+          <div className="w-full max-w-md rounded-[var(--radius-card)] bg-white p-5 shadow-2xl">
+            <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
               Projeyi silmek istediğine emin misin?
             </h2>
 
-            <p className="mt-2 text-sm leading-6 text-neutral-500">
+            <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
               Bu işlem geri alınamaz. Projeye ait
               mevcut bilgiler silinecek.
             </p>
@@ -778,7 +780,7 @@ useEffect(() => {
                   setShowDeleteModal(false)
                 }
                 disabled={deleting}
-                className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm font-medium text-neutral-700"
+                className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)]"
               >
                 Vazgeç
               </button>
@@ -787,7 +789,7 @@ useEffect(() => {
                 type="button"
                 onClick={deleteProject}
                 disabled={deleting}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-[var(--radius-card)] bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {deleting && (
                   <Loader2 className="h-4 w-4 animate-spin" />

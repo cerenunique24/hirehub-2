@@ -1,4 +1,4 @@
-export type ProfileReview={id:string;project_id:string;reviewer_id:string;rating:number;comment:string|null;created_at:string;reviewerName?:string|null;reviewerAvatar?:string|null;projectTitle?:string|null};
+export type ProfileReview={id:string;project_id:string;reviewer_id:string;rating:number;comment:string|null;created_at:string;reviewer_role?:"client"|"freelancer"|null;reviewerName?:string|null;reviewerAvatar?:string|null;projectTitle?:string|null};
 export type ProfileRating={average:number;count:number};
 export function parseProfileRating(data:unknown):ProfileRating|null {
  const row=Array.isArray(data)?data[0]:data;

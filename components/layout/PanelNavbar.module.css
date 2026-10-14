@@ -1,0 +1,3 @@
+.root{composes:header from "./ShellHeader.module.css";position:relative;z-index:30;justify-content:space-between;padding-inline:var(--space-5);background:var(--color-surface-1)}
+.root button:focus-visible,.root a:focus-visible,.root input:focus-visible{outline:2px solid var(--color-primary-600);outline-offset:var(--space-1)}
+@media(min-width:640px){.root{padding-inline:var(--space-8)}}

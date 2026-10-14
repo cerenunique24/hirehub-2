@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useSidebarCounts } from "@/lib/hooks/useSidebarCounts";
 import { Avatar } from "@/components/ui/Avatar";
 import { useMobileSidebar } from "@/components/layout/MobileSidebarContext";
+import styles from "./Sidebar.module.css";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
 export type SidebarMenuItem = {
@@ -183,6 +184,7 @@ export function Sidebar({
 
       <aside
         className={[
+          styles.root,
           "fixed inset-y-0 left-0 z-50 flex h-screen w-[260px] flex-col",
           "border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-1)]",
           "transition-transform duration-200 ease-in-out",
@@ -194,7 +196,7 @@ export function Sidebar({
         {/* Logo + toggle */}
         <div
           className={[
-            "flex h-[76px] shrink-0 items-center border-b border-[var(--color-border-subtle)]",
+            styles.header,
             collapsedUI ? "lg:justify-center lg:px-3" : "lg:justify-between lg:px-5",
             "justify-between px-5",
           ].join(" ")}
@@ -248,8 +250,8 @@ export function Sidebar({
         </div>
 
         {/* Navigation */}
-        <nav className={["flex-1 overflow-y-auto px-4 pt-5", collapsedUI ? "lg:px-3 lg:pt-4" : ""].join(" ")}>
-          <div className="space-y-5">
+        <nav tabIndex={0} aria-label="Panel navigasyonu" className={[styles.navigation, "flex-1 overflow-y-auto px-4 pt-5", collapsedUI ? "lg:px-3 lg:pt-4" : ""].join(" ")}>
+          <div className={styles.groups}>
             {menuGroups.map((group, groupIndex) => (
               <div key={groupIndex}>
                 <div className="space-y-1">
@@ -262,8 +264,12 @@ export function Sidebar({
                       <Link
                         key={item.name}
                         href={item.href}
-                        title={collapsedUI ? item.name : undefined}
+                        title={item.name}
+                        aria-label={item.name}
+                        aria-current={active ? "page" : undefined}
                         className={[
+                          styles.item,
+                          collapsedUI ? styles.collapsedItem : "",
                           "group relative flex h-9 items-center gap-2.5 rounded-[var(--radius-nav)] px-2.5 text-sm font-medium transition-colors duration-150",
                           collapsedUI ? "lg:justify-center lg:gap-0 lg:px-0" : "",
                           active
@@ -294,7 +300,7 @@ export function Sidebar({
                         )}
 
                         {collapsedUI && (
-                          <span className="pointer-events-none absolute left-[calc(100%+10px)] z-50 hidden whitespace-nowrap rounded-md bg-[var(--color-text-primary)] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 lg:block">
+                          <span className="pointer-events-none absolute left-[calc(100%+10px)] z-50 hidden whitespace-nowrap rounded-md bg-[var(--color-text-primary)] px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 lg:block">
                             {item.name}
                           </span>
                         )}
@@ -304,7 +310,7 @@ export function Sidebar({
                 </div>
 
                 {groupIndex !== menuGroups.length - 1 && (
-                  <div className="mt-5 border-t border-[var(--color-border-subtle)]" />
+                  <div className={["mt-5 border-t border-[var(--color-border-subtle)]", styles.divider].join(" ")} />
                 )}
               </div>
             ))}
@@ -321,8 +327,11 @@ export function Sidebar({
           <button
             type="button"
             onClick={() => void handleLogout()}
-            title={collapsedUI ? "Çıkış Yap" : undefined}
+            title="Çıkış Yap"
+            aria-label="Çıkış Yap"
             className={[
+              styles.item,
+              collapsedUI ? styles.collapsedItem : "",
               "group relative flex h-9 w-full items-center gap-2.5 rounded-[var(--radius-nav)] px-2.5 text-sm font-medium transition-colors",
               "text-[var(--color-text-secondary)] hover:bg-[var(--color-canvas)] hover:text-[var(--color-error-600)]",
               collapsedUI ? "lg:justify-center lg:gap-0 lg:px-0" : "",

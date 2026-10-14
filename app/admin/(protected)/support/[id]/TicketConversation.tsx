@@ -74,7 +74,7 @@ export default function TicketConversation({
     setStatusUpdating(true);
     setStatusError("");
 
-    const { error } = await supabase.from("support_tickets").update({ status: newStatus }).eq("id", ticketId);
+    const { error } = await supabase.from("support_tickets").update({ status: newStatus, updated_at: new Date().toISOString() }).eq("id", ticketId);
 
     if (error) {
       console.error("[CollaCrew Admin] Talep durumu güncellenemedi:", error);

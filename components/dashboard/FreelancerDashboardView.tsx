@@ -147,14 +147,12 @@ export function FreelancerDashboardView({
     <div className={[panelRootClass, styles.dashboard].join(" ")}>
       <header className={styles.welcome}>
         <div className={styles.welcomeGroup}>
-          <DashboardMascot pose="wave" size={80} className={styles.wave} eager />
           <div className={styles.welcomeCopy}>
-            <span className={styles.eyebrow}>Çalışma merkeziniz</span>
             <h1>{name ? "Hoş geldin, " + name : "Hoş geldin"}</h1>
             <p>İşlerini, teslimlerini ve sana uygun fırsatları takip et.</p>
           </div>
         </div>
-        <div className={styles.welcomeActions}>
+        <div className={styles.welcomeActions}><DashboardMascot pose="wave" size={80} className={styles.wave} eager />
           <PanelAction href="/freelancers/discover" variant="primary" className={styles.buttonPrimary}>Projeleri keşfet<ArrowRight size={16} aria-hidden="true" /></PanelAction>
         </div>
       </header>

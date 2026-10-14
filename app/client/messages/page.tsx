@@ -1,5 +1,8 @@
 "use client";
 
+import { Input } from "@/components/ui/Input";
+import { buttonClasses } from "@/components/ui/Button";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import {
   Suspense,
   useEffect,
@@ -8,6 +11,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import shellStyles from "@/components/layout/AppShell.module.css";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { notifyUsers } from "@/lib/notifications";
@@ -1067,27 +1071,27 @@ function ClientMessagesContent() {
     );
 
   return (
-    <main className="w-full p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">
+    <main className={shellStyles.workspacePage}>
+      <div className={pageHeaderClass}>
+        <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">
           Mesajlar
         </h1>
 
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
           Freelancerlar ve ekiplerle iletişimini yönet.
         </p>
       </div>
 
       {loadError && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="mb-4 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-600)]">
           {loadError}
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-220px)] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className={[shellStyles.messages,"flex w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white"].join(" ")}>
         {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
         <div
-          className={`w-full shrink-0 flex-col border-gray-200 md:flex md:w-[340px] md:border-r ${
+          className={`w-full shrink-0 flex-col border-[var(--color-border-subtle)] md:flex md:w-[340px] md:border-r ${
             (activeTab === "freelancers" && selectedUserId) ||
             (activeTab === "teams" && selectedCoalitionId)
               ? "hidden"
@@ -1095,7 +1099,7 @@ function ClientMessagesContent() {
           }`}
         >
           {/* TABLAR */}
-          <div className="flex gap-2 border-b border-gray-200 p-4">
+          <div className="flex gap-2 border-b border-[var(--color-border-subtle)] p-4">
             <button
               type="button"
               onClick={() => {
@@ -1105,7 +1109,7 @@ function ClientMessagesContent() {
               className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "freelancers"
                   ? "bg-[var(--color-primary-600)] text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:bg-gray-200"
               }`}
             >
               Freelancerlar
@@ -1121,7 +1125,7 @@ function ClientMessagesContent() {
               className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
                 activeTab === "teams"
                   ? "bg-[var(--color-primary-600)] text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  : "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:bg-gray-200"
               }`}
             >
               Ekipler
@@ -1133,10 +1137,10 @@ function ClientMessagesContent() {
             <div className="relative">
               <Search
                 size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
               />
 
-              <input
+              <Input
                 value={search}
                 onChange={(event) =>
                   setSearch(
@@ -1144,7 +1148,7 @@ function ClientMessagesContent() {
                   )
                 }
                 placeholder="Mesajlarda ara..."
-                className="w-full rounded-xl bg-gray-100 py-2.5 pl-9 pr-4 text-sm outline-none"
+                className="w-full rounded-[var(--radius-card)] bg-[var(--color-surface-2)] py-2.5 pl-9 pr-4 text-sm outline-none"
               />
             </div>
           </div>
@@ -1154,7 +1158,7 @@ function ClientMessagesContent() {
             "freelancers" && (
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="p-5 text-center text-sm text-gray-400">
+                <div className="p-5 text-center text-sm text-[var(--color-text-muted)]">
                   Mesajlar yükleniyor...
                 </div>
               ) : filteredConversations.length ===
@@ -1165,11 +1169,11 @@ function ClientMessagesContent() {
                     className="mb-3 text-gray-300"
                   />
 
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                     Henüz mesaj yok
                   </p>
 
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                     Bir freelancer ile iletişime geçtiğinde burada görünecek.
                   </p>
                 </div>
@@ -1200,10 +1204,10 @@ function ClientMessagesContent() {
                           setSelectedProposalId(conversation.proposalId);
                           setSelectedProjectId(conversation.proposalId ? null : conversation.projectId);
                         }}
-                        className={`flex w-full gap-3 border-b border-gray-100 p-4 text-left transition ${
+                        className={`flex w-full gap-3 border-b border-[var(--color-border-subtle)] p-4 text-left transition ${
                           isSelected
-                            ? "bg-gray-50"
-                            : "hover:bg-gray-50"
+                            ? "bg-[var(--color-surface-2)]"
+                            : "hover:bg-[var(--color-surface-2)]"
                         }`}
                       >
                         {profile.avatar_url ? (
@@ -1227,13 +1231,13 @@ function ClientMessagesContent() {
 
                         <div className="min-w-0 flex-1">
                           <div className="flex justify-between gap-2">
-                            <h3 className="truncate text-sm font-semibold text-gray-900">
+                            <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
                               {getFullName(
                                 profile
                               )}
                             </h3>
 
-                            <span className="shrink-0 text-xs text-gray-400">
+                            <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
                               {formatTime(
                                 conversation
                                   .lastMessage
@@ -1242,7 +1246,7 @@ function ClientMessagesContent() {
                             </span>
                           </div>
 
-                          <p className="mt-1 truncate text-sm text-gray-500">
+                          <p className="mt-1 truncate text-sm text-[var(--color-text-secondary)]">
                             {
                               conversation.projectTitle
                             }{" "}
@@ -1273,11 +1277,11 @@ function ClientMessagesContent() {
                     className="mb-3 text-gray-300"
                   />
 
-                  <p className="text-sm font-medium text-gray-700">
+                  <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                     Henüz ekip konuşması yok
                   </p>
 
-                  <p className="mt-1 text-xs text-gray-400">
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                     Bir ekip projesi için ilk freelancer kabul edildiğinde
                     burada görünecek.
                   </p>
@@ -1290,10 +1294,10 @@ function ClientMessagesContent() {
                     onClick={() =>
                       setSelectedCoalitionId(conversation.coalitionId)
                     }
-                    className={`flex w-full items-center gap-3 border-b border-gray-100 p-4 text-left transition ${
+                    className={`flex w-full items-center gap-3 border-b border-[var(--color-border-subtle)] p-4 text-left transition ${
                       selectedCoalitionId === conversation.coalitionId
-                        ? "bg-gray-50"
-                        : "hover:bg-gray-50"
+                        ? "bg-[var(--color-surface-2)]"
+                        : "hover:bg-[var(--color-surface-2)]"
                     }`}
                   >
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-white">
@@ -1301,11 +1305,11 @@ function ClientMessagesContent() {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-gray-900">
+                      <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
                         {conversation.name}
                       </h3>
 
-                      <p className="mt-1 truncate text-sm text-gray-500">
+                      <p className="mt-1 truncate text-sm text-[var(--color-text-secondary)]">
                         {conversation.projectTitle ?? "Ekip mesajlaşması"}
                       </p>
                     </div>
@@ -1328,16 +1332,16 @@ function ClientMessagesContent() {
           {activeTab === "teams" ? (
             selectedCoalitionId && currentUserId ? (
               <div className="flex flex-1 flex-col">
-                <div className="flex items-center gap-3 border-b border-gray-200 p-4 md:hidden">
+                <div className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] p-4 md:hidden">
                   <button
                     type="button"
                     onClick={() => setSelectedCoalitionId(null)}
-                    className="text-gray-500"
+                    className="text-[var(--color-text-secondary)]"
                   >
                     <ArrowLeft size={18} />
                   </button>
 
-                  <span className="text-sm font-semibold text-gray-900">
+                  <span className="text-sm font-semibold text-[var(--color-text-primary)]">
                     {
                       teamConversations.find(
                         (item) => item.coalitionId === selectedCoalitionId
@@ -1355,34 +1359,34 @@ function ClientMessagesContent() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center bg-gray-50 text-sm text-gray-400">
+              <div className="flex flex-1 items-center justify-center bg-[var(--color-surface-2)] text-sm text-[var(--color-text-muted)]">
                 Bir ekip konuşması seç.
               </div>
             )
           ) : !selectedProfile ? (
-            <div className="flex flex-1 flex-col items-center justify-center bg-gray-50">
+            <div className="flex flex-1 flex-col items-center justify-center bg-[var(--color-surface-2)]">
               <MessageCircle
                 size={30}
                 className="mb-3 text-gray-300"
               />
 
-              <p className="text-sm font-medium text-gray-700">
+              <p className="text-sm font-medium text-[var(--color-text-secondary)]">
                 Bir konuşma seç
               </p>
 
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                 Soldan bir kullanıcı seçerek mesajlaşmaya başla.
               </p>
             </div>
           ) : (
             <>
               {/* CHAT HEADER */}
-              <div className="flex items-center gap-3 border-b border-gray-200 p-5">
+              <div className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] p-5">
                 <button
                   type="button"
                   onClick={() => setSelectedUserId(null)}
                   aria-label="Konuşma listesine dön"
-                  className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 md:hidden"
+                  className="-ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] md:hidden"
                 >
                   <ArrowLeft size={18} />
                 </button>
@@ -1407,13 +1411,13 @@ function ClientMessagesContent() {
                 )}
 
                 <div>
-                  <h2 className="font-semibold text-gray-900">
+                  <h2 className="font-semibold text-[var(--color-text-primary)]">
                     {getFullName(
                       selectedProfile
                     )}
                   </h2>
 
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-[var(--color-text-secondary)]">
                     {selectedProposalId ? (
                       <>
                         {projectIds[selectedProposalId] ? (
@@ -1425,7 +1429,7 @@ function ClientMessagesContent() {
                             )}&proposal=${encodeURIComponent(
                               selectedProposalId
                             )}`}
-                            className="font-medium text-gray-900 hover:underline"
+                            className="font-medium text-[var(--color-text-primary)] hover:underline"
                           >
                             {projectNames[selectedProposalId] ?? "Proje"}
                           </Link>
@@ -1447,10 +1451,10 @@ function ClientMessagesContent() {
               </div>
 
               {/* MESSAGES */}
-              <div className="flex-1 space-y-4 overflow-y-auto bg-gray-50 p-5">
+              <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--color-surface-2)] p-5">
                 {selectedMessages.length ===
                 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-400">
+                  <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
                     Henüz mesaj yok. İlk mesajı sen gönder.
                   </div>
                 ) : (
@@ -1470,10 +1474,10 @@ function ClientMessagesContent() {
                           }`}
                         >
                           <div
-                            className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm ${
+                            className={`max-w-[70%] rounded-[var(--radius-card)] px-4 py-3 text-sm ${
                               isMe
                                 ? "bg-[var(--color-primary-600)] text-white"
-                                : "border border-gray-200 bg-white text-gray-800"
+                                : "border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-primary)]"
                             }`}
                           >
                             {message.content && (
@@ -1507,22 +1511,22 @@ function ClientMessagesContent() {
               </div>
 
               {/* INPUT */}
-              <div className="border-t border-gray-200 p-5">
+              <div className="border-t border-[var(--color-border-subtle)] p-5">
                 {sendError && (
-                  <p className="mb-3 text-sm text-red-600">{sendError}</p>
+                  <p className="mb-3 text-sm text-[var(--color-error-600)]">{sendError}</p>
                 )}
                 {attachmentError && (
-                  <p className="mb-3 text-sm text-red-600">{attachmentError}</p>
+                  <p className="mb-3 text-sm text-[var(--color-error-600)]">{attachmentError}</p>
                 )}
                 {attachmentFile && (
-                  <div className="mb-3 flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
+                  <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
                     <FileText size={15} />
                     <span className="flex-1 truncate">{attachmentFile.name}</span>
                     <button
                       type="button"
                       aria-label="Ek dosyayı kaldır"
                       onClick={() => setAttachmentFile(null)}
-                      className="text-gray-400 hover:text-gray-600"
+                      className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
                     >
                       <X size={14} />
                     </button>
@@ -1544,12 +1548,12 @@ function ClientMessagesContent() {
                   aria-label="Dosya ekle"
                   onClick={() => attachmentInputRef.current?.click()}
                   disabled={sending}
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-500 transition hover:bg-gray-200 disabled:opacity-40"
+                  className="flex h-12 w-12 items-center justify-center rounded-[var(--radius-card)] bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] transition hover:bg-gray-200 disabled:opacity-40"
                 >
                   <Paperclip size={18} />
                 </button>
 
-                <input
+                <Input
                   value={messageText}
                   onChange={(event) =>
                     setMessageText(
@@ -1567,7 +1571,7 @@ function ClientMessagesContent() {
                   }}
                   placeholder="Mesaj yaz..."
                   disabled={sending}
-                  className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-200"
+                  className="flex-1 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-200"
                 />
 
                 <button
@@ -1579,7 +1583,7 @@ function ClientMessagesContent() {
                     sending ||
                     (!messageText.trim() && !attachmentFile)
                   }
-                  className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-40"
+                  className={buttonClasses({variant:"primary"})}
                 >
                   <Send size={16} />
 
@@ -1602,7 +1606,7 @@ export default function ClientMessagesPage() {
     <Suspense
       fallback={
         <main className="flex min-h-screen items-center justify-center">
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-[var(--color-text-muted)]">
             Mesajlar yükleniyor...
           </div>
         </main>

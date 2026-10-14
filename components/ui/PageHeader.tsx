@@ -1,3 +1,5 @@
+import styles from "./PageHeader.module.css";
+export const pageHeaderClass = styles.header;
 /**
  * CollaCrew Design System — PageHeader.
  * Shared title/description/primary-action block for panel pages.

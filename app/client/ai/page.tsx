@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Check, FolderPlus } from "lucide-react";
 import type { ClientWorkspace } from "@/lib/ai/workspace";
@@ -81,15 +82,17 @@ export default function ClientAIPage() {
     ) : null;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-[var(--space-section-md)]">
       <WorkspaceHeader
         plan={plan}
         description="Projeni analiz et, doğru rolleri belirle ve sana en uygun freelancerları keşfet."
         action={projectSelector}
       />
 
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border-subtle)] pb-[var(--space-5)]"><p className="cc-h2 text-[var(--color-text-primary)]">Projen için doğru ekibi oluştur.</p><Image src="/images/mascots/ai-lightbulb.png" alt="" aria-hidden="true" width={96} height={91} className="h-auto w-16 shrink-0 sm:w-24" sizes="(max-width: 639px) 64px, 96px" /></div>
+
       {error && (
-        <p className="rounded-[var(--radius-input)] border border-red-200 bg-[var(--color-error-50)] px-3 py-2.5 text-sm text-[var(--color-error-600)]">
+        <p className="rounded-[var(--radius-input)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-3 py-2.5 text-sm text-[var(--color-error-600)]">
           {error}
         </p>
       )}
@@ -123,7 +126,7 @@ export default function ClientAIPage() {
             />
           </section>
 
-          <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-16">
+          <div className="mt-[var(--space-section-md)] grid gap-[var(--space-section-md)] lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:gap-[var(--space-section-md)]">
             {/* PROJE İÇGÖRÜSÜ */}
             <section>
               <SectionHeading title="Proje içgörüsü" />

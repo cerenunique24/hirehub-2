@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { ProjectDetailSurface, ProjectDetailState } from "@/components/projects/ProjectDetailSurface";
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+
 import { createClient } from "@/lib/supabase/client";
 import ProjectWorkroom, { type WorkroomTeamMember } from "@/components/projects/ProjectWorkroom";
 
@@ -16,6 +16,10 @@ type Project = {
   status: string | null;
   deadline: string | null;
   team_required: boolean | null;
+  skills: string[] | null;
+  project_type: string | null;
+  created_at: string | null;
+  team_size: number | null;
   requirements_confirmed_at: string | null;
   requirements_note: string | null;
 };
@@ -29,6 +33,7 @@ function FreelancerWorkroomContent() {
   const backToMessagesUser = searchParams.get("user");
   const backToMessagesProposal = searchParams.get("proposal");
 
+  const [personalRole, setPersonalRole] = useState<string | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [teamMembers, setTeamMembers] = useState<WorkroomTeamMember[]>([]);
   const [coalitionId, setCoalitionId] = useState<string | null>(null);
@@ -60,7 +65,7 @@ function FreelancerWorkroomContent() {
       // Erişim kontrolü: kullanıcı bu projenin aktif ekip üyesi mi?
       const { data: membership, error: membershipError } = await supabase
         .from("project_team_members")
-        .select("id")
+        .select("id, role")
         .eq("project_id", id)
         .eq("freelancer_id", user.id)
         .eq("status", "active")
@@ -72,9 +77,11 @@ function FreelancerWorkroomContent() {
         return;
       }
 
+      setPersonalRole(membership.role ?? null);
+
       const { data: projectData, error: projectError } = await supabase
         .from("projects")
-        .select("id, client_id, title, description, budget, status, deadline, team_required, requirements_confirmed_at, requirements_note")
+        .select("id, client_id, title, description, budget, status, deadline, team_required, skills, project_type, created_at, team_size, requirements_confirmed_at, requirements_note")
         .eq("id", id)
         .single();
 
@@ -135,87 +142,25 @@ function FreelancerWorkroomContent() {
     void load();
   }, [id, reloadKey]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">Çalışma alanı yükleniyor...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !project) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-        <div className="mx-auto max-w-5xl">
-          <Link
-            href="/freelancers/projects"
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Projelere dön
-          </Link>
-          <div className="rounded-xl border border-red-100 bg-white p-6 shadow-sm">
-            <h1 className="text-xl font-semibold text-gray-900">Çalışma alanı görüntülenemedi</h1>
-            <p className="mt-2 text-sm text-gray-500">{error || "Aradığınız proje bulunamadı."}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-      <div className="mx-auto max-w-5xl space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href="/freelancers/projects"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Projelere dön
-          </Link>
-
-          {cameFromMessages && backToMessagesUser && (
-            <Link
-              href={`/freelancers/messages?user=${encodeURIComponent(backToMessagesUser)}${
-                backToMessagesProposal ? `&proposal=${encodeURIComponent(backToMessagesProposal)}` : ""
-              }`}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
-            >
-              <ArrowLeft size={16} />
-              Mesajlara dön
-            </Link>
-          )}
-        </div>
-
-        <ProjectWorkroom
-          key={searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
-          initialTab={searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
-          project={project}
-          teamMembers={teamMembers}
-          viewerRole="freelancer"
-          onProjectChanged={() => setReloadKey((key) => key + 1)}
-          messagesBasePath="/freelancers/messages"
-          isTeamProject={Boolean(project.team_required)}
-          coalitionId={coalitionId}
-        />
-      </div>
-    </div>
-  );
+  if (loading) return <ProjectDetailState backHref="/freelancers/projects" loading/>;
+  if (error || !project) return <ProjectDetailState backHref="/freelancers/projects" error={error}/>;
+  const messageHref = cameFromMessages && backToMessagesUser
+    ? `/freelancers/messages?user=${encodeURIComponent(backToMessagesUser)}${backToMessagesProposal?"&proposal="+encodeURIComponent(backToMessagesProposal):""}` : undefined;
+  return <ProjectDetailSurface role="freelancer" project={project} backHref="/freelancers/projects" messageHref={messageHref} memberCount={teamMembers.length} personalRole={personalRole} coalitionId={coalitionId}>
+    <ProjectWorkroom identityShownAbove
+      key={searchParams.get("tab")==="milestones"?"milestones":"overview"}
+      initialTab={searchParams.get("tab")==="milestones"?"milestones":"overview"}
+      project={project} teamMembers={teamMembers} viewerRole="freelancer"
+      onProjectChanged={()=>setReloadKey(key=>key+1)}
+      messagesBasePath="/freelancers/messages" isTeamProject={Boolean(project.team_required)} coalitionId={coalitionId}
+    />
+  </ProjectDetailSurface>;
 }
 
 export default function FreelancerWorkroomPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
-          <p className="text-sm text-gray-500">Yükleniyor...</p>
-        </div>
-      }
+      fallback={<ProjectDetailState backHref="/freelancers/projects" loading/>}
     >
       <FreelancerWorkroomContent />
     </Suspense>

@@ -1,12 +1,11 @@
 ﻿"use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import { CoalitionCard } from "@/components/coalitions/CoalitionCard";
 import { useEffect, useMemo, useState } from "react";
 import { Search, Send } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchBudgetBreakdown, getTeamCompletion } from "@/lib/projects/teamReadiness";
-import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
 import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
 import { buttonClasses } from "@/components/ui/Button";
 import { coalitionActionSummary, coalitionWork, coalitionProjectLabel, coalitionProjectHref, type CoalitionProject, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
@@ -496,9 +495,8 @@ export default function CoalitionsPage() {
   return (
     <main className={[panelRootClass, styles.page].join(" ")}>
       <header className={styles.header}>
-        <div><span className={styles.eyebrow}>Koalisyon çalışma alanı</span><h1>Koalisyonların</h1>
+        <div><h1>Koalisyonlarım</h1>
         <p>Birlikte çalıştığın ekipleri, rol dağılımını ve sıradaki adımları buradan takip et.</p></div>
-        <DashboardMascot pose="team" size={200} className={styles.teamArt} eager />
       </header>
       {/* Search + Filters */}
       <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -612,29 +610,27 @@ export default function CoalitionsPage() {
         {filteredCoalitions.map(coalition=>{
           const work=coalitionWork(coalition.project??null,coalition.stages??null,currentUserId,coalition.teamMemberIds??[]);
           const myMembership=coalition.members.find(member=>member.user_id===currentUserId);
-          return <article key={coalition.id} className={styles.card}>
-            <div className={styles.cardHeading}><div><h2>{coalition.name}</h2><p className={styles.projectName}>{coalition.project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}</p></div>
-              <div className={styles.labeledBadge}><span>Koalisyon</span><PanelBadge>{coalition.status==="active"?"Aktif":"Tamamlandı"}</PanelBadge></div>
-            </div>
-            <dl className={styles.metadata}>
-              <div><dt>Projede rolün</dt><dd>{coalition.myProjectRole || "Belirtilmedi"}</dd></div>
-              <div><dt>Koalisyon görevin</dt><dd>{myMembership?.role==="owner"?"Koalisyon yöneticisi":"Ekip üyesi"}</dd></div>
-              <div><dt>Ekip</dt><dd className={styles.avatarGroup}>{coalition.members.slice(0,4).map(member=><span key={member.id} title={getMemberName(member)}>{getAvatar(member)?<Image unoptimized src={getAvatar(member)!} width={32} height={32} alt="" />:<span className={styles.avatar}>{getMemberName(member).charAt(0)}</span>}</span>)}<span>{coalition.members.length} kişi</span></dd></div>
-              <div><dt>{coalition.project?.updated_at?"Proje güncellendi":"Koalisyon oluşturuldu"}</dt><dd>{formatDate(coalition.project?.updated_at || coalition.created_at)}</dd></div>
-            </dl>
-            <div className={styles.statusLine}>
+          return <CoalitionCard key={coalition.id}
+            name={coalition.name}
+            projectTitle={coalition.project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}
+            status={coalition.status}
+            members={coalition.members.map(member=>({id:member.id,name:getMemberName(member),avatarUrl:getAvatar(member)}))}
+            leadingMetadata={[{label:"Projede rolün",value:coalition.myProjectRole || "Belirtilmedi"},{label:"Koalisyon görevin",value:myMembership?.role==="owner"?"Koalisyon yöneticisi":"Ekip üyesi"}]}
+            metadata={[{label:coalition.project?.updated_at?"Proje güncellendi":"Koalisyon oluşturuldu",value:formatDate(coalition.project?.updated_at || coalition.created_at)}]}
+            statusContent={<>
               {coalition.project && <><span>Proje</span><PanelBadge>{coalitionProjectLabel(coalition.project.status)}</PanelBadge></>}
               {!coalition.team && <span>Rol kontenjanı doğrulanamadı</span>}
               {coalition.team && <span>{coalition.team.ready ? "Tüm roller dolu" : coalition.team.filledRoles+" / "+coalition.team.totalRoles+" rol dolu"}</span>}
               {work.currentStage && <span>Aşaman: {work.currentStage.title}</span>}
-            </div>
-            <div className={styles.cardFooter}><div><p className={styles.actionHeadline}>{coalitionActionSummary(work,coalition.project??null,coalition.stages??null)}</p>{work.currentUserMustAct && <PanelBadge tone="revision">Senden aksiyon bekleniyor</PanelBadge>}</div>
-              <div className={styles.actions}><PanelAction href={"/freelancers/coalitions/"+coalition.id} variant="primary">Ekip Alanını Aç</PanelAction>
-                <PanelAction href={"/freelancers/coalitions/"+coalition.id+"#team-messages"}>Mesajlar</PanelAction>
-                {coalition.project && <Link href={coalitionProjectHref(coalition.project)} className={styles.projectLink}>Bağlı projeyi gör</Link>}
-              </div>
-            </div>
-          </article>;
+            </>}
+            nextStep={coalitionActionSummary(work,coalition.project??null,coalition.stages??null)}
+            actionBadge={work.currentUserMustAct && <PanelBadge tone="revision">Senden aksiyon bekleniyor</PanelBadge>}
+            actions={<>
+              <PanelAction href={"/freelancers/coalitions/"+coalition.id} variant="primary">Ekip Alanını Aç</PanelAction>
+              <PanelAction href={"/freelancers/coalitions/"+coalition.id+"#team-messages"}>Mesajlar</PanelAction>
+              {coalition.project && <Link href={coalitionProjectHref(coalition.project)} className={styles.projectLink}>Bağlı projeyi gör</Link>}
+            </>}
+          />;
         })}
       </div>}
 

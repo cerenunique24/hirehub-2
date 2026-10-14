@@ -1,15 +1,19 @@
 "use client";
 
-import Link from "next/link";
+import { CoalitionWorkspace, CoalitionWorkspaceState, WorkspaceMemberRow } from "@/components/coalitions/CoalitionWorkspace";
+import { coalitionActivity, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
+import { coalitionUpdatedDate } from "@/components/coalitions/clientCoalitionPresentation";
+import { resolveProjectWorkflowState } from "@/lib/projects/workflow-state";
+import { PanelAction } from "@/components/dashboard/PanelPrimitives";
+import styles from "@/components/coalitions/Coalitions.module.css";
+import { buttonClasses } from "@/components/ui/Button";
+
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeft,
   Check,
   Loader2,
-  MessageSquare,
   PlayCircle,
-  Users,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -19,7 +23,7 @@ import {
   getTeamCompletion,
   type TeamCompletion,
 } from "@/lib/projects/teamReadiness";
-import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
+
 import RequirementsConfirmation from "@/components/projects/RequirementsConfirmation";
 import { publicDisplayName } from "@/lib/utils/displayName";
 
@@ -28,6 +32,8 @@ type Coalition = {
   name: string;
   description: string | null;
   project_id: string | null;
+  status: string;
+  created_at: string;
 };
 
 type LinkedProject = {
@@ -35,6 +41,8 @@ type LinkedProject = {
   title: string;
   status: string | null;
   client_id: string;
+  deadline: string | null;
+  team_required: boolean | null;
   budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
 };
 
@@ -54,6 +62,7 @@ type Member = {
   role: string | null;
   projectRole: string | null;
   teamMemberId: string | null;
+  joined_at: string;
   profile: Profile | null;
 };
 
@@ -71,6 +80,7 @@ export default function ClientCoalitionDetailPage() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
+  const [stages, setStages] = useState<CoalitionStage[] | null>(null);
   const [coalition, setCoalition] = useState<Coalition | null>(null);
   const [project, setProject] = useState<LinkedProject | null>(null);
   const [teamCompletion, setTeamCompletion] = useState<TeamCompletion | null>(null);
@@ -100,7 +110,7 @@ export default function ClientCoalitionDetailPage() {
       error: coalitionError,
     } = await supabase
       .from("coalitions")
-      .select("id, name, description, project_id")
+      .select("id, name, description, project_id, status, created_at")
       .eq("id", id)
       .eq("status", "active")
       .single();
@@ -118,7 +128,7 @@ export default function ClientCoalitionDetailPage() {
     if (coalitionData.project_id) {
       const { data: projectData } = await supabase
         .from("projects")
-        .select("id, title, status, client_id")
+        .select("id, title, status, client_id, deadline, team_required")
         .eq("id", coalitionData.project_id)
         .maybeSingle();
 
@@ -133,12 +143,19 @@ export default function ClientCoalitionDetailPage() {
       setProject(null);
     }
 
+    if (linkedProject) {
+      const result = await supabase.from("project_milestones")
+        .select("id, project_id, title, status, freelancer_id, due_date, sort_order, submitted_at, approved_at, revision_requested_at")
+        .eq("project_id", linkedProject.id).order("sort_order", {ascending:true});
+      setStages(result.error ? null : result.data as CoalitionStage[]);
+    } else setStages(null);
+
     const {
       data: memberRows,
       error: memberError,
     } = await supabase
       .from("coalition_members")
-      .select("id, user_id, role")
+      .select("id, user_id, role, joined_at")
       .eq("coalition_id", id)
       .eq("status", "active")
       .order("joined_at");
@@ -283,6 +300,14 @@ export default function ClientCoalitionDetailPage() {
     void loadCoalition();
   }, [id, supabase]);
 
+  useEffect(() => {
+    if (loading || error || window.location.hash !== "#team-messages") return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById("team-messages")?.scrollIntoView({block:"start"});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading, error]);
+
   const handleApprove = async (memberId: string) => {
     setProcessingId(memberId);
     setError("");
@@ -409,393 +434,40 @@ export default function ClientCoalitionDetailPage() {
     router.push(`/client/projects/${project.id}`);
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center gap-2 text-sm text-gray-500">
-        <Loader2 size={18} className="animate-spin" />
-        Koalisyon yükleniyor...
-      </div>
-    );
-  }
+  if (loading) return <CoalitionWorkspaceState backHref="/client/coalitions" loading/>;
+  if (!coalition) return <CoalitionWorkspaceState backHref="/client/coalitions" error={error}/>;
 
-  if (!coalition) {
-    return (
-      <div className="p-6">
-        <Link
-          href="/client/coalitions"
-          className="inline-flex items-center gap-2 text-sm text-gray-500"
-        >
-          <ArrowLeft size={16} />
-          Koalisyonlara dön
-        </Link>
-
-        <p className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-          {error}
-        </p>
-      </div>
-    );
-  }
-
-  const skills = uniqueSkills(
-    members.map((member) => member.profile?.skills)
-  );
-
-  return (
-    <div className="p-6">
-      <div className="mx-auto max-w-4xl">
-        <Link
-          href="/client/coalitions"
-          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[var(--color-text-primary)]"
-        >
-          <ArrowLeft size={16} />
-          Koalisyonlara dön
-        </Link>
-
-        {error && (
-          <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-7 shadow-sm">
-          <h1 className="text-3xl font-semibold text-neutral-900">
-            {coalition.name}
-          </h1>
-
-          <p className="mt-3 max-w-3xl leading-7 text-neutral-600">
-            {coalition.description ||
-              "Bu koalisyon henüz açıklama eklememiş."}
-          </p>
-
-          <div className="mt-7 grid gap-6 md:grid-cols-2">
-            <div>
-              <h2 className="font-semibold text-neutral-900">
-                Ekip yetenekleri
-              </h2>
-
-              {skills.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700"
-                    >
-                      {skill}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-neutral-500">
-                  Aktif üyelerde yetenek bilgisi yok.
-                </p>
-              )}
-            </div>
-
-            <div>
-              <h2 className="font-semibold text-neutral-900">
-                Ekip büyüklüğü
-              </h2>
-
-              <p className="mt-3 text-sm text-neutral-600">
-                {members.length} aktif üye
-              </p>
-            </div>
-          </div>
-
-          {pendingMembers.length > 0 && (
-            <section className="mt-8 border-t border-neutral-100 pt-6">
-              <div>
-                <h2 className="font-semibold text-neutral-900">
-                  Bekleyen ekip önerileri
-                </h2>
-
-                <p className="mt-1 text-sm text-neutral-500">
-                  Freelancerların önerdiği ekip üyelerini
-                  onaylayabilir veya reddedebilirsin.
-                </p>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {pendingMembers.map((member) => {
-                  const name = publicDisplayName(member.profile, "Profil bilgisi yok");
-
-                  const inviterName = publicDisplayName(member.inviter, "Bir ekip üyesi");
-
-                  const isProcessing =
-                    processingId === member.id;
-
-                  return (
-                    <div
-                      key={member.id}
-                      className="rounded-xl border border-neutral-200 p-4"
-                    >
-                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3">
-                          {member.profile?.avatar_url ? (
-                            <img
-                              src={member.profile.avatar_url}
-                              alt=""
-                              className="h-11 w-11 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-neutral-100 font-medium text-neutral-600">
-                              {name.slice(0, 1)}
-                            </div>
-                          )}
-
-                          <div>
-                            <p className="font-medium text-neutral-900">
-                              {name}
-                            </p>
-
-                            <p className="text-sm text-neutral-500">
-                              {member.profile?.title ||
-                                member.profile?.expertise ||
-                                "Uzmanlık bilgisi eklenmemiş"}
-                            </p>
-
-                            <p className="mt-1 text-xs text-neutral-400">
-                              {inviterName} tarafından önerildi
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="mr-2 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
-                            {member.role || "Üye"}
-                          </span>
-
-                          <button
-                            type="button"
-                            disabled={isProcessing}
-                            onClick={() =>
-                              void handleReject(member.id)
-                            }
-                            className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <X size={16} />
-                            Reddet
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={isProcessing}
-                            onClick={() =>
-                              void handleApprove(member.id)
-                            }
-                            className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-3 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isProcessing ? (
-                              <Loader2
-                                size={16}
-                                className="animate-spin"
-                              />
-                            ) : (
-                              <Check size={16} />
-                            )}
-                            Onayla
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          <section className="mt-8 border-t border-neutral-100 pt-6">
-            <h2 className="flex items-center gap-2 font-semibold text-neutral-900">
-              <Users size={18} />
-              Üyeler
-            </h2>
-
-            <div className="mt-4 space-y-3">
-              {members.length ? (
-                members.map((member) => {
-                  const name = publicDisplayName(member.profile, "Profil bilgisi yok");
-
-                  return (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between gap-4 rounded-xl border border-neutral-100 p-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        {member.profile?.avatar_url ? (
-                          <img
-                            src={member.profile.avatar_url}
-                            alt=""
-                            className="h-10 w-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 font-medium text-neutral-600">
-                            {name.slice(0, 1)}
-                          </div>
-                        )}
-
-                        <div>
-                          <p className="font-medium text-neutral-900">
-                            {name}
-                          </p>
-
-                          <p className="text-sm text-neutral-500">
-                            {member.role === "owner"
-                              ? "Proje Sahibi"
-                              : member.profile?.title ||
-                                member.profile?.expertise ||
-                                "Uzmanlık bilgisi eklenmemiş"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700">
-                          {member.role === "owner"
-                            ? "Proje Sahibi"
-                            : member.projectRole || "Üye"}
-                        </span>
-
-                        {isProjectClient && member.role !== "owner" && member.teamMemberId && (
-                          <button
-                            type="button"
-                            disabled={removingMemberId === member.teamMemberId}
-                            onClick={() => void handleRemoveMember(member.teamMemberId!)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {removingMemberId === member.teamMemberId ? (
-                              <Loader2 size={13} className="animate-spin" />
-                            ) : null}
-                            Ekipten Çıkar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-neutral-500">
-                  Aktif üye bulunmuyor.
-                </p>
-              )}
-            </div>
-          </section>
-        </section>
-
-        {teamCompletion && (
-          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-neutral-900">
-                  Ekip Durumu
-                </h2>
-
-                <p className="mt-1 text-sm text-neutral-500">
-                  {teamCompletion.ready
-                    ? "Tüm ekip üyeleri projeye dahil oldu."
-                    : `${teamCompletion.filledRoles} / ${teamCompletion.totalRoles} rol tamamlandı.`}
-                </p>
-              </div>
-
-              <span
-                className={`w-fit rounded-full px-3 py-1.5 text-xs font-medium ${
-                  teamCompletion.ready
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-amber-50 text-amber-700"
-                }`}
-              >
-                {teamCompletion.ready ? "Ekip hazır" : "Ekip oluşturuluyor"}
-              </span>
-            </div>
-
-            {teamCompletion.roles.length > 0 && (
-              <div className="mt-5 space-y-2">
-                {teamCompletion.roles.map((role) => (
-                  <div
-                    key={role.role}
-                    className="flex items-center justify-between rounded-xl bg-neutral-50 px-4 py-2.5 text-sm"
-                  >
-                    <span className="flex items-center gap-2 text-neutral-800">
-                      {role.isFull ? (
-                        <Check size={15} className="text-emerald-600" />
-                      ) : (
-                        <span className="h-3.5 w-3.5 rounded-full border border-neutral-300" />
-                      )}
-                      {role.role}
-                    </span>
-
-                    <span className="text-xs text-neutral-500">
-                      {role.filled} / {role.capacity}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {project?.status === "in_progress" ? (
-              <p className="mt-5 text-sm font-medium text-emerald-700">
-                Proje başlatıldı — ekip artık çalışmaya başlayabilir.
-              </p>
-            ) : (
-              <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                {isProjectClient && canStartProject && (
-                  <RequirementsConfirmation
-                    ready={requirementsReady}
-                    note={requirementsNote}
-                    onReadyChange={setRequirementsReady}
-                    onNoteChange={setRequirementsNote}
-                  />
-                )}
-
-                {isProjectClient && (
-                  <button
-                    type="button"
-                    disabled={!canStartProject || starting || !requirementsReady}
-                    onClick={() => void handleStartProject()}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {starting ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <PlayCircle size={16} />
-                    )}
-                    Projeyi Başlat
-                  </button>
-                )}
-
-                {!teamCompletion.ready && (
-                  <p className="self-center text-xs text-neutral-500">
-                    Eksik roller için freelancer aramaya devam edebilirsin.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {currentUserId && (
-          <section className="mt-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
-              <MessageSquare size={18} />
-              Ekip Mesajları
-            </h2>
-
-            <p className="mt-1 text-sm text-neutral-500">
-              Proje başlamadan önce ekiple burada hazırlık yapabilirsin.
-            </p>
-
-            <div className="mt-4">
-              <TeamMessagesPanel
-                coalitionId={coalition.id}
-                currentUserId={currentUserId}
-                memberLabels={members.map((member) => ({
-                  id: member.user_id,
-                  name: publicDisplayName(member.profile, "Ekip üyesi"),
-                }))}
-              />
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
-  );
+  const skills = uniqueSkills(members.map(member => member.profile?.skills));
+  const work = project?.status === "in_progress" && stages === null
+    ? {state:"Aşama bilgileri alınamadı",nextStep:"Sıradaki adımı bağlı proje alanından kontrol et.",actionOwner:"Doğrulanamadı",currentUserMustAct:false}
+    : resolveProjectWorkflowState({projectStatus:project?.status ?? null,viewerRole:"client",isTeamProject:project?.team_required!==false,milestones:stages??[],currentUserId,teamMemberIds:members.map(member=>member.user_id)});
+  const needsApproval = isProjectClient && pendingMembers.length > 0;
+  const mustAct = isProjectClient && (needsApproval || work.currentUserMustAct);
+  const currentStage = stages?.find(stage=>stage.status==="submitted" || stage.status==="in_review") ?? stages?.find(stage=>stage.status!=="approved");
+  const events = coalitionActivity(coalition.created_at,members.map(member=>({id:member.id,joined_at:member.joined_at,name:publicDisplayName(member.profile,"Ekip üyesi")})),stages);
+  const stagesHref = project ? "/client/projects/"+project.id+"?tab=milestones" : "";
+  return <CoalitionWorkspace backHref="/client/coalitions" name={coalition.name} coalitionStatus={coalition.status}
+    project={project ? {title:project.title,status:project.status ?? ""} : null}
+    headerContext={teamCompletion&&project?.budget_breakdown?.length ? teamCompletion.filledRoles+" / "+teamCompletion.totalRoles+" rol dolu" : "Rol kontenjanı doğrulanamadı"}
+    error={error}
+    members={members.map(member=>({id:member.id,userId:member.user_id,name:publicDisplayName(member.profile,"Ekip üyesi"),avatarUrl:member.profile?.avatar_url || null,projectRole:member.projectRole || member.profile?.title || member.profile?.expertise || null,owner:member.role==="owner",self:member.user_id===currentUserId,
+      actions:isProjectClient&&member.role!=="owner"&&member.teamMemberId?<button type="button" disabled={removingMemberId===member.teamMemberId} onClick={()=>void handleRemoveMember(member.teamMemberId!)} className={buttonClasses({variant:"secondary",size:"sm"})}>{removingMemberId===member.teamMemberId&&<Loader2 size={13} className="animate-spin"/>}Ekipten Çıkar</button>:null}))}
+    team={teamCompletion} roleCapacityKnown={Boolean(project?.budget_breakdown?.length)}
+    status={{headline:needsApproval?pendingMembers.length+" ekip önerisi onay bekliyor":work.state,state:work.state,tone:mustAct?"info":"neutral",nextStep:needsApproval?"Bekleyen ekip önerilerini yönetim bölümünden değerlendir.":project?work.nextStep:"Proje bağlantısını kontrol et.",mustAct,
+      facts:[{label:"Aksiyon sahibi",value:mustAct?"Sen":work.actionOwner},{label:"Mevcut aşama",value:stages===null?"Doğrulanamadı":currentStage?.title || (stages.length?"Aşamalar onaylandı":"Henüz aşama yok")},{label:"Deadline",value:currentStage?.due_date?coalitionUpdatedDate(currentStage.due_date):coalitionUpdatedDate(project?.deadline ?? null)}],
+      action:needsApproval?<PanelAction href="#workspace-management" variant="primary">Önerileri değerlendir</PanelAction>:isProjectClient&&canStartProject?<PanelAction href="#workspace-management" variant="primary">Başlatma adımına git</PanelAction>:project&&isProjectClient&&work.currentUserMustAct?<PanelAction href={stagesHref} variant="primary">Aşamaları Yönet</PanelAction>:null}}
+    stages={stages} stagesHref={stagesHref} events={events} formatDate={coalitionUpdatedDate} coalitionId={coalition.id} currentUserId={currentUserId}
+    description={coalition.description} skills={skills}
+    management={isProjectClient&&(pendingMembers.length>0||(teamCompletion&&project?.status!=="in_progress"))?<div id="workspace-management">
+      {pendingMembers.length>0&&<><h3>Bekleyen ekip önerileri</h3>{pendingMembers.map(member=><WorkspaceMemberRow key={member.id} status="Onay bekliyor" detail={<p className={styles.metaLabel}>{publicDisplayName(member.inviter,"Ekip üyesi")} tarafından önerildi</p>} member={{id:member.id,userId:member.user_id,name:publicDisplayName(member.profile,"Ekip üyesi"),avatarUrl:member.profile?.avatar_url || null,projectRole:member.profile?.title || member.profile?.expertise || member.role,owner:false,self:false,actions:<>
+        <button type="button" disabled={processingId===member.id} onClick={()=>void handleReject(member.id)} className={buttonClasses({variant:"secondary",size:"sm"})}><X size={16}/>Reddet</button>
+        <button type="button" disabled={processingId===member.id} onClick={()=>void handleApprove(member.id)} className={buttonClasses({variant:"primary",size:"sm"})}>{processingId===member.id?<Loader2 size={16} className="animate-spin"/>:<Check size={16}/>}Onayla</button>
+      </>}}/>)}</>}
+      {teamCompletion&&project?.status!=="in_progress"&&<><div className={styles.section}>
+        {canStartProject&&<RequirementsConfirmation ready={requirementsReady} note={requirementsNote} onReadyChange={setRequirementsReady} onNoteChange={setRequirementsNote}/>}
+        <button type="button" disabled={!canStartProject||starting||!requirementsReady} onClick={()=>void handleStartProject()} className={buttonClasses({variant:"primary"})}>{starting?<Loader2 size={16} className="animate-spin"/>:<PlayCircle size={16}/>}Projeyi Başlat</button>
+        {!teamCompletion.ready&&<p className={styles.secondary}>Eksik roller için freelancer aramaya devam edebilirsin.</p>}
+      </div></>}
+    </div>:null}
+  />;
 }

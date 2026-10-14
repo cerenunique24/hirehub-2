@@ -25,7 +25,7 @@ import { publicDisplayName } from "@/lib/utils/displayName";
 
 type Freelancer = {
   id: string;
-  first_name: string | null;
+  first_name: string | null;
   avatar_url: string | null;
   title: string | null;
   bio: string | null;
@@ -286,7 +286,7 @@ export default function ClientFreelancerDetailPage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-2 text-sm text-neutral-500">
+        <div className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
           <Loader2 size={18} className="animate-spin" />
           Profil yükleniyor...
         </div>
@@ -296,19 +296,19 @@ export default function ClientFreelancerDetailPage() {
 
   if (!freelancer) {
     return (
-      <div className="p-6">
-        <div className="mx-auto max-w-5xl">
+      <div className="w-full">
+        <div className="w-full">
           <Link
             href="/client/freelancers"
-            className="inline-flex items-center gap-2 text-sm text-neutral-500 transition hover:text-neutral-900"
+            className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
           >
             <ArrowLeft size={16} />
-            Freelancerlara dön
+            Freelancer Keşfet’e dön
           </Link>
 
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5">
+          <div className="mt-6 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] p-5">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-[var(--color-error-600)]">
                 <UserRound size={18} />
               </div>
 
@@ -317,7 +317,7 @@ export default function ClientFreelancerDetailPage() {
                   Freelancer profili bulunamadı
                 </h1>
 
-                <p className="mt-1 text-sm leading-6 text-red-700">
+                <p className="mt-1 text-sm leading-6 text-[var(--color-error-600)]">
                   {error || "Profil bilgileri alınamadı."}
                 </p>
               </div>
@@ -348,21 +348,21 @@ export default function ClientFreelancerDetailPage() {
     ] ?? "Müsaitlik belirtilmemiş";
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-5xl">
+    <div className="w-full">
+      <div className="w-full">
         {/* BACK */}
         <Link
           href="/client/freelancers"
-          className="inline-flex items-center gap-2 text-sm text-neutral-500 transition hover:text-neutral-900"
+          className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
         >
           <ArrowLeft size={16} />
-          Freelancerlara dön
+          Freelancer Keşfet’e dön
         </Link>
 
         {/* PROFILE */}
-        <main className="mt-6 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
+        <main className="mt-6 overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white shadow-sm">
           {/* HEADER */}
-          <section className="border-b border-neutral-100 p-7 md:p-8">
+          <section className="border-b border-[var(--color-border-subtle)] p-7 md:p-8">
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
               {freelancer.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -372,17 +372,17 @@ export default function ClientFreelancerDetailPage() {
                   className="h-24 w-24 shrink-0 rounded-full object-cover"
                 />
               ) : (
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-2xl font-semibold text-neutral-600">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-2xl font-semibold text-[var(--color-text-secondary)]">
                   {initials || "F"}
                 </div>
               )}
 
               <div className="min-w-0 flex-1">
-                <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-900">
+                <h1 className="cc-page-title font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
                   {name}
                 </h1>
 
-                <p className="mt-1 text-base text-neutral-500">
+                <p className="mt-1 text-base text-[var(--color-text-secondary)]">
                   {freelancer.title ||
                     freelancer.expertise ||
                     "Freelancer"}
@@ -390,18 +390,18 @@ export default function ClientFreelancerDetailPage() {
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {freelancer.city && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
                       <MapPin size={13} />
                       {freelancer.city}
                     </span>
                   )}
 
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
                     <CheckCircle2 size={13} />
                     {availabilityLabel}
                   </span>
 
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)]">
                     <BriefcaseBusiness size={13} />
                     {activeProjectCount} aktif proje
                   </span>
@@ -416,18 +416,18 @@ export default function ClientFreelancerDetailPage() {
 
             {/* ABOUT */}
             <section>
-              <h2 className="text-lg font-semibold text-neutral-900">
+              <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                 Hakkımda
               </h2>
 
-              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-neutral-600">
+              <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[var(--color-text-secondary)]">
                 {freelancer.bio ||
                   "Bu freelancer henüz kendisi hakkında bilgi eklememiş."}
               </p>
             </section>
 
             {/* INFO GRID */}
-            <section className="mt-8 grid gap-6 border-t border-neutral-100 pt-7 md:grid-cols-2">
+            <section className="mt-8 grid gap-6 border-t border-[var(--color-border-subtle)] pt-7 md:grid-cols-2">
               <Info
                 icon={<Wrench size={17} />}
                 title="Uzmanlık alanı"
@@ -465,8 +465,8 @@ export default function ClientFreelancerDetailPage() {
             </section>
 
             {/* SKILLS */}
-            <section className="mt-8 border-t border-neutral-100 pt-7">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+            <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+              <h2 className="flex items-center gap-2 cc-h2 font-semibold text-[var(--color-text-primary)]">
                 <Wrench size={18} />
                 Yetenekler
               </h2>
@@ -476,14 +476,14 @@ export default function ClientFreelancerDetailPage() {
                   {skills.map((skill, index) => (
                     <span
                       key={`${skill}-${index}`}
-                      className="rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700"
+                      className="rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)]"
                     >
                       {skill}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-neutral-500">
+                <p className="mt-3 text-sm text-[var(--color-text-secondary)]">
                   Henüz yetenek eklenmemiş.
                 </p>
               )}
@@ -491,8 +491,8 @@ export default function ClientFreelancerDetailPage() {
 
             {/* WORK TYPES */}
             {workTypes.length > 0 && (
-              <section className="mt-8 border-t border-neutral-100 pt-7">
-                <h2 className="text-lg font-semibold text-neutral-900">
+              <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+                <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                   Çalışma türleri
                 </h2>
 
@@ -500,7 +500,7 @@ export default function ClientFreelancerDetailPage() {
                   {workTypes.map((type, index) => (
                     <span
                       key={`${type}-${index}`}
-                      className="rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700"
+                      className="rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)]"
                     >
                       {type}
                     </span>
@@ -511,8 +511,8 @@ export default function ClientFreelancerDetailPage() {
 
             {/* LANGUAGES */}
             {languages.length > 0 && (
-              <section className="mt-8 border-t border-neutral-100 pt-7">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+              <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+                <h2 className="flex items-center gap-2 cc-h2 font-semibold text-[var(--color-text-primary)]">
                   <Languages size={18} />
                   Diller
                 </h2>
@@ -521,7 +521,7 @@ export default function ClientFreelancerDetailPage() {
                   {languages.map((language, index) => (
                     <span
                       key={`${language}-${index}`}
-                      className="rounded-full bg-neutral-100 px-3 py-1.5 text-sm text-neutral-700"
+                      className="rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-secondary)]"
                     >
                       {language}
                     </span>
@@ -531,8 +531,8 @@ export default function ClientFreelancerDetailPage() {
             )}
 
             {/* PORTFOLIO */}
-            <section className="mt-8 border-t border-neutral-100 pt-7">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+            <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+              <h2 className="flex items-center gap-2 cc-h2 font-semibold text-[var(--color-text-primary)]">
                 <BriefcaseBusiness size={18} />
                 Portföy
               </h2>
@@ -545,7 +545,7 @@ export default function ClientFreelancerDetailPage() {
                     return (
                       <article
                         key={item.id}
-                        className="overflow-hidden rounded-2xl border border-neutral-200 bg-white"
+                        className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white"
                       >
                         {item.image_url && (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -557,18 +557,18 @@ export default function ClientFreelancerDetailPage() {
                         )}
 
                         <div className="p-5">
-                          <h3 className="font-semibold text-neutral-900">
+                          <h3 className="font-semibold text-[var(--color-text-primary)]">
                             {item.title || "Portföy çalışması"}
                           </h3>
 
                           {item.category && (
-                            <p className="mt-1 text-xs font-medium text-neutral-400">
+                            <p className="mt-1 text-xs font-medium text-[var(--color-text-muted)]">
                               {item.category}
                             </p>
                           )}
 
                           {item.description && (
-                            <p className="mt-3 text-sm leading-6 text-neutral-600">
+                            <p className="mt-3 text-sm leading-6 text-[var(--color-text-secondary)]">
                               {item.description}
                             </p>
                           )}
@@ -578,7 +578,7 @@ export default function ClientFreelancerDetailPage() {
                               href={portfolioUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-neutral-900 hover:underline"
+                              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-[var(--color-text-primary)] hover:underline"
                             >
                               Çalışmayı görüntüle
                               <ExternalLink size={14} />
@@ -590,8 +590,8 @@ export default function ClientFreelancerDetailPage() {
                   })}
                 </div>
               ) : (
-                <div className="mt-4 rounded-2xl bg-neutral-50 p-5">
-                  <p className="text-sm leading-6 text-neutral-500">
+                <div className="mt-4 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] p-5">
+                  <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                     Bu freelancer henüz portföy çalışması eklememiş.
                   </p>
                 </div>
@@ -599,8 +599,8 @@ export default function ClientFreelancerDetailPage() {
             </section>
 
             {/* EXPERIENCE */}
-            <section className="mt-8 border-t border-neutral-100 pt-7">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+            <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+              <h2 className="flex items-center gap-2 cc-h2 font-semibold text-[var(--color-text-primary)]">
                 <BriefcaseBusiness size={18} />
                 Geçmiş Deneyimler
               </h2>
@@ -624,24 +624,24 @@ export default function ClientFreelancerDetailPage() {
                     return (
                       <article
                         key={experience.id}
-                        className="rounded-2xl border border-neutral-200 p-5"
+                        className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] p-5"
                       >
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <h3 className="font-semibold text-neutral-900">
+                            <h3 className="font-semibold text-[var(--color-text-primary)]">
                               {experience.title ||
                                 "Deneyim"}
                             </h3>
 
                             {company && (
-                              <p className="mt-1 text-sm text-neutral-600">
+                              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                                 {company}
                               </p>
                             )}
                           </div>
 
                           {(startDate || endDate) && (
-                            <span className="shrink-0 text-xs text-neutral-400">
+                            <span className="shrink-0 text-xs text-[var(--color-text-muted)]">
                               {startDate}
                               {startDate && endDate ? " – " : ""}
                               {endDate}
@@ -650,7 +650,7 @@ export default function ClientFreelancerDetailPage() {
                         </div>
 
                         {experience.description && (
-                          <p className="mt-3 whitespace-pre-line text-sm leading-6 text-neutral-600">
+                          <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--color-text-secondary)]">
                             {experience.description}
                           </p>
                         )}
@@ -659,8 +659,8 @@ export default function ClientFreelancerDetailPage() {
                   })}
                 </div>
               ) : (
-                <div className="mt-4 rounded-2xl bg-neutral-50 p-5">
-                  <p className="text-sm leading-6 text-neutral-500">
+                <div className="mt-4 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] p-5">
+                  <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                     Bu freelancer henüz geçmiş deneyim eklememiş.
                   </p>
                 </div>
@@ -669,13 +669,13 @@ export default function ClientFreelancerDetailPage() {
 
             {/* LOCATION / OTHER */}
             {freelancer.city && (
-              <section className="mt-8 border-t border-neutral-100 pt-7">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-neutral-900">
+              <section className="mt-8 border-t border-[var(--color-border-subtle)] pt-7">
+                <h2 className="flex items-center gap-2 cc-h2 font-semibold text-[var(--color-text-primary)]">
                   <Globe2 size={18} />
                   Konum
                 </h2>
 
-                <p className="mt-3 flex items-center gap-2 text-sm text-neutral-600">
+                <p className="mt-3 flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
                   <MapPin size={16} />
                   {freelancer.city}
                 </p>
@@ -699,12 +699,12 @@ function Info({
 }) {
   return (
     <div>
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-        <span className="text-neutral-500">{icon}</span>
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="text-[var(--color-text-secondary)]">{icon}</span>
         {title}
       </h2>
 
-      <p className="mt-2 text-sm leading-6 text-neutral-600">
+      <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
         {children}
       </p>
     </div>

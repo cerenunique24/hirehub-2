@@ -75,7 +75,7 @@ const DURATION_OPTIONS = [
   },
 ];
 
-const CONTAINER = "mx-auto w-full max-w-[1240px] px-6";
+const CONTAINER = "w-full";
 
 const CARD =
   "rounded-[var(--radius-card)] border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]";
@@ -84,13 +84,13 @@ const EYEBROW =
   "text-xs font-semibold uppercase tracking-[0.14em] text-gray-400";
 
 const HEADING =
-  "mt-2 text-[32px] leading-10 font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]";
+  "cc-page-title mt-[var(--rhythm-title-gap)] text-[var(--color-text-primary)]";
 
 const SUBTEXT =
   "mt-2 max-w-2xl text-sm leading-6 text-gray-500";
 
 const INPUT =
-  "h-[38px] w-full rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]";
+  "h-[var(--control-height-md)] w-full rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]";
 
 const LABEL =
   "mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]";
@@ -1214,7 +1214,7 @@ export default function CreateProjectPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--color-canvas)]">
+    <main className="w-full">
       <PageHeader
         title="Yeni Proje"
         onBack={goBack}
@@ -1226,7 +1226,7 @@ export default function CreateProjectPage() {
         className={`${CONTAINER} pb-20`}
       >
         {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-600)]">
             <X className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1462,15 +1462,15 @@ function ProjectStep({
             Proje dökümanları
           </label>
 
-          <label className="flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-gray-300 bg-gray-50/50 px-6 py-10 transition hover:border-gray-400 hover:bg-gray-50">
+          <label className="flex cursor-pointer items-center justify-center rounded-[var(--radius-card)] border border-dashed border-gray-300 bg-[var(--color-surface-2)]/50 px-6 py-10 transition hover:border-gray-400 hover:bg-[var(--color-surface-2)]">
             <div className="text-center">
-              <Upload className="mx-auto h-5 w-5 text-gray-400" />
+              <Upload className="mx-auto h-5 w-5 text-[var(--color-text-muted)]" />
 
               <p className="mt-3 text-sm font-medium text-[#222]">
                 Dosya seç
               </p>
 
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                 Brief, PDF, görsel veya
                 referans dosyaları · en fazla
                 10 dosya
@@ -1502,7 +1502,7 @@ function ProjectStep({
           )}
         </div>
 
-        <div className="flex justify-end border-t border-gray-100 pt-6">
+        <div className="flex justify-end border-t border-[var(--color-border-subtle)] pt-6">
           <button
             type="button"
             onClick={onContinue}
@@ -1598,21 +1598,21 @@ function NeedsStep({
         <div className={`${CARD} p-10 text-center`}>
           <AnalyzingState />
 
-          <p className="mt-4 text-sm text-gray-500">
+          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
             Proje ihtiyaçlarınız çıkarılıyor...
           </p>
         </div>
       ) : analysisFailed ? (
         <div className={`${CARD} p-10 text-center`}>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[var(--radius-card)] bg-[var(--color-warning-50)] text-amber-600">
             <AlertTriangle size={22} />
           </div>
-          <h3 className="mt-4 text-lg font-semibold text-gray-900">
+          <h3 className="mt-4 cc-h3 font-semibold text-[var(--color-text-primary)]">
             {analysisRetryable
               ? "AI analizi şu anda kullanılamıyor"
               : "Proje analizi tamamlanamadı"}
           </h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">
+          <p className="mx-auto mt-2 max-w-md text-sm text-[var(--color-text-secondary)]">
             {analysisError ||
               (analysisRetryable
                 ? "AI servisi geçici olarak yoğun. Lütfen birkaç dakika sonra tekrar deneyin."
@@ -1621,7 +1621,7 @@ function NeedsStep({
           <button
             type="button"
             onClick={onRetryAnalysis}
-            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+            className="mt-6 inline-flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
           >
             <RotateCcw size={16} />
             Tekrar Dene
@@ -1630,11 +1630,11 @@ function NeedsStep({
       ) : (
         <>
           {analysis && (
-            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-5 py-4">
+            <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-5 py-4">
               <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary-600)]" />
-              <p className="text-sm leading-6 text-gray-700">
+              <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                 Projenizi inceledik. Bu proje için{" "}
-                <span className="font-semibold text-gray-900">
+                <span className="font-semibold text-[var(--color-text-primary)]">
                   {roles.length} farklı uzmanlık alanına
                 </span>{" "}
                 ihtiyaç olduğunu düşünüyoruz. Aşağıdaki rolleri ve
@@ -1674,7 +1674,7 @@ function NeedsStep({
           <button
             type="button"
             onClick={onAddRole}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:text-gray-900"
+            className="mt-4 inline-flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-gray-400 hover:text-[var(--color-text-primary)]"
           >
             <Plus className="h-4 w-4" />
             Rol ekle
@@ -1792,7 +1792,7 @@ function RoleNeedsCard({
         <button
           type="button"
           onClick={onRemove}
-          className="shrink-0 rounded-lg p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+          className="shrink-0 rounded-lg p-2 text-[var(--color-text-muted)] transition hover:bg-[var(--color-error-50)] hover:text-[var(--color-error-600)]"
           aria-label="Rolü sil"
         >
           <Trash2 className="h-4 w-4" />
@@ -1800,14 +1800,14 @@ function RoleNeedsCard({
       </div>
 
       {role.reason && (
-        <p className="mt-2 text-sm leading-6 text-gray-500">
+        <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
           {truncateToSentence(role.reason)}
         </p>
       )}
 
       <div className="mt-5 grid gap-6 sm:grid-cols-2">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Gerekli beceriler
           </p>
 
@@ -1821,7 +1821,7 @@ function RoleNeedsCard({
                     onRemoveListItem("skills", index)
                   }
                   aria-label={`${skill} becerisini kaldır`}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1833,7 +1833,7 @@ function RoleNeedsCard({
                 <button
                   type="button"
                   onClick={() => setShowAllSkills(true)}
-                  className="text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+                  className="text-xs font-medium text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
                 >
                   + {role.skills.length - MAX_SKILLS} daha
                 </button>
@@ -1855,7 +1855,7 @@ function RoleNeedsCard({
                 }
               }}
               placeholder="Beceri ekle..."
-              className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 text-sm outline-none focus:border-gray-400"
+              className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--color-border-subtle)] px-2.5 text-sm outline-none focus:border-gray-400"
             />
             <button
               type="button"
@@ -1864,7 +1864,7 @@ function RoleNeedsCard({
                 setSkillDraft("");
                 setShowAllSkills(true);
               }}
-              className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-[var(--color-border-subtle)] px-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
             >
               Ekle
             </button>
@@ -1872,7 +1872,7 @@ function RoleNeedsCard({
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Tercih edilen
           </p>
 
@@ -1886,7 +1886,7 @@ function RoleNeedsCard({
                     onRemoveListItem("preferredSkills", index)
                   }
                   aria-label={`${skill} becerisini kaldır`}
-                  className="text-gray-400 hover:text-gray-700"
+                  className="text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -1898,7 +1898,7 @@ function RoleNeedsCard({
                 <button
                   type="button"
                   onClick={() => setShowAllPreferred(true)}
-                  className="text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+                  className="text-xs font-medium text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
                 >
                   +{" "}
                   {role.preferredSkills.length - MAX_PREFERRED}{" "}
@@ -1922,7 +1922,7 @@ function RoleNeedsCard({
                 }
               }}
               placeholder="Beceri ekle..."
-              className="h-8 min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 text-sm outline-none focus:border-gray-400"
+              className="h-8 min-w-0 flex-1 rounded-lg border border-[var(--color-border-subtle)] px-2.5 text-sm outline-none focus:border-gray-400"
             />
             <button
               type="button"
@@ -1931,7 +1931,7 @@ function RoleNeedsCard({
                 setPreferredDraft("");
                 setShowAllPreferred(true);
               }}
-              className="rounded-lg border border-gray-200 px-2.5 text-sm text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-[var(--color-border-subtle)] px-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
             >
               Ekle
             </button>
@@ -1940,7 +1940,7 @@ function RoleNeedsCard({
       </div>
 
       <div className="mt-6">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
           Beklentiler
         </p>
 
@@ -1948,7 +1948,7 @@ function RoleNeedsCard({
           {visibleResponsibilities.map((item, index) => (
             <li
               key={item}
-              className="flex items-start justify-between gap-3 rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700"
+              className="flex items-start justify-between gap-3 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-3.5 py-2.5 text-sm text-[var(--color-text-secondary)]"
             >
               <span>{item}</span>
               <button
@@ -1957,7 +1957,7 @@ function RoleNeedsCard({
                   onRemoveListItem("responsibilities", index)
                 }
                 aria-label="Sorumluluğu kaldır"
-                className="shrink-0 text-gray-400 hover:text-gray-700"
+                className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -1973,7 +1973,7 @@ function RoleNeedsCard({
               onClick={() =>
                 setShowAllResponsibilities(true)
               }
-              className="mt-2 text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+              className="mt-2 text-xs font-medium text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
             >
               +{" "}
               {role.responsibilities.length -
@@ -2000,7 +2000,7 @@ function RoleNeedsCard({
               }
             }}
             placeholder="Sorumluluk ekle..."
-            className="h-9 min-w-0 flex-1 rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-gray-400"
+            className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-border-subtle)] px-3 text-sm outline-none focus:border-gray-400"
           />
           <button
             type="button"
@@ -2012,7 +2012,7 @@ function RoleNeedsCard({
               setResponsibilityDraft("");
               setShowAllResponsibilities(true);
             }}
-            className="rounded-lg border border-gray-200 px-3 text-sm text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-[var(--color-border-subtle)] px-3 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
           >
             Ekle
           </button>
@@ -2089,7 +2089,7 @@ function AnalysisStep({
         >
           <AnalyzingState />
 
-          <p className="mt-4 text-sm text-gray-500">
+          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
             İhtiyaçlarınıza uygun freelancerları buluyoruz...
           </p>
         </div>
@@ -2118,7 +2118,7 @@ function AnalysisStep({
                   }
                 />
 
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-[var(--color-text-secondary)]">
                   {roles.length} rol
                 </span>
               </div>
@@ -2139,14 +2139,14 @@ function AnalysisStep({
                   return (
                     <div
                       key={role.id}
-                      className="flex items-center justify-between gap-4 rounded-xl bg-gray-50 px-4 py-3"
+                      className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3"
                     >
                       <div>
                         <p className="text-sm font-medium text-[#222]">
                           {role.name}
                         </p>
 
-                        <p className="mt-0.5 text-xs text-gray-500">
+                        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
                           {role.memberCount}{" "}
                           kişi
                         </p>
@@ -2166,13 +2166,13 @@ function AnalysisStep({
 
               {selectionMode ===
                 "team" && (
-                <div className="mt-6 space-y-5 border-t border-gray-100 pt-6">
+                <div className="mt-6 space-y-5 border-t border-[var(--color-border-subtle)] pt-6">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
                       Ekip üyelerini seç
                     </p>
 
-                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                    <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
                       Seçtiğiniz kişiler
                       henüz proje ekibine
                       eklenmez. Proje
@@ -2234,8 +2234,8 @@ function AnalysisStep({
                   </div>
 
                   <div className="mt-5 flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                      <UserRound className="h-5 w-5 text-gray-500" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
+                      <UserRound className="h-5 w-5 text-[var(--color-text-secondary)]" />
                     </div>
 
                     <div className="min-w-0">
@@ -2247,7 +2247,7 @@ function AnalysisStep({
                       />
 
                       {bestOverallFreelancer.title && (
-                        <p className="truncate text-xs text-gray-500">
+                        <p className="truncate text-xs text-[var(--color-text-secondary)]">
                           {
                             bestOverallFreelancer.title
                           }
@@ -2257,7 +2257,7 @@ function AnalysisStep({
                   </div>
 
                   {bestOverallFreelancer.reason && (
-                    <p className="mt-4 text-sm leading-6 text-gray-500">
+                    <p className="mt-4 text-sm leading-6 text-[var(--color-text-secondary)]">
                       {
                         bestOverallFreelancer.reason
                       }
@@ -2283,7 +2283,7 @@ function AnalysisStep({
                     </div>
                   )}
 
-                  <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-xs leading-5 text-gray-500">
+                  <div className="mt-6 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3 text-xs leading-5 text-[var(--color-text-secondary)]">
                     Bu seçim freelancerı
                     doğrudan proje ekibine
                     eklemez. Proje
@@ -2293,7 +2293,7 @@ function AnalysisStep({
                   </div>
                 </div>
               ) : (
-                <p className="mt-4 text-sm leading-6 text-gray-500">
+                <p className="mt-4 text-sm leading-6 text-[var(--color-text-secondary)]">
                   Şu anda uygun bir
                   freelancer bulunamadı.
                   Yine de seçim yapmadan
@@ -2309,8 +2309,8 @@ function AnalysisStep({
               onClick={onChooseNone}
               className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
                 selectionMode === "none"
-                  ? "border-blue-600 bg-blue-50 text-blue-600"
-                  : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-[#222]"
+                  ? "border-blue-600 bg-[var(--color-info-50)] text-blue-600"
+                  : "border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] hover:border-gray-300 hover:text-[#222]"
               }`}
             >
               {selectionMode ===
@@ -2322,7 +2322,7 @@ function AnalysisStep({
         </>
       )}
 
-      <div className="mt-10 flex items-center justify-between border-t border-gray-100 pt-6">
+      <div className="mt-10 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
         <button
           type="button"
           onClick={onBack}
@@ -2368,7 +2368,7 @@ function AdvancedAnalysisSection({
         {advancedAnalysis ? (
           <div className={`${CARD} p-6`}>
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900">Kapsamlı Analiz</h3>
+              <h3 className="font-semibold text-[var(--color-text-primary)]">Kapsamlı Analiz</h3>
               <span className="rounded-full bg-[var(--color-primary-600)] px-2.5 py-0.5 text-xs font-medium text-white">
                 {canUseDeepAnalysis ? "Pro" : "Plus"}
               </span>
@@ -2376,18 +2376,18 @@ function AdvancedAnalysisSection({
 
             <div className="mt-4 space-y-2">
               {advancedAnalysis.detailedRoleAnalysis.map((item) => (
-                <p key={item.role} className="text-sm text-gray-600">
-                  <span className="font-medium text-gray-900">{item.role}:</span> {item.insight}
+                <p key={item.role} className="text-sm text-[var(--color-text-secondary)]">
+                  <span className="font-medium text-[var(--color-text-primary)]">{item.role}:</span> {item.insight}
                 </p>
               ))}
             </div>
 
             {advancedAnalysis.skillGapInsights.length > 0 && (
-              <div className="mt-4 border-t border-gray-100 pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Beceri İçgörüleri</p>
+              <div className="mt-4 border-t border-[var(--color-border-subtle)] pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Beceri İçgörüleri</p>
                 <ul className="mt-2 space-y-1">
                   {advancedAnalysis.skillGapInsights.map((insight, index) => (
-                    <li key={index} className="text-sm text-gray-600">
+                    <li key={index} className="text-sm text-[var(--color-text-secondary)]">
                       • {insight}
                     </li>
                   ))}
@@ -2395,36 +2395,36 @@ function AdvancedAnalysisSection({
               </div>
             )}
 
-            <div className="mt-4 border-t border-gray-100 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Bütçe ve Süre Değerlendirmesi</p>
-              <p className="mt-2 text-sm text-gray-600">{advancedAnalysis.budgetDurationAssessment.insight}</p>
+            <div className="mt-4 border-t border-[var(--color-border-subtle)] pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Bütçe ve Süre Değerlendirmesi</p>
+              <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{advancedAnalysis.budgetDurationAssessment.insight}</p>
               {advancedAnalysis.budgetDurationAssessment.flags.map((flag, index) => (
-                <p key={index} className="mt-1 text-sm text-amber-700">
+                <p key={index} className="mt-1 text-sm text-[var(--color-warning-600)]">
                   ⚠ {flag}
                 </p>
               ))}
             </div>
 
             {proAnalysis && (
-              <div className="mt-5 border-t border-gray-100 pt-5">
+              <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
                 <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-gray-900">Gelişmiş Pro Analizi</h4>
+                  <h4 className="font-semibold text-[var(--color-text-primary)]">Gelişmiş Pro Analizi</h4>
                   <span className="rounded-full bg-[var(--color-primary-600)] px-2 py-0.5 text-[10px] font-medium text-white">Pro</span>
                 </div>
 
-                <p className="mt-3 text-sm text-gray-600">{proAnalysis.teamCompositionInsight}</p>
+                <p className="mt-3 text-sm text-[var(--color-text-secondary)]">{proAnalysis.teamCompositionInsight}</p>
 
                 <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Risk Analizi</p>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Risk Analizi</p>
+                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                     Risk seviyesi:{" "}
                     <span
                       className={`font-medium ${
                         proAnalysis.riskAnalysis.level === "high"
-                          ? "text-red-600"
+                          ? "text-[var(--color-error-600)]"
                           : proAnalysis.riskAnalysis.level === "medium"
                             ? "text-amber-600"
-                            : "text-emerald-700"
+                            : "text-[var(--color-success-600)]"
                       }`}
                     >
                       {proAnalysis.riskAnalysis.level === "high"
@@ -2436,7 +2436,7 @@ function AdvancedAnalysisSection({
                   </p>
                   <ul className="mt-1 space-y-1">
                     {proAnalysis.riskAnalysis.risks.map((risk, index) => (
-                      <li key={index} className="text-sm text-gray-600">
+                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
                         • {risk}
                       </li>
                     ))}
@@ -2444,10 +2444,10 @@ function AdvancedAnalysisSection({
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Alternatif Rol Önerileri</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Alternatif Rol Önerileri</p>
                   <ul className="mt-1 space-y-1">
                     {proAnalysis.alternativeRoleSuggestions.map((suggestion, index) => (
-                      <li key={index} className="text-sm text-gray-600">
+                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
                         • {suggestion}
                       </li>
                     ))}
@@ -2455,15 +2455,15 @@ function AdvancedAnalysisSection({
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gelişmiş Bütçe İçgörüsü</p>
-                  <p className="mt-1 text-sm text-gray-600">{proAnalysis.advancedBudgetInsight}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Gelişmiş Bütçe İçgörüsü</p>
+                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{proAnalysis.advancedBudgetInsight}</p>
                 </div>
 
                 <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Gelişmiş Öneriler</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Gelişmiş Öneriler</p>
                   <ul className="mt-1 space-y-1">
                     {proAnalysis.advancedRecommendations.map((rec, index) => (
-                      <li key={index} className="text-sm text-gray-600">
+                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
                         • {rec}
                       </li>
                     ))}
@@ -2473,13 +2473,13 @@ function AdvancedAnalysisSection({
             )}
 
             {aiUsage && (
-              <p className="mt-4 border-t border-gray-100 pt-3 text-xs text-gray-400">
+              <p className="mt-4 border-t border-[var(--color-border-subtle)] pt-3 text-xs text-[var(--color-text-muted)]">
                 Bu ay {aiUsage.count}/{aiUsage.monthlyLimit} ek analiz kullanıldı.
               </p>
             )}
           </div>
         ) : aiUsage?.limitReached ? (
-          <div className={`${CARD} p-6 text-sm text-gray-500`}>
+          <div className={`${CARD} p-6 text-sm text-[var(--color-text-secondary)]`}>
             Bu ay için ek analiz hakkın doldu ({aiUsage.count}/{aiUsage.monthlyLimit}). Gelecek ay otomatik olarak
             yenilenecek{canUseDeepAnalysis ? "" : " — daha yüksek limit için Pro'ya geçebilirsin"}.
           </div>
@@ -2531,16 +2531,16 @@ function MatchOptionCard({
       } ${
         selected
           ? "border-[#222] ring-1 ring-[#222]"
-          : "border-gray-200"
+          : "border-[var(--color-border-subtle)]"
       }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
             {eyebrow}
           </p>
 
-          <h2 className="mt-1 text-lg font-semibold text-[#222]">
+          <h2 className="mt-1 cc-h2 font-semibold text-[#222]">
             {title}
           </h2>
         </div>
@@ -2588,12 +2588,12 @@ function MatchBadge({
   score: number;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-1 rounded-full bg-gray-100 px-3 py-1.5">
+    <span className="inline-flex items-baseline gap-1 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5">
       <span className="text-sm font-semibold text-[#222]">
         %{Math.round(score)}
       </span>
 
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-[var(--color-text-secondary)]">
         uyum
       </span>
     </span>
@@ -2618,7 +2618,7 @@ function MatchPaywallCard({
   if (rolesWithMatches.length === 0) {
     return (
       <div className={`${CARD} p-8 text-center`}>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-[var(--color-text-secondary)]">
           Bu proje için henüz uygun freelancer bulamadık.
         </p>
       </div>
@@ -2635,7 +2635,7 @@ function MatchPaywallCard({
         {rolesWithMatches.map((group) => (
           <p
             key={group.role}
-            className="text-sm text-gray-600"
+            className="text-sm text-[var(--color-text-secondary)]"
           >
             <span className="font-medium text-[#222]">
               {group.role}
@@ -2646,7 +2646,7 @@ function MatchPaywallCard({
         ))}
       </div>
 
-      <p className="mt-4 text-sm text-gray-500">
+      <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
         Uygun freelancerları görmek için Plus&apos;a
         geçin.
       </p>
@@ -2698,7 +2698,7 @@ function RoleCandidatePicker({
           {role.name}
         </p>
 
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-[var(--color-text-muted)]">
           {selected.length}/{role.memberCount}
         </span>
       </div>
@@ -2725,10 +2725,10 @@ function RoleCandidatePicker({
 
                 onToggle(candidate);
               }}
-              className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left transition ${
+              className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] border px-3 py-3 text-left transition ${
                 picked
-                  ? "border-[#222] bg-gray-50"
-                  : "border-gray-200 bg-white hover:border-gray-300"
+                  ? "border-[#222] bg-[var(--color-surface-2)]"
+                  : "border-[var(--color-border-subtle)] bg-white hover:border-gray-300"
               } ${
                 disabled
                   ? "cursor-not-allowed opacity-40"
@@ -2742,7 +2742,7 @@ function RoleCandidatePicker({
                   <FreelancerHoverCard talent={candidate} />
 
                   {candidate.title && (
-                    <span className="block truncate text-xs text-gray-500">
+                    <span className="block truncate text-xs text-[var(--color-text-secondary)]">
                       {candidate.title}
                     </span>
                   )}
@@ -2764,7 +2764,7 @@ function RoleCandidatePicker({
             event.stopPropagation();
             setShowAll(true);
           }}
-          className="mt-2 text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+          className="mt-2 text-xs font-medium text-[var(--color-text-secondary)] underline-offset-2 hover:underline"
         >
           Tümünü gör ({freelancers.length})
         </button>
@@ -2816,26 +2816,26 @@ function FreelancerHoverCard({
       {open && hasInfo && (
         <div
           onClick={(event) => event.stopPropagation()}
-          className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-gray-200 bg-white p-3 text-left shadow-lg"
+          className="absolute left-0 top-full z-50 mt-1 w-64 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-3 text-left shadow-lg"
         >
           <p className="text-sm font-semibold text-[#222]">
             {talent.name}
           </p>
 
           {talent.title && (
-            <p className="mt-0.5 text-xs text-gray-500">
+            <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
               {talent.title}
             </p>
           )}
 
           {talent.experience && (
-            <p className="mt-2 text-xs text-gray-600">
+            <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
               Deneyim: {talent.experience}
             </p>
           )}
 
           {talent.bio && (
-            <p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-600">
+            <p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--color-text-secondary)]">
               {talent.bio}
             </p>
           )}
@@ -2974,15 +2974,15 @@ function BudgetPublishStep({
             <div
               className={`${CARD} p-6`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                 Toplam bütçe
               </p>
 
-              <p className="mt-2 text-3xl font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
+              <p className="mt-2 cc-page-title font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
                 ₺{formatTL(totalBudget)}
               </p>
 
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                 Tüm rollerin toplamı
               </p>
             </div>
@@ -2990,7 +2990,7 @@ function BudgetPublishStep({
             <div
               className={`${CARD} p-6`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                 Proje süresi
               </p>
 
@@ -2999,7 +2999,7 @@ function BudgetPublishStep({
                   "Rol süreleri girilmedi"}
               </p>
 
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                 En uzun rol süresine göre
                 belirlenir
               </p>
@@ -3011,9 +3011,9 @@ function BudgetPublishStep({
           {selectionMode ===
             "freelancer" &&
             selectedFreelancer && (
-              <div className="mb-8 flex items-center gap-3 border-b border-gray-100 pb-6">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                  <UserRound className="h-5 w-5 text-gray-500" />
+              <div className="mb-8 flex items-center gap-3 border-b border-[var(--color-border-subtle)] pb-6">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
+                  <UserRound className="h-5 w-5 text-[var(--color-text-secondary)]" />
                 </div>
 
                 <div className="min-w-0">
@@ -3024,7 +3024,7 @@ function BudgetPublishStep({
                   </p>
 
                   {selectedFreelancer.title && (
-                    <p className="truncate text-xs text-gray-500">
+                    <p className="truncate text-xs text-[var(--color-text-secondary)]">
                       {
                         selectedFreelancer.title
                       }
@@ -3063,18 +3063,18 @@ function BudgetPublishStep({
       <div
         className={`${CARD} mt-8 overflow-hidden`}
       >
-        <div className="border-b border-gray-100 px-6 py-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+        <div className="border-b border-[var(--color-border-subtle)] px-6 py-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
             Proje özeti
           </p>
 
-          <h2 className="mt-2 text-lg font-semibold text-[#222]">
+          <h2 className="mt-2 cc-h2 font-semibold text-[#222]">
             {brief.title ||
               "Başlıksız proje"}
           </h2>
         </div>
 
-        <div className="grid gap-px bg-gray-100 sm:grid-cols-2">
+        <div className="grid gap-px bg-[var(--color-surface-2)] sm:grid-cols-2">
           <SummaryRow
             label="Kategori"
             value={
@@ -3143,15 +3143,15 @@ function BudgetPublishStep({
         <div
           className={`${CARD} mt-6 overflow-hidden`}
         >
-          <div className="border-b border-gray-100 px-6 py-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
+          <div className="border-b border-[var(--color-border-subtle)] px-6 py-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
               Yayınlamadan önce ödeme özetini kontrol et
             </p>
           </div>
 
           <div className="space-y-3 px-6 py-5">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">
+              <span className="text-[var(--color-text-secondary)]">
                 Proje bütçesi
               </span>
               <span className="font-medium text-[#222]">
@@ -3160,7 +3160,7 @@ function BudgetPublishStep({
             </div>
 
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">
+              <span className="text-[var(--color-text-secondary)]">
                 CollaCrew hizmet bedeli (%
                 {Math.round(
                   effectiveCommissionRate * 100
@@ -3172,7 +3172,7 @@ function BudgetPublishStep({
               </span>
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-100 pt-3">
+            <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-3">
               <span className="text-sm font-semibold text-[#222]">
                 Tahmini toplam ödeme
               </span>
@@ -3181,7 +3181,7 @@ function BudgetPublishStep({
               </span>
             </div>
 
-            <p className="text-xs leading-5 text-gray-400">
+            <p className="text-xs leading-5 text-[var(--color-text-muted)]">
               Bu bir tahsilat değildir. CollaCrew&apos;da ödeme
               altyapısı devreye girdiğinde gerçek tahsilat ayrı
               bir adımda onayınıza sunulacaktır.
@@ -3190,7 +3190,7 @@ function BudgetPublishStep({
         </div>
       )}
 
-      <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-6">
+      <div className="mt-8 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
         <button
           type="button"
           onClick={onBack}
@@ -3252,14 +3252,14 @@ function RoleBudgetCard({
           </p>
 
           {role.reason && (
-            <p className="mt-1 max-w-xl text-xs leading-5 text-gray-500">
+            <p className="mt-1 max-w-xl text-xs leading-5 text-[var(--color-text-secondary)]">
               {role.reason}
             </p>
           )}
         </div>
 
         <div className="shrink-0">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-[var(--color-text-muted)]">
             Rol toplamı
           </p>
 
@@ -3313,8 +3313,8 @@ function RoleBudgetCard({
 
       {role.memberCount > 0 &&
         role.budgetPerPerson > 0 && (
-          <div className="mt-5 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
-            <span className="text-xs text-gray-500">
+          <div className="mt-5 flex items-center justify-between rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3">
+            <span className="text-xs text-[var(--color-text-secondary)]">
               {role.memberCount} kişi × ₺
               {formatTL(
                 role.budgetPerPerson
@@ -3382,7 +3382,7 @@ function BudgetSelector({
           }`}
         />
 
-        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--color-text-muted)]">
           TL
         </span>
       </div>
@@ -3435,7 +3435,7 @@ function DurationSelector({
           )}
         </select>
 
-        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
       </div>
     </Field>
   );
@@ -3451,8 +3451,8 @@ function SummaryRow({
   strong?: boolean;
 }) {
   return (
-    <div className="bg-gray-50 p-4">
-      <p className="text-xs font-medium text-gray-500">
+    <div className="bg-[var(--color-surface-2)] p-4">
+      <p className="text-xs font-medium text-[var(--color-text-secondary)]">
         {label}
       </p>
 
@@ -3477,14 +3477,14 @@ function PageHeader({
   onBack: () => void;
 }) {
   return (
-    <header className="border-b border-gray-200 bg-white">
+    <header className="border-b border-[var(--color-border-subtle)] bg-white">
       <div
         className={`${CONTAINER} flex items-center gap-4 py-5`}
       >
         <button
           type="button"
           onClick={onBack}
-          className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] text-gray-400 transition hover:bg-gray-100 hover:text-[#222]"
+          className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-2)] hover:text-[#222]"
           aria-label="Geri"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -3534,7 +3534,7 @@ function StepIndicator({
     <div
       className={`${CONTAINER} pt-6`}
     >
-      <div className="hidden items-center rounded-[var(--radius-card)] border border-gray-200 bg-white px-6 py-4 sm:flex">
+      <div className="hidden items-center rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-6 py-4 sm:flex">
         {steps.map(
           (item, index) => {
             const done =
@@ -3553,7 +3553,7 @@ function StepIndicator({
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                       done || current
                         ? "bg-[var(--color-primary-600)] text-white"
-                        : "bg-gray-100 text-gray-400"
+                        : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
                     }`}
                   >
                     {done ? (
@@ -3572,7 +3572,7 @@ function StepIndicator({
                     className={`text-[13px] font-medium ${
                       done || current
                         ? "text-[#222]"
-                        : "text-gray-400"
+                        : "text-[var(--color-text-muted)]"
                     }`}
                   >
                     {item.label}
@@ -3597,9 +3597,9 @@ function StepIndicator({
         )}
       </div>
 
-      <div className="flex items-center justify-between rounded-[var(--radius-card)] border border-gray-200 bg-white px-4 py-3 sm:hidden">
+      <div className="flex items-center justify-between rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 sm:hidden">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Adım{" "}
             {currentIndex + 1} /{" "}
             {steps.length}
@@ -3726,7 +3726,7 @@ function Select({
         )}
       </select>
 
-      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
     </div>
   );
 }
@@ -3868,14 +3868,14 @@ function MultiSelect({
             className={
               values.length > 0
                 ? "text-[#222]"
-                : "text-gray-400"
+                : "text-[var(--color-text-muted)]"
             }
           >
             {placeholder}
           </span>
 
           <ChevronDown
-            className={`h-4 w-4 shrink-0 text-gray-400 transition ${
+            className={`h-4 w-4 shrink-0 text-[var(--color-text-muted)] transition ${
               open
                 ? "rotate-180"
                 : ""
@@ -3884,8 +3884,8 @@ function MultiSelect({
         </button>
 
         {open && (
-          <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.08)]">
-            <div className="border-b border-gray-100 p-2">
+          <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.08)]">
+            <div className="border-b border-[var(--color-border-subtle)] p-2">
               <input
                 autoFocus
                 type="text"
@@ -3901,7 +3901,7 @@ function MultiSelect({
                 placeholder={
                   searchPlaceholder
                 }
-                className="h-10 w-full rounded-lg bg-gray-50 px-3 text-sm text-[#222] outline-none placeholder:text-gray-400 focus:bg-gray-100"
+                className="h-10 w-full rounded-lg bg-[var(--color-surface-2)] px-3 text-sm text-[#222] outline-none placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface-2)]"
               />
             </div>
 
@@ -3920,15 +3920,15 @@ function MultiSelect({
                     onClick={() =>
                       add(search.trim())
                     }
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
                   >
-                    <span className="text-gray-400">Ekle:</span>
+                    <span className="text-[var(--color-text-muted)]">Ekle:</span>
                     <span className="font-medium text-[#222]">
                       {search.trim()}
                     </span>
                   </button>
                 ) : (
-                  <div className="px-3 py-6 text-center text-xs text-gray-400">
+                  <div className="px-3 py-6 text-center text-xs text-[var(--color-text-muted)]">
                     Sonuç bulunamadı.
                   </div>
                 )
@@ -3943,7 +3943,7 @@ function MultiSelect({
                           option
                         )
                       }
-                      className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50"
+                      className="flex w-full items-center rounded-lg px-3 py-2.5 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
                     >
                       {option}
                     </button>
@@ -3972,7 +3972,7 @@ function MultiSelect({
                       value
                     )
                   }
-                  className="text-gray-400 transition hover:text-gray-700"
+                  className="text-[var(--color-text-muted)] transition hover:text-[var(--color-text-secondary)]"
                   aria-label={`${value} kaldır`}
                 >
                   <X className="h-3 w-3" />
@@ -4000,7 +4000,7 @@ function FileThumbnail({
 
   return (
     <div className="group relative">
-      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-gray-100 text-xs text-gray-500">
+      <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-[var(--color-surface-2)] text-xs text-[var(--color-text-secondary)]">
         {isImage ? (
           <FilePreview
             file={file}
@@ -4018,7 +4018,7 @@ function FileThumbnail({
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 opacity-0 shadow-sm transition hover:text-gray-800 group-hover:opacity-100"
+        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] opacity-0 shadow-sm transition hover:text-[var(--color-text-primary)] group-hover:opacity-100"
         title="Dosyayı kaldır"
         aria-label="Dosyayı kaldır"
       >

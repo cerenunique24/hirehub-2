@@ -1,4 +1,5 @@
 "use client";
+import { PageHeader, pageHeaderClass } from "@/components/ui/PageHeader";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -138,7 +139,7 @@ export default function FreelancerPerformancePage() {
 
   if (premiumLoading) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
+      <main className="">
         <div className="flex min-h-[40vh] items-center justify-center text-sm text-gray-500">
           Performans verilerin hazırlanıyor...
         </div>
@@ -148,7 +149,7 @@ export default function FreelancerPerformancePage() {
 
   if (!hasAccess) {
     return (
-      <main className="mx-auto max-w-3xl p-6">
+      <main className="">
         <Link
           href="/freelancers/dashboard"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
@@ -179,7 +180,7 @@ export default function FreelancerPerformancePage() {
 
   if (loading) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
+      <main className="">
         <div className="flex min-h-[40vh] items-center justify-center text-sm text-gray-500">
           Performans verilerin hazırlanıyor...
         </div>
@@ -189,7 +190,7 @@ export default function FreelancerPerformancePage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
+      <main className="">
         <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>
       </main>
     );
@@ -199,23 +200,8 @@ export default function FreelancerPerformancePage() {
   const profile = data?.profileAnalysis;
 
   return (
-    <main className="mx-auto max-w-5xl space-y-8 p-6">
-      <div>
-        <Link
-          href="/freelancers/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft size={15} />
-          Panele dön
-        </Link>
-        <div className="mt-3 flex items-center gap-2">
-          <h1 className="text-2xl font-semibold text-gray-900">Performans</h1>
-          <span className="rounded-full bg-[var(--color-primary-600)] px-2.5 py-0.5 text-xs font-medium text-white">
-            {plan === "pro" ? "Pro" : "Plus"}
-          </span>
-        </div>
-        <p className="mt-1 text-sm text-gray-500">Teklif geçmişin ve profilin üzerinden gerçek verilere dayanan analiz.</p>
-      </div>
+    <main className="space-y-8">
+      <PageHeader className={pageHeaderClass} title="Performans" description="Teklif geçmişin ve profilin üzerinden gerçek verilere dayanan analiz." action={<div className="flex items-center gap-2"><Link href="/freelancers/dashboard">Panele dön</Link><span className="rounded-full bg-[var(--color-primary-600)] px-2.5 py-0.5 text-xs font-medium text-white">{plan === "pro" ? "Pro" : "Plus"}</span></div>} />
 
       {/* GENEL BAKIŞ */}
       {performance && !performance.hasData ? (

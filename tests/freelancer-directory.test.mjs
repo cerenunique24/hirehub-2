@@ -7,7 +7,7 @@ import React from "react";
 import * as jsx from "react/jsx-runtime";
 import {renderToStaticMarkup} from "react-dom/server";
 function compile(path,require=()=>({})) {const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText,{exports,module:{exports},require,URL,URLSearchParams,Intl});return exports;}
-const presentation=compile("components/freelancers/directoryPresentation.ts");
+const presentation=compile("components/freelancers/directoryPresentation.ts",name=>{if(name.includes("paginationPresentation"))return compile("components/ui/paginationPresentation.ts");throw Error(name);});
 test("directory skill summary deduplicates, limits to three and counts the rest",()=>{
  const result=presentation.directorySkills(["Figma","Figma"," React ","CSS","TypeScript","SEO","", "HTML"]);
  assert.equal(result.visible.join(","),"Figma,React,CSS");assert.equal(result.remaining,3);assert.equal(presentation.directorySkills(null).visible.length,0);
@@ -91,7 +91,7 @@ const Reviews=compile("components/freelancers/ProfileReviews.tsx",request=>{if(r
 const renderReviews=props=>renderToStaticMarkup(React.createElement(Reviews,{reviews:[],rating:null,failed:false,loading:false,hasMore:false,onLoadMore(){},...props}));
 test("reviews render actual author, project, date, rating and comment",()=>{
  const html=renderReviews({rating:{average:4.8,count:24},reviews:[{id:"r",project_id:"p",reviewer_id:"c",rating:5,comment:"Gerçek müşteri yorumu",created_at:"2026-10-13",reviewerName:"Deniz",projectTitle:"Marka projesi"}],hasMore:true});
- for(const text of ["4.8","24 değerlendirme","Deniz","Marka projesi","Gerçek müşteri yorumu","5/5","Daha fazla yorum"])assert.ok(html.includes(text));assert.ok(html.includes('dateTime="2026-10-13"'));
+ for(const text of ["4.8","24 değerlendirme","Deniz","Marka projesi","Gerçek müşteri yorumu","5.0","Daha fazla değerlendirme"])assert.ok(html.includes(text));assert.ok(html.includes('dateTime="2026-10-13"'));
 });
 test("review empty, inaccessible and loading states are distinct",()=>{
  assert.ok(renderReviews({}).includes("Henüz değerlendirme yok"));const error=renderReviews({failed:true});assert.ok(error.includes("Değerlendirmeler yüklenemedi"));assert.equal(error.includes("Henüz değerlendirme yok"),false);assert.ok(renderReviews({loading:true}).includes("yükleniyor"));
@@ -134,6 +134,44 @@ test("long and multiline reviews offer disclosure while short reviews stay compa
 });
 
 test("review loading and empty states explain what users are seeing",()=>{
- const empty=renderReviews({});assert.ok(empty.includes("tamamlanan projelerden sonra"));assert.equal(empty.includes("reviewAverage"),false);
+ const empty=renderReviews({});assert.ok(empty.includes("Tamamlanan projelerden sonra"));assert.equal(empty.includes("reviewAverage"),false);
  const loading=renderReviews({loading:true});assert.ok(loading.includes('aria-busy="true"'));assert.ok(loading.includes('role="status"'));assert.equal(loading.includes("Henüz değerlendirme yok"),false);assert.equal(loading.includes("reviewCard"),false);
+});
+
+
+test("review rating remains accessible for low ratings and missing project context",()=>{
+ const html=renderReviews({rating:{average:2,count:1},reviews:[{id:"low",project_id:"p",reviewer_id:"u",reviewer_role:"client",rating:2,comment:"Teslim gecikti.",created_at:"2026-10-01",reviewerName:"Deniz"}]});
+ assert.ok(html.includes('aria-label="2 / 5 yıldız"'));assert.ok(html.includes('aria-label="2 / 5 puan"'));assert.ok(html.includes("Client · "));assert.ok(html.includes("1 değerlendirme"));assert.equal(html.includes("reviewProject"),false);
+});
+
+test("review list preserves multiple real comments and progressive loading control",()=>{
+ const reviews=Array.from({length:3},(_,i)=>({id:"r"+i,project_id:"p",reviewer_id:"u"+i,rating:4,comment:"Yorum-"+i,created_at:"2026-10-01",reviewerName:"Kullanıcı-"+i}));
+ const html=renderReviews({reviews,rating:{average:4,count:8},hasMore:true,loading:true});for(let i=0;i<3;i++)assert.ok(html.includes("Yorum-"+i));assert.ok(html.includes("8 değerlendirme"));assert.ok(html.includes('disabled=""'));assert.equal(html.includes("reviewSkeletonCard"),false);
+});
+
+test("header trust signal navigates to reviews only through its explicit link",()=>{
+ const html=renderProfile({reviewState:{reviews:[],rating:{average:5,count:1},failed:false,loading:false,hasMore:false,loadMore(){}}});assert.ok(html.includes('href="#reviews"'));assert.ok(html.includes("Değerlendirmelere git"));
+});
+
+test("directory pagination shows at most twenty real ordered results without losing or duplicating records",()=>{
+ const input=Array.from({length:41},(_,id)=>({id}));
+ const pages=[1,2,3].map(page=>presentation.paginateDirectory(input,page));
+ assert.deepEqual(pages.map(p=>p.items.length),[20,20,1]);
+ assert.deepEqual(pages.flatMap(p=>Array.from(p.items,item=>item.id)),input.map(item=>item.id));
+ assert.equal(pages[1].start,20);assert.equal(pages[1].end,40);assert.equal(pages[2].total,41);
+});
+test("directory pagination handles empty, twenty, filtered and invalid page requests",()=>{
+ const empty=presentation.paginateDirectory([],4);assert.equal(empty.page,1);assert.equal(empty.totalPages,0);assert.equal(empty.end,0);
+ assert.equal(presentation.paginateDirectory(Array(20).fill(1),1).totalPages,1);
+ for(const requested of [0,-3,NaN,Infinity])assert.equal(presentation.paginateDirectory(Array(21).fill(1),requested).page,1);
+ assert.equal(presentation.paginateDirectory(Array(21).fill(1),999).page,2);
+ const filtered=presentation.paginateDirectory(["matching result"],3);assert.equal(filtered.page,1);assert.equal(filtered.items[0],"matching result");
+});
+test("directory pager only contains real pages and marks gaps between distant pages",()=>{
+ assert.equal(Array.from(presentation.directoryPageNumbers(4,8)).join(","),"1,…,3,4,5,…,8");
+ assert.equal(Array.from(presentation.directoryPageNumbers(1,2)).join(","),"1,2");
+ assert.equal(presentation.directoryPageNumbers(1,0).length,0);
+});
+test("profile return target preserves actual directory page with search and coalition context",()=>{
+ const url=new URL(presentation.directoryReturnHref("crew","Ada","Design",2),"https://local.invalid");assert.equal(url.searchParams.get("page"),"2");assert.equal(url.searchParams.get("q"),"Ada");assert.equal(url.searchParams.get("coalitionId"),"crew");
 });

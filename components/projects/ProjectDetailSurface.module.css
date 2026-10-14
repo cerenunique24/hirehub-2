@@ -1,0 +1,15 @@
+ .page { width:100%; }
+.navigation { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3); margin-bottom:var(--space-5); }
+.back { display:inline-flex; align-items:center; gap:var(--space-2); color:var(--color-text-secondary); font-size:var(--font-size-body-sm); }
+.back:hover { color:var(--color-text-primary); }
+.back:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:4px; }
+.content { display:grid; gap:var(--space-5); }
+.header { composes: header from "./ProjectWorkroom.module.css"; }
+.identity { display:flex; flex-direction:column; align-items:flex-start; gap:var(--space-2); }
+.identity h1 { font-size:var(--font-size-page-title); font-weight:var(--weight-page-title); line-height:var(--line-height-page-title); color:var(--color-text-primary); overflow-wrap:anywhere; }
+.actions { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-3); margin-top:var(--space-4); }
+.loading { composes: header from "./ProjectWorkroom.module.css"; display:flex; align-items:center; gap:var(--space-3); color:var(--color-text-secondary); }
+.error { composes: header from "./ProjectWorkroom.module.css"; color:var(--color-text-secondary); }
+.error h1 { font-size:var(--font-size-h2); font-weight:var(--weight-h2); color:var(--color-text-primary); }
+.error p { margin-top:var(--space-2); }
+@media(max-width:639px) { .actions { align-items:stretch; } .navigation { gap:var(--space-3); } }

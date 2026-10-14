@@ -1880,7 +1880,7 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <main className="w-full p-6">
+      <main className="w-full">
         <p className="text-sm text-gray-500">
           Profil yükleniyor...
         </p>
@@ -1890,7 +1890,7 @@ export default function ProfilePage() {
 
   if (!profile) {
     return (
-      <main className="w-full p-6">
+      <main className="w-full">
         <div className="rounded-xl border border-gray-200 bg-white p-6">
           <p className="text-sm text-gray-500">
             Profil bilgileri bulunamadı.
@@ -1923,7 +1923,7 @@ export default function ProfilePage() {
       );
 
   return (
-    <main className="w-full p-6">
+    <main className="w-full">
       {/* PROFİL HEADER */}
 
       <section className="mb-6 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-6">
@@ -1968,7 +1968,7 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <h1 className="text-2xl font-semibold">
+            <h1 className="cc-page-title">
               {fullName}
             </h1>
 

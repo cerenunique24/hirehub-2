@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/Button";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
@@ -57,7 +59,7 @@ export default function ClientPaymentsPage() {
   if (loading) {
     return (
       <main className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-gray-500">
+        <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
           <Loader2 size={20} className="animate-spin" />
           Yükleniyor...
         </div>
@@ -66,23 +68,23 @@ export default function ClientPaymentsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold text-neutral-900">Ödemeler</h1>
-          <p className="mt-2 text-sm text-neutral-500">
+    <div className="w-full">
+      <div className="w-full">
+        <div className={pageHeaderClass}>
+          <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">Ödemeler</h1>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
             Projelerinin gerçek bütçe ve hakediş özetini buradan takip et.
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 flex gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 flex gap-3 rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
             <AlertCircle size={18} className="mt-0.5 shrink-0" />
             <p>{error}</p>
           </div>
         )}
 
-        <div className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-warning-600)]/20 bg-[var(--color-warning-50)] p-4 text-sm text-[var(--color-warning-600)]">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
           <p>
             Ödeme altyapısı henüz aktif değil. Aşağıdaki tutarlar bir ödeme işlemini değil, mevcut proje ve
@@ -101,53 +103,53 @@ export default function ClientPaymentsPage() {
         {!error && summary && (
           <>
             <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-xl border border-neutral-200 bg-white p-5">
-                <p className="text-sm text-neutral-500">Toplam Proje Bütçesi</p>
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
+                <p className="text-sm text-[var(--color-text-secondary)]">Toplam Proje Bütçesi</p>
                 <h2 className="mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">{formatCurrency(summary.totalBudget)}</h2>
               </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
-                <div className="flex items-center gap-2 text-emerald-700">
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-success-600)]/20 bg-[var(--color-success-50)] p-5">
+                <div className="flex items-center gap-2 text-[var(--color-success-600)]">
                   <Wallet size={16} />
                   <p className="text-sm font-medium">Aktif Proje Bütçesi</p>
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-emerald-800">
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-success-600)]">
                   {formatCurrency(summary.activeBudget)}
                 </h2>
               </div>
-              <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
-                <div className="flex items-center gap-2 text-blue-700">
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-info-600)]/20 bg-[var(--color-info-50)] p-5">
+                <div className="flex items-center gap-2 text-[var(--color-info-600)]">
                   <CheckCircle2 size={16} />
                   <p className="text-sm font-medium">Tamamlanan İşler</p>
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold text-blue-800">
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-info-600)]">
                   {formatCurrency(summary.completedBudget)}
                 </h2>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
-                <p className="text-sm font-medium text-amber-700">Bekleyen Hakediş</p>
-                <h2 className="mt-2 text-2xl font-semibold text-amber-800">
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-warning-600)]/20 bg-[var(--color-warning-50)] p-5">
+                <p className="text-sm font-medium text-[var(--color-warning-600)]">Bekleyen Hakediş</p>
+                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-warning-600)]">
                   {formatCurrency(summary.pendingObligation)}
                 </h2>
-                <p className="mt-1 text-xs text-amber-700">Devam eden, henüz onaylanmamış aşamalar</p>
+                <p className="mt-1 text-xs text-[var(--color-warning-600)]">Devam eden, henüz onaylanmamış aşamalar</p>
               </div>
             </div>
 
             {summary.totalDueWithFee > 0 && (
-              <p className="mb-8 -mt-4 text-sm text-neutral-500">
+              <p className="mb-8 -mt-4 text-sm text-[var(--color-text-secondary)]">
                 Aşama bütçelerin ve platform hizmet bedeli dahil toplam ödeme tutarın:{" "}
-                <strong className="font-semibold text-neutral-800">{formatCurrency(summary.totalDueWithFee)}</strong>.
+                <strong className="font-semibold text-[var(--color-text-primary)]">{formatCurrency(summary.totalDueWithFee)}</strong>.
                 Proje bütçesi, platform ücreti ve toplam ödeme her aşama kartında ayrı ayrı gösterilir.
               </p>
             )}
 
-            <h2 className="mb-4 text-lg font-semibold text-neutral-900">Proje bazında bütçe / harcama</h2>
+            <h2 className="mb-4 cc-h2 font-semibold text-[var(--color-text-primary)]">Proje bazında bütçe / harcama</h2>
 
             {summary.projects.length === 0 ? (
-              <div className="rounded-2xl border border-neutral-200 bg-white p-12 text-center">
-                <p className="text-sm text-neutral-500">Henüz bir projen yok.</p>
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-center">
+                <p className="text-sm text-[var(--color-text-secondary)]">Henüz bir projen yok.</p>
                 <Link
                   href="/client/projects/new"
-                  className="mt-6 inline-flex rounded-lg bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white"
+                  className={buttonClasses({variant:"primary"})}
                 >
                   Yeni Proje Oluştur
                 </Link>
@@ -158,31 +160,31 @@ export default function ClientPaymentsPage() {
                   <Link
                     key={project.projectId}
                     href={`/client/projects/${project.projectId}`}
-                    className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
                       <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-neutral-900">{project.title}</h3>
-                        <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-600">
+                        <h3 className="font-semibold text-[var(--color-text-primary)]">{project.title}</h3>
+                        <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                           {statusLabel(project.status)}
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-6 text-sm">
                         <div>
-                          <span className="block text-xs text-neutral-400">Bütçe</span>
-                          <span className="font-medium text-neutral-900">
+                          <span className="block text-xs text-[var(--color-text-muted)]">Bütçe</span>
+                          <span className="font-medium text-[var(--color-text-primary)]">
                             {formatCurrency(project.engagementValue)}
                           </span>
                         </div>
                         <div>
-                          <span className="block text-xs text-neutral-400">Onaylanan aşamalar</span>
-                          <span className="font-medium text-emerald-700">
+                          <span className="block text-xs text-[var(--color-text-muted)]">Onaylanan aşamalar</span>
+                          <span className="font-medium text-[var(--color-success-600)]">
                             {formatCurrency(project.approvedValue)}
                           </span>
                         </div>
                         <div>
-                          <span className="block text-xs text-neutral-400">Bekleyen</span>
-                          <span className="font-medium text-amber-700">{formatCurrency(project.pendingValue)}</span>
+                          <span className="block text-xs text-[var(--color-text-muted)]">Bekleyen</span>
+                          <span className="font-medium text-[var(--color-warning-600)]">{formatCurrency(project.pendingValue)}</span>
                         </div>
                         {project.engagementValue > 0 && (() => {
                           const pricing = calculateClientPricing(
@@ -192,14 +194,14 @@ export default function ClientPaymentsPage() {
                           return (
                             <>
                               <div>
-                                <span className="block text-xs text-neutral-400">
+                                <span className="block text-xs text-[var(--color-text-muted)]">
                                   Hizmet bedeli ({formatRatePercent(pricing.rate)})
                                 </span>
-                                <span className="font-medium text-neutral-900">{formatCurrency(pricing.platformFee)}</span>
+                                <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(pricing.platformFee)}</span>
                               </div>
                               <div>
-                                <span className="block text-xs text-neutral-400">Toplam maliyet</span>
-                                <span className="font-medium text-neutral-900">{formatCurrency(pricing.clientTotal)}</span>
+                                <span className="block text-xs text-[var(--color-text-muted)]">Toplam maliyet</span>
+                                <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(pricing.clientTotal)}</span>
                               </div>
                             </>
                           );

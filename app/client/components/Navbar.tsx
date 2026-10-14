@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PanelNavbarFrame } from "@/components/layout/PanelNavbarFrame";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
@@ -399,22 +400,19 @@ export default function Navbar() {
   };
 
   return (
-    <header
-      ref={navbarRef}
-      className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8"
-    >
+    <PanelNavbarFrame ref={navbarRef}>
       {/* Arama */}
-      <div className="hidden h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-gray-100 bg-white px-3 lg:flex">
+      <div className="hidden h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-white px-3 lg:flex">
         <Search
           size={16}
-          className="text-gray-400"
+          className="text-[var(--color-text-muted)]"
         />
 
         <input
           type="search"
           placeholder="Proje veya freelancer ara..."
           aria-label="Ara"
-          className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+          className="w-full bg-transparent text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
         />
       </div>
 
@@ -423,13 +421,13 @@ export default function Navbar() {
         type="button"
         onClick={() => setMobileSidebarOpen(true)}
         aria-label="Menüyü aç"
-        className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white text-gray-700 transition hover:bg-gray-50 lg:hidden"
+        className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] lg:hidden"
       >
         <Menu size={18} />
       </button>
 
       {/* Sağ alan */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-4">
 
         {/* Mesajlar */}
         <div className="relative">
@@ -437,7 +435,7 @@ export default function Navbar() {
             type="button"
             onClick={toggleMessages}
             aria-label="Mesajlar"
-            className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
+            className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white transition hover:bg-[var(--color-surface-2)]"
           >
             <MessageCircle size={18} />
 
@@ -451,14 +449,14 @@ export default function Navbar() {
           </button>
 
           {showMessages && (
-            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-5 py-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
+                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
                     Mesajlar
                   </h3>
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-[var(--color-text-secondary)]">
                     Son mesajların
                   </p>
                 </div>
@@ -469,22 +467,22 @@ export default function Navbar() {
                     setShowMessages(false)
                   }
                   aria-label="Mesajları kapat"
-                  className="rounded-lg p-1 transition hover:bg-gray-100"
+                  className="rounded-lg p-1 transition hover:bg-[var(--color-surface-2)]"
                 >
                   <X
                     size={17}
-                    className="text-gray-400"
+                    className="text-[var(--color-text-muted)]"
                   />
                 </button>
               </div>
 
               <div className="max-h-80 overflow-y-auto">
                 {loadingMessages ? (
-                  <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  <div className="px-5 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                     Mesajlar yükleniyor...
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  <div className="px-5 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                     Henüz mesajın yok.
                   </div>
                 ) : (
@@ -495,16 +493,16 @@ export default function Navbar() {
                       onClick={() =>
                         setShowMessages(false)
                       }
-                      className="block border-b border-gray-50 px-5 py-4 transition hover:bg-gray-50"
+                      className="block border-b border-gray-50 px-5 py-4 transition hover:bg-[var(--color-surface-2)]"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-xs font-semibold text-[var(--color-text-secondary)]">
                           M
                         </div>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className="text-sm font-medium text-[var(--color-text-primary)]">
                               Yeni mesaj
                             </p>
 
@@ -513,11 +511,11 @@ export default function Navbar() {
                             )}
                           </div>
 
-                          <p className="mt-1 truncate text-xs text-gray-500">
+                          <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">
                             {message.content}
                           </p>
 
-                          <p className="mt-1 text-xs text-gray-400">
+                          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                             {new Date(
                               message.created_at
                             ).toLocaleString("tr-TR")}
@@ -534,7 +532,7 @@ export default function Navbar() {
                 onClick={() =>
                   setShowMessages(false)
                 }
-                className="block border-t border-gray-100 px-5 py-3 text-center text-sm font-medium text-gray-900 transition hover:bg-gray-50"
+                className="block border-t border-[var(--color-border-subtle)] px-5 py-3 text-center text-sm font-medium text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-2)]"
               >
                 Tüm mesajları gör →
               </Link>
@@ -548,7 +546,7 @@ export default function Navbar() {
             type="button"
             onClick={toggleNotifications}
             aria-label="Bildirimler"
-            className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-gray-100 bg-white transition hover:bg-gray-50"
+            className="relative flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white transition hover:bg-[var(--color-surface-2)]"
           >
             <Bell size={18} />
 
@@ -562,14 +560,14 @@ export default function Navbar() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-gray-100 bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <div className="absolute right-0 top-14 z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white shadow-xl">
+              <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-5 py-4">
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
+                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
                     Bildirimler
                   </h3>
 
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-[var(--color-text-secondary)]">
                     Son bildirimlerin
                   </p>
                 </div>
@@ -579,7 +577,7 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => void markAllNotificationsAsRead()}
-                      className="text-xs font-medium text-gray-500 hover:text-gray-900"
+                      className="text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
                     >
                       Tümünü okundu işaretle
                     </button>
@@ -590,11 +588,11 @@ export default function Navbar() {
                       setShowNotifications(false)
                     }
                     aria-label="Bildirimleri kapat"
-                    className="rounded-lg p-1 transition hover:bg-gray-100"
+                    className="rounded-lg p-1 transition hover:bg-[var(--color-surface-2)]"
                   >
                     <X
                       size={17}
-                      className="text-gray-400"
+                      className="text-[var(--color-text-muted)]"
                     />
                   </button>
                 </div>
@@ -602,11 +600,11 @@ export default function Navbar() {
 
               <div className="max-h-80 overflow-y-auto">
                 {loadingNotifications ? (
-                  <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  <div className="px-5 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                     Bildirimler yükleniyor...
                   </div>
                 ) : notifications.length === 0 ? (
-                  <div className="px-5 py-8 text-center text-sm text-gray-500">
+                  <div className="px-5 py-8 text-center text-sm text-[var(--color-text-secondary)]">
                     Henüz bildirimin yok.
                   </div>
                 ) : (
@@ -629,20 +627,20 @@ export default function Navbar() {
 
                           setShowNotifications(false);
                         }}
-                        className={`block border-b border-gray-50 px-5 py-4 transition hover:bg-gray-50 ${
+                        className={`block border-b border-gray-50 px-5 py-4 transition hover:bg-[var(--color-surface-2)] ${
                           !notification.is_read
-                            ? "bg-gray-50/70"
+                            ? "bg-[var(--color-surface-2)]/70"
                             : ""
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
+                          <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
                             <Bell size={14} />
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-medium text-gray-900">
+                              <p className="text-sm font-medium text-[var(--color-text-primary)]">
                                 {notification.title}
                               </p>
 
@@ -652,12 +650,12 @@ export default function Navbar() {
                             </div>
 
                             {notification.message && (
-                              <p className="mt-1 text-xs text-gray-500">
+                              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
                                 {notification.message}
                               </p>
                             )}
 
-                            <p className="mt-2 text-xs text-gray-400">
+                            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
                               {formatRelativeTime(notification.created_at)}
                             </p>
                           </div>
@@ -673,7 +671,7 @@ export default function Navbar() {
                 onClick={() =>
                   setShowNotifications(false)
                 }
-                className="block border-t border-gray-100 px-5 py-3 text-center text-sm font-medium text-gray-900 transition hover:bg-gray-50"
+                className="block border-t border-[var(--color-border-subtle)] px-5 py-3 text-center text-sm font-medium text-[var(--color-text-primary)] transition hover:bg-[var(--color-surface-2)]"
               >
                 Tüm bildirimleri gör →
               </Link>
@@ -684,7 +682,7 @@ export default function Navbar() {
         {/* Profil */}
         <Link
           href="/client/profile"
-          className="hidden h-9 items-center gap-2.5 rounded-[var(--radius-button)] border border-gray-100 bg-white px-2.5 transition hover:bg-gray-50 sm:flex"
+          className="hidden h-9 items-center gap-2.5 rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-white px-2.5 transition hover:bg-[var(--color-surface-2)] sm:flex"
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--color-primary-600)] text-sm font-semibold text-white">
             {profile?.avatar_url ? (
@@ -700,16 +698,16 @@ export default function Navbar() {
           </div>
 
           <div>
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
               {displayName}
             </p>
 
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[var(--color-text-secondary)]">
               Proje sahibi
             </p>
           </div>
         </Link>
       </div>
-    </header>
+    </PanelNavbarFrame>
   );
 }

@@ -183,7 +183,7 @@ export default function CompletedProjectSummaryPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-[50vh] items-center justify-center gap-2 p-6 text-sm text-gray-500">
+      <main className="flex min-h-[50vh] items-center justify-center gap-2 text-sm text-gray-500">
         <Loader2 size={18} className="animate-spin" />
         Çalışma sonucu yükleniyor...
       </main>
@@ -192,7 +192,7 @@ export default function CompletedProjectSummaryPage() {
 
   if (error || !project || !membership) {
     return (
-      <main className="p-6">
+      <main className="">
         <Link href="/freelancers/earnings" className="inline-flex items-center gap-2 text-sm text-gray-500">
           <ArrowLeft size={16} />
           Kazançlarım
@@ -209,7 +209,7 @@ export default function CompletedProjectSummaryPage() {
   const approvedCount = milestones.filter((m) => m.status === "approved").length;
 
   return (
-    <main className="w-full p-6">
+    <main className="w-full">
       <Link href="/freelancers/earnings" className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
         <ArrowLeft size={16} />
         Kazançlarım
@@ -219,7 +219,7 @@ export default function CompletedProjectSummaryPage() {
         <section className="space-y-6">
           <div className="rounded-2xl border border-gray-200 bg-white p-6">
             <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold text-gray-900">{project.title}</h1>
+              <h1 className="cc-page-title text-[var(--color-text-primary)]">{project.title}</h1>
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">Tamamlandı</span>
             </div>
             {membership.role && <p className="mt-2 text-sm text-gray-500">Rolün: {membership.role}</p>}

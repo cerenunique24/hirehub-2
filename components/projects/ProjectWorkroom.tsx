@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {Tabs} from "@/components/ui/Tabs";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -160,6 +161,7 @@ export default function ProjectWorkroom({
   isTeamProject = false,
   coalitionId = null,
   initialTab = "overview",
+  identityShownAbove = false,
 }: {
   project: WorkroomProject;
   teamMembers: WorkroomTeamMember[];
@@ -184,6 +186,8 @@ export default function ProjectWorkroom({
    */
   coalitionId?: string | null;
   initialTab?: "overview" | "milestones";
+  /** Suppress duplicated project identity when the containing detail page already shows it. */
+  identityShownAbove?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const isClient = viewerRole === "client";
@@ -591,14 +595,14 @@ export default function ProjectWorkroom({
 
   return (
     <div className="space-y-5">
-      <header className={styles.header}>
-        <div className={styles.headerTitle}><div><p className={styles.eyebrow}>Proje çalışma alanı</p><h2>{project.title}</h2></div><PanelBadge>{projectStatusLabel}</PanelBadge></div>
+      {!identityShownAbove && <header className={styles.header}>
+        <div className={styles.headerTitle}><div><p className={styles.eyebrow}>Proje detayları</p><h2>{project.title}</h2></div><PanelBadge>{projectStatusLabel}</PanelBadge></div>
         <dl className={styles.metadata}>
-          <div><dt>Senin rolün</dt><dd>{isClient ? "Proje sahibi · Client" : viewerMember?.memberRole || (currentUserId ? "Rol bilgisi bulunmuyor" : "Yükleniyor")}</dd></div>
+          <div><dt>{isClient ? "Proje sahibi" : "Projede rolün"}</dt><dd>{isClient ? "Client" : viewerMember?.memberRole || (currentUserId ? "Rol bilgisi bulunmuyor" : "Yükleniyor")}</dd></div>
           <div><dt>Ekip</dt><dd>{teamMembers.length} freelancer{isTeamProject ? " · Ekip projesi" : ""}</dd></div>
           <div><dt>Son tarih</dt><dd>{formatDate(project.deadline)}</dd></div>
         </dl>
-      </header>
+      </header>}
       <section className={styles.status} data-action-required={!loading && workflowState.currentUserMustAct} aria-label="Şu anki durum" aria-live="polite">
         <div className={styles.statusBody}>
           <div><p className={styles.eyebrow}>Şu anki durum</p><h3>{loading ? "Durum yükleniyor" : error ? "Durum doğrulanamadı" : workflowState.state}</h3><p className={styles.nextStep}>{loading ? "Proje aşamaları kontrol ediliyor." : error ? "Aşama bilgileri alınamadı; yeniden kontrol et." : workflowState.nextStep}</p>
@@ -611,19 +615,17 @@ export default function ProjectWorkroom({
         {projectClosedMessage && <p className={styles.systemMeta}>{projectClosedMessage}</p>}
         {project.requirements_confirmed_at && <p className={styles.systemMeta}><CheckCircle2 size={15} aria-hidden="true" />Gereksinimler hazır · Client {formatDate(project.requirements_confirmed_at)} tarihinde onayladı.</p>}
       </section>
-      <nav aria-label="Çalışma alanı bölümleri" className={styles.tabs}>
-        {TABS.map(t=><button key={t.id} type="button" onClick={()=>setTab(t.id)} aria-current={tab===t.id ? "page" : undefined} className={tab===t.id ? styles.activeTab : ""}>{t.label}</button>)}
-      </nav>
+      <Tabs items={TABS.map(item=>({value:item.id,label:item.label}))} value={tab} onChange={value=>setTab(value as Tab)} />
       {error && <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {tab==="overview" && project.description && <section className={styles.context}><h3>Proje kapsamı</h3><p>{project.description}</p></section>}
+      {!identityShownAbove && tab==="overview" && project.description && <section className={styles.context}><h3>Proje kapsamı</h3><p>{project.description}</p></section>}
       {tab==="overview" && project.requirements_note && <section className={styles.clientNote}><h3>Client notu</h3><p>{project.requirements_note}</p></section>}
 
       {tab === "overview" && (
         <section className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          {!identityShownAbove && <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-medium text-gray-500">Bütçe</p>
-            <p className="mt-1 font-semibold text-gray-900">{formatCurrency(Number(project.budget ?? 0))}</p>
-          </div>
+            <p className="mt-1 font-semibold text-gray-900">{project.budget==null?"Belirtilmedi":formatCurrency(Number(project.budget))}</p>
+          </div>}
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
             <p className="text-xs font-medium text-gray-500">Aşama ilerlemesi</p>
             <p className="mt-1 font-semibold text-gray-900">

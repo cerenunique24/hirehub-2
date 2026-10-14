@@ -1,22 +1,20 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
+
+import { CoalitionWorkspace, CoalitionWorkspaceState } from "@/components/coalitions/CoalitionWorkspace";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
   Loader2,
-  MessageSquare,
   UserPlus,
   LogOut,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchBudgetBreakdown, getTeamCompletion, type TeamCompletion } from "@/lib/projects/teamReadiness";
-import TeamMessagesPanel from "@/components/coalitions/TeamMessagesPanel";
-import { panelRootClass, PanelBadge, PanelAction, PanelSection } from "@/components/dashboard/PanelPrimitives";
+
+import { PanelAction } from "@/components/dashboard/PanelPrimitives";
 import { Button } from "@/components/ui/Button";
-import { coalitionDetailSummary, coalitionActivity, coalitionWork, coalitionProjectLabel, coalitionProjectHref, coalitionStageLabel, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
+import { coalitionDetailSummary, coalitionActivity, coalitionWork, coalitionProjectHref, type CoalitionStage } from "@/components/coalitions/coalitionPresentation";
 import styles from "@/components/coalitions/Coalitions.module.css";
 import { publicDisplayName } from "@/lib/utils/displayName";
 
@@ -413,11 +411,6 @@ export default function CoalitionDetailPage({
     member.role === "owner" ||
     (coalition !== null && member.user_id === coalition.created_by);
 
-  const getInitial = (member: CoalitionMember) => {
-    return getMemberName(member)
-      .charAt(0)
-      .toLocaleUpperCase("tr-TR");
-  };
 
   const isCurrentUser = (member: CoalitionMember) => {
     return member.user_id === currentUserId;
@@ -427,54 +420,8 @@ export default function CoalitionDetailPage({
   // Loading
   // --------------------------------------------------
 
-  if (loading) {
-    return (
-      <main className={[panelRootClass, styles.page].join(" ")}>
-        <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
-          <Loader2
-            size={24}
-            className="mx-auto animate-spin text-gray-400"
-          />
-
-          <p className="mt-4 text-sm text-gray-500">
-            Koalisyon yükleniyor...
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  // --------------------------------------------------
-  // Error
-  // --------------------------------------------------
-
-  if (errorMessage || !coalition) {
-    return (
-      <main className={[panelRootClass, styles.page].join(" ")}>
-        <Link
-          href="/freelancers/coalitions"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
-        >
-          <ArrowLeft size={16} />
-          Koalisyonlarım
-        </Link>
-
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6">
-          <h1 className="text-lg font-semibold text-red-800">
-            Koalisyon yüklenemedi
-          </h1>
-
-          <p className="mt-2 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  // --------------------------------------------------
-  // Main
-  // --------------------------------------------------
+  if (loading) return <CoalitionWorkspaceState backHref="/freelancers/coalitions" loading/>;
+  if (errorMessage || !coalition) return <CoalitionWorkspaceState backHref="/freelancers/coalitions" error={errorMessage}/>;
 
   const work=coalitionWork(project,stages,currentUserId,projectMemberIds);
   const statusSummary=coalitionDetailSummary(work,project,stages);
@@ -483,72 +430,20 @@ export default function CoalitionDetailPage({
   const roleCapacityKnown=Boolean(project?.budget_breakdown?.length);
   const events=coalitionActivity(coalition.created_at,members.map(member=>({id:member.id,joined_at:member.joined_at,name:getMemberName(member)})),stages);
 
-  return (
-    <main ref={overviewRef} className={[panelRootClass,styles.page].join(" ")}>
-      <Link href="/freelancers/coalitions" className={styles.back}><ArrowLeft size={16} />Koalisyonların</Link>
-      {leaveError && <div className={styles.error} role="alert">{leaveError}</div>}
-      <header className={styles.detailHeader}>
-        <div>
-          <span className={styles.eyebrow}>Ekip koordinasyon alanı</span>
-          <div className={styles.cardHeading}><h1>{coalition.name}</h1><div className={styles.labeledBadge}><span>Koalisyon</span><PanelBadge>{coalition.status==="active"?"Aktif":"Tamamlandı"}</PanelBadge></div></div>
-          <p className={styles.projectName}>{project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}</p>
-          <p className={styles.secondary}>Senin rolün: {ownMember?.projectRole || "Proje rolü belirtilmedi"} · {members.length} ekip üyesi</p>
-          {project && <div className={styles.statusLine}><span>Proje</span><PanelBadge>{coalitionProjectLabel(project.status)}</PanelBadge></div>}
-        </div>
-        <div className={styles.actions}>
-          {currentUserId && <PanelAction href="#team-messages"><MessageSquare size={16} />Mesajlara git</PanelAction>}
-          {project && <PanelAction href={coalitionProjectHref(project)}>Bağlı projeyi gör</PanelAction>}
-        </div>
-      </header>
-      <section className={styles.coordinationSummary} data-action-required={work.currentUserMustAct} aria-labelledby="workflow-heading">
-        <div className={styles.workflowTop}>
-          <div><p className={styles.eyebrow}>Şu anki durum</p><h2 id="workflow-heading">{statusSummary.headline}</h2></div>
-          <PanelBadge tone={statusSummary.tone}>{work.state}</PanelBadge>
-        </div>
-        <p className={styles.nextStep}>{work.nextStep}</p>
-        <dl className={styles.coordinationFacts}>
-          <div><dt>Aksiyon sahibi</dt><dd>{work.currentUserMustAct ? "Sen" : work.actionOwner}</dd></div>
-          <div><dt>Senin aşaman</dt><dd>{stages===null ? "Doğrulanamadı" : work.currentStage?.title || (work.total>0 && work.approved===work.total ? "Aşamalar onaylandı" : "Sana atanmış açık aşama yok")}</dd></div>
-          <div><dt>Deadline</dt><dd>{work.currentStage?.due_date ? formatDate(work.currentStage.due_date) : project?.deadline ? formatDate(project.deadline) : "Belirtilmedi"}</dd></div>
-        </dl>
-        {project && work.currentUserMustAct && <PanelAction href={stagesHref} variant="primary">{work.currentStage?.status==="revision" ? "Revizyonu Aç" : "Aşamaları Yönet"}</PanelAction>}
-      </section>
-      <PanelSection title="Ekip ve rol dağılımı" className={styles.section}>
-        <div className={styles.sectionBody}>
-          <div className={styles.statusLine}><span>{members.length} aktif koalisyon üyesi</span>
-            {teamCompletion && roleCapacityKnown ? <PanelBadge tone="warning">{teamCompletion.ready ? "Tüm roller dolu" : teamCompletion.filledRoles+" / "+teamCompletion.totalRoles+" rol dolu"}</PanelBadge> : <span>Rol kontenjanı bilgisi bulunmuyor</span>}
-          </div>
-          {members.length===0 ? <p className={styles.secondary}>Henüz aktif ekip üyesi yok.</p> : members.map(member=><div key={member.id} className={isCurrentUser(member)?styles.selfRow:styles.memberRow}>
-            <div className={styles.memberIdentity}>
-              {member.profile?.avatar_url ? <Image unoptimized src={member.profile.avatar_url} width={32} height={32} alt="" className={styles.avatar} /> : <span className={styles.avatar}>{getInitial(member)}</span>}
-              <div><div className={styles.statusLine}><strong>{getMemberName(member)}</strong>{isCurrentUser(member)&&<PanelBadge tone="info">Sen</PanelBadge>}</div>
-                <p>{member.projectRole || "Proje rolü belirtilmedi"}</p>
-                {isProjectOwner(member)&&<span className={styles.metaLabel}>Koalisyon yöneticisi</span>}
-              </div>
-            </div><PanelBadge>Aktif</PanelBadge>
-          </div>)}
-          {teamCompletion && roleCapacityKnown && <div className={styles.roleCapacity}><h3>Rol kontenjanları</h3>{teamCompletion.roles.map(role=><div key={role.role} className={styles.roleRow}><span>{role.role}</span><span>{role.filled} / {role.capacity} kişi</span></div>)}</div>}
-        </div>
-      </PanelSection>
-        <PanelSection title="Proje ilerlemesi" className={styles.section}>
-          <div className={styles.sectionBody}>
-            {stages===null ? <p className={styles.secondary}>Aşama bilgileri alınamadı. Çalışma alanını kontrol edebilirsin.</p> : stages.length===0 ? <p className={styles.secondary}>Henüz proje aşaması tanımlanmadı.</p> : <>
-              <div className={styles.progressLabel}><span>{work.approved} / {work.total} aşama onaylandı</span><span>{Math.round(work.approved/work.total*100)}%</span></div>
-              <progress className={styles.progress} max={work.total} value={work.approved} aria-label="Onaylanan ekip aşamaları" />
-              {stages.slice(0,3).map(stage=><div key={stage.id} className={styles.stageRow}><div><strong>{stage.title}</strong><p className={styles.secondary}>{stage.freelancer_id ? (members.find(member=>member.user_id===stage.freelancer_id) ? getMemberName(members.find(member=>member.user_id===stage.freelancer_id)!) : "Sorumlu üye bilgisi görünmüyor") : "Sorumlu atanmadı"}{stage.due_date && " · "+formatDate(stage.due_date)}</p></div><PanelBadge>{coalitionStageLabel(stage.status)}</PanelBadge></div>)}
-            </>}
-            {project && <Link href={stagesHref} className={styles.projectLink}>Tüm aşamaları projede gör{stages && stages.length>3 ? " · "+stages.length+" aşama" : ""}</Link>}
-          </div>
-        </PanelSection>
-        <PanelSection title="Son hareketler" className={styles.section}><ol className={styles.activity}>{events.map(event=><li key={event.id}><p>{event.text}</p><time dateTime={event.date}>{formatDate(event.date)}</time></li>)}</ol>{stages===null && <p className={styles.sectionBody}>Teslim ve revizyon hareketleri alınamadı.</p>}</PanelSection>
-      {currentUserId && <PanelSection title="Ekip iletişimi" className={styles.section}><div id="team-messages" className={styles.sectionBody}><p className={styles.secondary}>Rol paylaşımı ve proje koordinasyonunu ekibinle burada konuş.</p><div className={styles.messageBody}><TeamMessagesPanel coalitionId={coalition.id} currentUserId={currentUserId} memberLabels={members.map(member=>({id:member.user_id,name:getMemberName(member)}))} /></div></div></PanelSection>}
-      {coalition.status==="active" && <section className={styles.management} aria-label="Koalisyon yönetimi">
-        <div><h2>Koalisyon yönetimi</h2><p className={styles.secondary}>Üye önerilerini ve ekipten ayrılma işlemini buradan yönet.</p></div>
-        <div className={styles.actions}>
-          <PanelAction href={"/freelancers/freelancers?coalitionId="+coalition.id}><UserPlus size={16} />Ekip üyesi öner</PanelAction>
-          {selfMembership && <Button size="sm" variant="secondary" disabled={leaving} onClick={()=>{if(window.confirm("Bu ekipten ayrılmak istediğine emin misin?")) void handleLeave();}}>{leaving?<Loader2 size={16} className="animate-spin" />:<LogOut size={16} />}Ekipten ayrıl</Button>}
-        </div>
-      </section>}
-    </main>
-  );
+  return <CoalitionWorkspace overviewRef={overviewRef} backHref="/freelancers/coalitions"
+    name={coalition.name} coalitionStatus={coalition.status} project={project}
+    headerContext={"Senin rolün: "+(ownMember?.projectRole || "Proje rolü belirtilmedi")}
+    error={leaveError}
+    members={members.map(member=>({id:member.id,userId:member.user_id,name:getMemberName(member),avatarUrl:member.profile?.avatar_url || null,projectRole:member.projectRole,owner:isProjectOwner(member),self:isCurrentUser(member)}))}
+    team={teamCompletion} roleCapacityKnown={roleCapacityKnown}
+    status={{headline:statusSummary.headline,state:work.state,tone:statusSummary.tone,nextStep:work.nextStep,mustAct:work.currentUserMustAct,
+      facts:[{label:"Aksiyon sahibi",value:work.currentUserMustAct?"Sen":work.actionOwner},{label:"Senin aşaman",value:stages===null?"Doğrulanamadı":work.currentStage?.title || (work.total>0&&work.approved===work.total?"Aşamalar onaylandı":"Sana atanmış açık aşama yok")},{label:"Deadline",value:work.currentStage?.due_date?formatDate(work.currentStage.due_date):project?.deadline?formatDate(project.deadline):"Belirtilmedi"}],
+      action:project&&work.currentUserMustAct?<PanelAction href={stagesHref} variant="primary">{work.currentStage?.status==="revision"?"Revizyonu Aç":"Aşamaları Yönet"}</PanelAction>:null}}
+    stages={stages} stagesHref={stagesHref} events={events} formatDate={formatDate}
+    coalitionId={coalition.id} currentUserId={currentUserId} description={coalition.description}
+    management={coalition.status==="active"?<><p className={styles.secondary}>Üye önerilerini ve ekipten ayrılma işlemini buradan yönet.</p><div className={styles.actions}>
+      <PanelAction href={"/freelancers/freelancers?coalitionId="+coalition.id}><UserPlus size={16}/>Ekip üyesi öner</PanelAction>
+      {selfMembership&&<Button size="sm" variant="secondary" disabled={leaving} onClick={()=>{if(window.confirm("Bu ekipten ayrılmak istediğine emin misin?")) void handleLeave();}}>{leaving?<Loader2 size={16} className="animate-spin"/>:<LogOut size={16}/>}Ekipten ayrıl</Button>}
+    </div></>:null}
+  />;
 }

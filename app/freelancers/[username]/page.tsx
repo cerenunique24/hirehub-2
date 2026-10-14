@@ -125,8 +125,8 @@ function FreelancerProfileContent() {
       </div>);
     }
     if (!freelancer) {
-        return (<div className="min-h-screen bg-gray-50 p-6">
-        <div className="mx-auto max-w-4xl">
+        return (<div className="w-full">
+        <div className="w-full">
           <Link href={returnTo} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
             <ArrowLeft size={16}/>
             Freelancerlara dön
@@ -144,4 +144,4 @@ function FreelancerProfileContent() {
     }
     return <FreelancerProfileView reviewState={reviewsState} key={freelancer.id} profile={freelancer} portfolio={portfolio} experiences={experiences} portfolioError={portfolioError} experienceError={experienceError} returnTo={returnTo} inviteAction={canInvite ? <InviteFreelancerPanel freelancerId={freelancer.id}/> : undefined} messageHref={messageHref}/>;
 }
-export default function FreelancerProfilePage() { return <Suspense fallback={<div className="p-6">Profil yükleniyor…</div>}><FreelancerProfileContent /></Suspense>; }
+export default function FreelancerProfilePage() { return <Suspense fallback={<div>Profil yükleniyor…</div>}><FreelancerProfileContent /></Suspense>; }

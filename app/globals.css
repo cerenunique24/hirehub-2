@@ -140,6 +140,7 @@
    --space-10: 2.5rem;    /* 40px */
    --space-12: 3rem;      /* 48px */
    --space-16: 4rem;      /* 64px */
+  --app-header-height: var(--space-16); /* Shared Sidebar/Navbar outer height. */
    --space-20: 5rem;      /* 80px */
    --space-24: 6rem;      /* 96px */
    
@@ -619,4 +620,15 @@ textarea.project-input {
 
 @media (prefers-reduced-motion: reduce) {
   .cc-appear { animation: none; }
+}
+
+/* Tab/filter navigation scrolls horizontally without a vertical scrollbar gutter. */
+.cc-horizontal-nav {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.cc-horizontal-nav::-webkit-scrollbar {
+  display: none;
 }

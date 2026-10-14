@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import { Lock, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { buttonClasses } from "@/components/ui/Button";
@@ -34,7 +35,7 @@ export function WorkspaceHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className={pageHeaderClass}>
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-primary-600)]">
           <Sparkles size={14} />

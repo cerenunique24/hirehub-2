@@ -16,7 +16,7 @@ export function useFreelancerReviews(userId:string|null) {
    setState(previous=>({...previous,loading:true,failed:false}));
    const offset=page*PAGE_SIZE;
    const [rowsResult,summaryResult]=await Promise.all([
-    supabase.from("reviews").select("id,project_id,reviewer_id,rating,comment,created_at",{count:"exact"}).eq("reviewee_id",userId).eq("is_hidden",false).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+PAGE_SIZE-1),
+    supabase.from("reviews").select("id,project_id,reviewer_id,reviewer_role,rating,comment,created_at",{count:"exact"}).eq("reviewee_id",userId).eq("is_hidden",false).order("created_at",{ascending:false}).order("id",{ascending:false}).range(offset,offset+PAGE_SIZE-1),
     supabase.rpc("get_rating_summary",{p_user_id:userId}),
    ]);
    if(!active)return;

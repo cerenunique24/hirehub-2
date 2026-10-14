@@ -1,5 +1,14 @@
 "use client";
 
+import { CoalitionCard } from "@/components/coalitions/CoalitionCard";
+import { clientCoalitionNextStep, coalitionUpdatedDate } from "@/components/coalitions/clientCoalitionPresentation";
+import { coalitionProjectLabel } from "@/components/coalitions/coalitionPresentation";
+import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
+import type { TeamCompletion } from "@/lib/projects/teamReadiness";
+import styles from "@/components/coalitions/Coalitions.module.css";
+import { Input } from "@/components/ui/Input";
+import { buttonClasses } from "@/components/ui/Button";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -18,6 +27,7 @@ type Coalition = {
   id: string;
   name: string;
   description: string | null;
+  status: string;
   project_id: string | null;
 };
 
@@ -38,6 +48,7 @@ type Project = {
   id: string;
   title: string;
   status: string;
+  updated_at?: string | null;
   budget_breakdown: { role?: string; name?: string; memberCount?: number }[] | null;
 };
 
@@ -45,6 +56,7 @@ type CoalitionCardData = Coalition & {
   members: Array<Member & { profile: Profile | null }>;
   project: Project | null;
   openRoles: string[];
+  team: TeamCompletion | null;
 };
 
 export default function ClientCoalitionsPage() {
@@ -82,7 +94,7 @@ export default function ClientCoalitionsPage() {
 
       const { data: rows, error: coalitionError } = await supabase
         .from("coalitions")
-        .select("id, name, description, project_id")
+        .select("id, name, description, status, project_id")
         .eq("status", "active")
         .eq("created_by", user.id)
         .order("created_at", { ascending: false });
@@ -149,7 +161,7 @@ export default function ClientCoalitionsPage() {
       const { data: projectRows } = projectIds.length
         ? await supabase
             .from("projects")
-            .select("id, title, status")
+            .select("id, title, status, updated_at")
             .in("id", projectIds)
         : { data: [] };
 
@@ -170,13 +182,13 @@ export default function ClientCoalitionsPage() {
         ])
       );
 
-      const { data: teamMemberRows } = projectIds.length
+      const { data: teamMemberRows, error: teamMemberError } = projectIds.length
         ? await supabase
             .from("project_team_members")
             .select("project_id, role")
             .in("project_id", projectIds)
             .eq("status", "active")
-        : { data: [] };
+        : { data: [], error: null };
 
       setCoalitions(
         base.map((coalition) => {
@@ -195,17 +207,18 @@ export default function ClientCoalitionsPage() {
             (row) => row.project_id === coalition.project_id
           );
 
-          const openRoles = project
+          // An empty/unavailable role breakdown cannot prove that the team is ready.
+          const team = project?.budget_breakdown?.length && !teamMemberError
             ? getTeamCompletion(project.budget_breakdown, projectActiveMembers)
-                .roles.filter((role) => !role.isFull)
-                .map((role) => role.role)
-            : [];
+            : null;
+          const openRoles = team?.roles.filter(role => !role.isFull).map(role => role.role) ?? [];
 
           return {
             ...coalition,
             members: activeMembers,
             project,
             openRoles,
+            team,
           };
         })
       );
@@ -318,15 +331,15 @@ export default function ClientCoalitionsPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div className={[panelRootClass, styles.page, "w-full"].join(" ")}>
+      <div className="w-full">
+        <header className={pageHeaderClass}>
           <div>
-            <h1 className="text-3xl font-semibold text-neutral-900">
+            <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">
               Koalisyonlarım
             </h1>
 
-            <p className="mt-1 text-sm text-neutral-500">
+            <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
               Projeleriniz için oluşturduğunuz ekipleri yönetin.
             </p>
           </div>
@@ -334,7 +347,7 @@ export default function ClientCoalitionsPage() {
           <button
             type="button"
             onClick={() => void openCreateModal()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+            className={buttonClasses({variant:"primary"})}
           >
             <Plus size={17} />
             Koalisyon Oluştur
@@ -342,12 +355,12 @@ export default function ClientCoalitionsPage() {
         </header>
 
         {loading ? (
-          <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-neutral-500">
+          <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-[var(--color-text-secondary)]">
             <Loader2 size={18} className="animate-spin" />
             Koalisyonlar yükleniyor...
           </div>
         ) : error ? (
-          <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <p className="rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
             {error}
           </p>
         ) : coalitions.length === 0 ? (
@@ -357,141 +370,39 @@ export default function ClientCoalitionsPage() {
             description="Bir projeniz için ekip oluşturarak freelancer önerilerini yönetmeye başlayabilirsiniz."
           />
         ) : (
-          <div className="space-y-5">
-            {coalitions.map((coalition) => {
-              const readyLabel =
-                coalition.project?.status === "in_progress"
-                  ? "Proje başladı"
-                  : coalition.openRoles.length === 0 && coalition.project
-                    ? "Ekip hazır"
-                    : "Ekip oluşturuluyor";
-
-              return (
-                <div
-                  key={coalition.id}
-                  className="flex w-full flex-col gap-6 rounded-xl border border-neutral-200 bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-3 flex flex-wrap items-center gap-3">
-                      <h2 className="text-lg font-semibold text-neutral-900">
-                        {coalition.name}
-                      </h2>
-
-                      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
-                        Aktif
-                      </span>
-
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-medium ${
-                          readyLabel === "Ekip hazır" || readyLabel === "Proje başladı"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {readyLabel}
-                      </span>
-                    </div>
-
-                    <p className="mb-5 line-clamp-2 text-sm text-neutral-500">
-                      {coalition.description || "Açıklama eklenmemiş."}
-                    </p>
-
-                    <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
-                      <div>
-                        <span className="mb-1 block text-neutral-400">Ekip</span>
-
-                        <div className="flex items-center">
-                          {coalition.members.length === 0 && (
-                            <span className="font-medium text-neutral-900">Henüz üye yok</span>
-                          )}
-
-                          {coalition.members.slice(0, 4).map((member, index) => {
-                            const name = publicDisplayName(member.profile, "Üye");
-
-                            return (
-                              <div
-                                key={member.user_id}
-                                title={name}
-                                className={index > 0 ? "-ml-2" : ""}
-                              >
-                                {member.profile?.avatar_url ? (
-                                  <img
-                                    src={member.profile.avatar_url}
-                                    alt={name}
-                                    className="h-7 w-7 rounded-full border-2 border-white object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-neutral-200 text-xs font-medium text-neutral-600">
-                                    {name.charAt(0).toUpperCase()}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-
-                          {coalition.members.length > 4 && (
-                            <span className="ml-2 text-xs text-neutral-500">
-                              +{coalition.members.length - 4}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <span className="mb-1 block text-neutral-400">Üye Sayısı</span>
-                        <span className="font-medium text-neutral-900">
-                          {coalition.members.length} kişi
-                        </span>
-                      </div>
-
-                      {coalition.project && (
-                        <div>
-                          <span className="mb-1 block text-neutral-400">Proje</span>
-                          <Link
-                            href={`/client/projects/${coalition.project.id}`}
-                            className="font-medium text-[var(--color-primary-600)] hover:underline"
-                          >
-                            {coalition.project.title}
-                          </Link>
-                        </div>
-                      )}
-
-                      {coalition.openRoles.length > 0 && (
-                        <div>
-                          <span className="mb-1 block text-neutral-400">Açık Roller</span>
-                          <span className="font-medium text-neutral-900">
-                            {coalition.openRoles.join(", ")}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 gap-3">
-                    <Link
-                      href={`/client/coalitions/${coalition.id}`}
-                      className="rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-                    >
-                      Detayları Gör
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
+          <div className={styles.list}>
+            {coalitions.map(coalition => <CoalitionCard key={coalition.id}
+              name={coalition.name}
+              projectTitle={coalition.project?.title || (coalition.project_id ? "Proje bilgileri alınamadı" : "Proje bağlantısı bulunmuyor")}
+              status={coalition.status}
+              members={coalition.members.map(member => ({id:member.user_id,name:publicDisplayName(member.profile,"Ekip üyesi"),avatarUrl:member.profile?.avatar_url || null}))}
+              metadata={[
+                {label:"Roller",value:coalition.team ? coalition.team.filledRoles+" / "+coalition.team.totalRoles+" rol dolu" : "Doğrulanamadı"},
+                ...(coalition.team ? [{label:"Açık roller",value:coalition.openRoles.length ? coalition.openRoles.length+" · "+coalition.openRoles.join(", ") : "Açık rol yok"}] : []),
+                ...(coalition.project?.updated_at ? [{label:"Proje güncellendi",value:coalitionUpdatedDate(coalition.project.updated_at)}] : []),
+              ]}
+              statusContent={coalition.project ? <><span>Proje</span><PanelBadge>{coalitionProjectLabel(coalition.project.status)}</PanelBadge></> : <span>Proje durumu doğrulanamadı</span>}
+              nextStep={clientCoalitionNextStep(coalition.project,coalition.team)}
+              actions={<>
+                <PanelAction href={"/client/coalitions/"+coalition.id} variant="primary">Ekip Alanını Aç</PanelAction>
+                <PanelAction href={"/client/coalitions/"+coalition.id+"#team-messages"}>Mesajlar</PanelAction>
+                {coalition.project && <Link href={"/client/projects/"+coalition.project.id} className={styles.projectLink}>Bağlı projeyi gör</Link>}
+              </>}
+            />)}
           </div>
         )}
       </div>
 
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-5">
+          <div className="w-full max-w-lg rounded-[var(--radius-card)] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] px-6 py-5">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">
+                <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">
                   Koalisyon Oluştur
                 </h2>
 
-                <p className="mt-1 text-sm text-neutral-500">
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                   Koalisyonu bir projenize bağlayın.
                 </p>
               </div>
@@ -501,7 +412,7 @@ export default function ClientCoalitionsPage() {
                 onClick={closeCreateModal}
                 disabled={creating}
                 aria-label="Pencereyi kapat"
-                className="rounded-lg p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg p-2 text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <X size={19} />
               </button>
@@ -509,7 +420,7 @@ export default function ClientCoalitionsPage() {
 
             <div className="space-y-5 px-6 py-6">
               {loadingProjects ? (
-                <div className="flex items-center justify-center gap-2 rounded-xl border border-neutral-200 p-5 text-sm text-neutral-500">
+                <div className="flex items-center justify-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] p-5 text-sm text-[var(--color-text-secondary)]">
                   <Loader2
                     size={17}
                     className="animate-spin"
@@ -525,7 +436,7 @@ export default function ClientCoalitionsPage() {
                     <Link
                       href="/client/create-project"
                       onClick={closeCreateModal}
-                      className="inline-flex h-[var(--button-height-sm)] items-center justify-center rounded-lg bg-[var(--color-primary-600)] px-3 text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                      className={buttonClasses({variant:"primary"})}
                     >
                       Proje Oluştur
                     </Link>
@@ -534,7 +445,7 @@ export default function ClientCoalitionsPage() {
               ) : (
                 <>
                   <div>
-                    <label className="text-sm font-medium text-neutral-900">
+                    <label className="text-sm font-medium text-[var(--color-text-primary)]">
                       Proje
                     </label>
 
@@ -543,7 +454,7 @@ export default function ClientCoalitionsPage() {
                       onChange={(event) =>
                         setSelectedProjectId(event.target.value)
                       }
-                      className="mt-2 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-neutral-400"
+                      className="mt-2 w-full rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-neutral-400"
                     >
                       <option value="">
                         Proje seçin
@@ -561,23 +472,23 @@ export default function ClientCoalitionsPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-neutral-900">
+                    <label className="text-sm font-medium text-[var(--color-text-primary)]">
                       Koalisyon adı
                     </label>
 
-                    <input
+                    <Input
                       type="text"
                       value={coalitionName}
                       onChange={(event) =>
                         setCoalitionName(event.target.value)
                       }
                       placeholder="Örn. Mobil Uygulama Ekibi"
-                      className="mt-2 w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      className="mt-2 w-full rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-neutral-400"
                     />
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium text-neutral-900">
+                    <label className="text-sm font-medium text-[var(--color-text-primary)]">
                       Açıklama
                     </label>
 
@@ -588,26 +499,26 @@ export default function ClientCoalitionsPage() {
                       }
                       rows={4}
                       placeholder="Bu koalisyonun amacı ve ekip yapısı hakkında kısa bilgi..."
-                      className="mt-2 w-full resize-none rounded-xl border border-neutral-200 px-4 py-3 text-sm leading-6 text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-400"
+                      className="mt-2 w-full resize-none rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] px-4 py-3 text-sm leading-6 text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-neutral-400"
                     />
                   </div>
                 </>
               )}
 
               {createError && (
-                <div className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-3 text-sm text-[var(--color-error-600)]">
                   {createError}
                 </div>
               )}
             </div>
 
             {projects.length > 0 && !loadingProjects && (
-              <div className="flex justify-end gap-3 border-t border-neutral-100 px-6 py-4">
+              <div className="flex justify-end gap-3 border-t border-[var(--color-border-subtle)] px-6 py-4">
                 <button
                   type="button"
                   onClick={closeCreateModal}
                   disabled={creating}
-                  className="rounded-xl px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-[var(--radius-card)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Vazgeç
                 </button>
@@ -616,7 +527,7 @@ export default function ClientCoalitionsPage() {
                   type="button"
                   onClick={() => void createCoalition()}
                   disabled={creating}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className={buttonClasses({variant:"primary"})}
                 >
                   {creating && (
                     <Loader2

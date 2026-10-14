@@ -14,7 +14,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatRemainingTime } from "@/lib/utils/deadline";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { PageHeader, pageHeaderClass } from "@/components/ui/PageHeader";
+import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -177,14 +178,14 @@ export default function SavedProjectsPage() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader className={pageHeaderClass}
         title="Favorilerim"
         description="Kaydettiğin projeleri buradan takip edebilirsin."
         action={
-          <Badge tone="neutral" className="gap-1.5 px-3 py-1.5 text-[13px]">
+          <div className="flex items-center gap-3"><DashboardMascot pose="heart" size={64} className="h-10 w-10 sm:h-16 sm:w-16" eager />          <Badge tone="neutral" className="gap-1.5 px-3 py-1.5 text-[13px]">
             <Heart className="h-3.5 w-3.5" />
             {loading ? "Yükleniyor..." : `${projects.length} favori`}
-          </Badge>
+          </Badge></div>
         }
       />
 

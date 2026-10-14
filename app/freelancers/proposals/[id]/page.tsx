@@ -408,7 +408,7 @@ export default function ProposalDetailPage({
 
   if (loading) {
     return (
-      <main className="w-full p-6">
+      <main className="w-full">
         <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
           <p className="text-sm text-gray-500">
             Teklif detayları yükleniyor...
@@ -420,7 +420,7 @@ export default function ProposalDetailPage({
 
   if (errorMessage || !proposal) {
     return (
-      <main className="w-full p-6">
+      <main className="w-full">
         <Link
           href="/freelancers/proposals"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
@@ -455,7 +455,7 @@ export default function ProposalDetailPage({
   const isPending = statusKey === "pending";
 
   return (
-    <main className="w-full p-6">
+    <main className="w-full">
       {/* HEADER */}
 
       <div className="mb-8">
@@ -470,7 +470,7 @@ export default function ProposalDetailPage({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="mb-3 flex flex-wrap items-center gap-3">
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="cc-page-title text-[var(--color-text-primary)]">
                 Teklif Detayı
               </h1>
 

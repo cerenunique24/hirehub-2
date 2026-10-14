@@ -1018,8 +1018,8 @@ function FreelancerProjectDetailContent({
    */
   if (loading) {
     return (
-      <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+      <main className="bg-white">
+        <div className="w-full">
           <div className="animate-pulse">
             <div className="mb-8 h-5 w-32 rounded bg-gray-100" />
 
@@ -1050,8 +1050,8 @@ function FreelancerProjectDetailContent({
    */
   if (!project) {
     return (
-      <main className="min-h-screen bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-10 lg:px-8">
+      <main className="bg-white">
+        <div className="w-full">
           <Link
             href="/freelancers/discover"
             className="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition hover:text-[var(--color-text-primary)]"
@@ -1098,8 +1098,8 @@ function FreelancerProjectDetailContent({
    * ----------------------------------------------------
    */
   return (
-    <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
+    <main className="bg-white">
+      <div className="w-full">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/freelancers/discover"
@@ -2028,7 +2028,7 @@ export default function FreelancerProjectDetailPage({
   return (
     <React.Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-white">
+        <main className="flex items-center justify-center bg-white">
           <div className="text-sm text-gray-400">
             Proje yükleniyor...
           </div>

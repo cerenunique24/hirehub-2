@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
-import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
-import styles from "@/components/projects/MyProjects.module.css";
+import {ProjectsListFrame} from "@/components/projects/ProjectsListFrame";
+import {ProjectListCard} from "@/components/projects/ProjectListCard";
+import {projectListTabs,projectMatchesTab,projectListAction,projectListContext,projectListDate,type ProjectsTab} from "@/components/projects/projectListPresentation";
+import { PanelAction } from "@/components/dashboard/PanelPrimitives";
 import {
   CalendarDays,
   ArrowRight,
-  Loader2,
-  AlertCircle,
   Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -31,43 +30,7 @@ type MyProject = Project & {
   membership: TeamMembership;
 };
 
-function formatDate(value: string | null) {
-  if (!value) {
-    return "Belirtilmedi";
-  }
-
-  return new Intl.DateTimeFormat("tr-TR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
-}
-
-type ProjectTab = "all" | "active" | "waiting" | "completed";
-const filters: { value: ProjectTab; label: string }[] = [{value:"all",label:"Tümü"},{value:"active",label:"Aktif"},{value:"waiting",label:"Başlangıç Bekleyen"},{value:"completed",label:"Tamamlanan"}];
-function getStatusLabel(status: string | null) {
- switch(status) {
- case "in_progress": return "Çalışma devam ediyor";
- case "completed": return "Tamamlandı";
- case "cancelled": return "İptal edildi";
- case "paused": return "Duraklatıldı";
- case "ready_to_start": return "Ekip hazır · Başlamadı";
- default: return "Tanımsız";
- }
-}
-function nextStep(status: string | null) {
- switch(status) {
- case "in_progress": return "Çalışma alanında sıradaki aşamayı kontrol et.";
- case "ready_to_start": return "Proje başlangıcı bekleniyor";
- case "paused": return "Projenin devam etmesi bekleniyor";
- case "completed": return "Tamamlanan çalışmanı görüntüle.";
- case "cancelled": return "Proje iptal edildi.";
- default: return "Proje detaylarını incele.";
- }
-}
-function matchesTab(status: string | null, tab: ProjectTab) {
- return tab === "all" || (tab === "active" && status === "in_progress") || (tab === "waiting" && status === "ready_to_start") || (tab === "completed" && status === "completed");
-}
+type ProjectTab=ProjectsTab;
 export default function ProjectsPage() {
   const supabase = useMemo(() => createClient(), []);
 
@@ -151,61 +114,9 @@ export default function ProjectsPage() {
     void loadProjects();
   }, [supabase]);
 
-  const visibleProjects = projects.filter(project => matchesTab(project.status, tab));
-  const isEmpty = !error && projects.length === 0;
-
-  if (loading) {
-    return (
-      <main className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          <Loader2 size={20} className="animate-spin" />
-          Projeler yükleniyor...
-        </div>
-       <div className={styles.bottomAccent} aria-hidden="true"><DashboardMascot pose="laptop" size={130} className={styles.mascot} /></div>
-   </main>
-    );
-  }
-
-  return (
-   <main className={[panelRootClass, styles.page].join(" ")}>
-    <header className={styles.header}>
-     <div className={styles.intro}>
-      <h1>Projelerim</h1>
-      <p>Aktif, bekleyen ve tamamlanan projelerini tek yerden takip et.</p>
-     </div>
-     <PanelAction href="/freelancers/discover">Projeleri Keşfet<ArrowRight size={16} /></PanelAction>
-    </header>
-    {error && <div className={styles.error} role="alert"><AlertCircle size={18} /><p>{error}</p></div>}
-    {!error && <div className={styles.filters} role="group" aria-label="Proje durumuna göre filtrele">
-     {filters.map(filter => <button key={filter.value} type="button" aria-pressed={tab === filter.value} onClick={() => setTab(filter.value)} className={tab === filter.value ? styles.selected : ""}>
-      {filter.label}<span>{projects.filter(project => matchesTab(project.status, filter.value)).length}</span>
-     </button>)}
-    </div>}
-    {!error && visibleProjects.length === 0 && <section className={styles.empty}>
-     <h2>{isEmpty ? "Henüz aktif projen yok" : "Bu durumda bir projen yok"}</h2>
-     <p>{isEmpty ? "Sana uygun projeleri keşfedebilir veya gelen davetleri inceleyebilirsin." : "Diğer durumları görmek için proje filtresini değiştirebilirsin."}</p>
-     {isEmpty && <PanelAction href="/freelancers/discover" variant="primary">Projeleri keşfet</PanelAction>}
-    </section>}
-    <div className={styles.list}>
-     {visibleProjects.map(project => {
-      const workspace = project.status === "in_progress" || project.status === "completed";
-      const href = workspace ? "/freelancers/projects/" + project.id : "/freelancers/discover/" + project.id;
-      return <article key={project.id} className={styles.card}>
-       <div className={styles.cardHeading}><h2>{project.title}</h2><PanelBadge>{getStatusLabel(project.status)}</PanelBadge></div>
-       <p className={styles.description}>{project.description || "Proje açıklaması bulunmuyor."}</p>
-       <dl className={styles.metadata}>
-        <div><dt><Users size={16} />Projede rolün</dt><dd>{project.membership.role || "Belirtilmedi"}</dd></div>
-        <div><dt><CalendarDays size={16} />Teslim tarihi</dt><dd>{formatDate(project.deadline)}</dd></div>
-       </dl>
-       <div className={styles.cardFooter}><div><span>Sıradaki adım</span><p>{nextStep(project.status)}</p></div>
-        <PanelAction href={href} variant={project.status === "in_progress" ? "primary" : "secondary"}>
-         {project.status === "in_progress" ? "Çalışma alanını aç" : project.status === "completed" ? "Projeyi görüntüle" : "Detayları gör"}<ArrowRight size={16} />
-        </PanelAction>
-       </div>
-      </article>;
-     })}
-    </div>
-    <div className={styles.bottomAccent} aria-hidden="true"><DashboardMascot pose="laptop" size={130} className={styles.mascot} /></div>
-   </main>
-  );
+  const visibleProjects=projects.filter(project=>projectMatchesTab(project.status,tab));
+  const isEmpty=!error&&projects.length===0;
+  return <ProjectsListFrame title="Projelerim" description="Aktif, bekleyen ve tamamlanan projelerini tek yerden takip et." action={<PanelAction href="/freelancers/discover" variant="primary">Projeleri Keşfet<ArrowRight size={16}/></PanelAction>} tabs={projectListTabs(projects,"freelancer")} value={tab} onChange={value=>setTab(value as ProjectTab)} loading={loading} error={error} totalCount={projects.length} visibleCount={visibleProjects.length} emptyTitle={isEmpty?"Henüz bir projen yok":"Bu durumda bir projen yok"} emptyDescription={isEmpty?"Sana uygun projeleri keşfedebilir veya gelen davetleri inceleyebilirsin.":"Diğer durumları görmek için proje sekmesini değiştirebilirsin."} emptyAction={isEmpty?<PanelAction href="/freelancers/discover" variant="primary">Projeleri Keşfet</PanelAction>:undefined}>
+    {visibleProjects.map(project=><ProjectListCard key={project.id} title={project.title} description={project.description} status={project.status} metadata={<><div><dt><Users size={16}/>Projede rolün</dt><dd>{project.membership.role||"Belirtilmedi"}</dd></div><div><dt><CalendarDays size={16}/>Teslim tarihi</dt><dd>{projectListDate(project.deadline)}</dd></div></>} context={projectListContext(project.status,"freelancer")} action={projectListAction(project.id,project.status,"freelancer")}/>)}
+  </ProjectsListFrame>;
 }

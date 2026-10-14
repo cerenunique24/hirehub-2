@@ -1,0 +1,11 @@
+.frame{display:flex;height:100dvh;min-height:0;overflow:hidden;background:var(--color-canvas)}
+.column{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0}
+.column>header{flex-shrink:0}
+.viewport{flex:1;min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden}
+.workspacePage{height:calc(100dvh - var(--app-header-height) - 2 * var(--space-8));display:flex;flex-direction:column;min-height:var(--space-24)}
+.workspacePage>div:first-child{flex-shrink:0}
+.messages{flex:1;min-height:0}
+
+@media(max-width:1023px){.drawerOpen{overflow:hidden}}
+
+.embeddedPage>main{min-height:0;padding:0;background:transparent}.embeddedPage h1{font-size:var(--font-size-page-title);line-height:var(--line-height-page-title);font-weight:var(--weight-page-title)}

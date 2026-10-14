@@ -232,7 +232,7 @@ export default function ClientProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center gap-2 p-6 text-sm text-neutral-500">
+      <div className="flex min-h-[50vh] items-center justify-center gap-2 p-6 text-sm text-[var(--color-text-secondary)]">
         <Loader2 size={18} className="animate-spin" />
         Profil yükleniyor...
       </div>
@@ -241,8 +241,8 @@ export default function ClientProfilePage() {
 
   if (error && !profile) {
     return (
-      <div className="p-6">
-        <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+      <div className="w-full">
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] p-5 text-sm text-[var(--color-error-600)]">
           {error}
         </div>
       </div>
@@ -251,9 +251,9 @@ export default function ClientProfilePage() {
 
   if (!profile) {
     return (
-      <div className="p-6">
-        <div className="rounded-xl border border-neutral-200 bg-white p-6">
-          <p className="text-sm text-neutral-500">Profil bilgileri bulunamadı.</p>
+      <div className="w-full">
+        <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-6">
+          <p className="text-sm text-[var(--color-text-secondary)]">Profil bilgileri bulunamadı.</p>
         </div>
       </div>
     );
@@ -277,9 +277,9 @@ export default function ClientProfilePage() {
 
   return (
     <main className="w-full p-6">
-      <div className="mx-auto max-w-5xl">
+      <div className="w-full">
         {/* PROFİL HEADER */}
-        <section className="mb-6 flex flex-col gap-5 rounded-xl border border-[var(--color-border-subtle)] bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
+        <section className="mb-6 flex flex-col gap-5 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
             <div className="relative">
               {profile.avatar_url ? (
@@ -319,14 +319,14 @@ export default function ClientProfilePage() {
             </div>
 
             <div>
-              <h1 className="text-2xl font-semibold text-neutral-900">{fullName}</h1>
+              <h1 className="text-2xl font-semibold text-[var(--color-text-primary)]">{fullName}</h1>
 
-              <p className="mt-1 text-neutral-500">
+              <p className="mt-1 text-[var(--color-text-secondary)]">
                 {profile.company_name || "Şirket bilgisi eklenmedi"}
               </p>
 
               {profile.city && (
-                <p className="mt-3 flex items-center gap-1.5 text-sm text-neutral-500">
+                <p className="mt-3 flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
                   <MapPin size={14} />
                   {[profile.city, profile.country].filter(Boolean).join(", ")}
                 </p>
@@ -341,13 +341,13 @@ export default function ClientProfilePage() {
         </section>
 
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
             {error}
           </div>
         )}
 
         {message && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="mb-6 rounded-[var(--radius-card)] border border-green-200 bg-[var(--color-success-50)] p-4 text-sm text-[var(--color-success-600)]">
             {message}
           </div>
         )}
@@ -400,18 +400,18 @@ export default function ClientProfilePage() {
       {/* PROFİLİ DÜZENLE MODAL */}
       {showProfileForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 sm:p-6">
-          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-[var(--radius-card)] bg-white shadow-xl">
             {/* MODAL HEADER */}
-            <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-7 py-5">
+            <div className="flex shrink-0 items-center justify-between border-b border-[var(--color-border-subtle)] px-7 py-5">
               <div>
-                <h2 className="text-lg font-semibold text-neutral-900">Profili Düzenle</h2>
-                <p className="mt-1 text-sm text-neutral-500">Profil bilgilerini güncelle.</p>
+                <h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">Profili Düzenle</h2>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Profil bilgilerini güncelle.</p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setShowProfileForm(false)}
-                className="text-neutral-400 transition hover:text-[var(--color-text-primary)]"
+                className="text-[var(--color-text-muted)] transition hover:text-[var(--color-text-primary)]"
               >
                 <X size={20} />
               </button>
@@ -478,7 +478,7 @@ export default function ClientProfilePage() {
               </div>
 
               <div className="mt-5">
-                <label className="mb-2 block text-sm font-medium text-neutral-900">
+                <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">
                   Hakkında
                 </label>
 
@@ -494,7 +494,7 @@ export default function ClientProfilePage() {
             </div>
 
             {/* FOOTER */}
-            <div className="flex shrink-0 justify-end gap-3 border-t border-neutral-100 px-7 py-4">
+            <div className="flex shrink-0 justify-end gap-3 border-t border-[var(--color-border-subtle)] px-7 py-4">
               <Button variant="ghost" onClick={() => setShowProfileForm(false)}>
                 Vazgeç
               </Button>
@@ -522,12 +522,12 @@ function InfoRow({
 }) {
   return (
     <div>
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-        <span className="text-neutral-500">{icon}</span>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text-primary)]">
+        <span className="text-[var(--color-text-secondary)]">{icon}</span>
         {label}
       </h3>
 
-      <p className="mt-2 text-sm leading-6 text-neutral-600">{children}</p>
+      <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">{children}</p>
     </div>
   );
 }
@@ -545,7 +545,7 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-neutral-900">{label}</label>
+      <label className="mb-2 block text-sm font-medium text-[var(--color-text-primary)]">{label}</label>
 
       <Input
         value={value}

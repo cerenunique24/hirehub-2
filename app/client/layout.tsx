@@ -1,7 +1,6 @@
+import { AppShell } from "@/components/layout/AppShell";
 import Sidebar from "./components/Sidebar";
 import Navbar from "./components/Navbar";
-import PageContainer from "@/components/layout/PageContainer";
-import { MobileSidebarProvider } from "@/components/layout/MobileSidebarContext";
 import { requireSession } from "@/lib/auth/session";
 
 
@@ -15,19 +14,5 @@ export default async function ClientLayout({
   // korumalı içeriğin oturumsuz kullanıcıya hiç render edilmemesini sağlar.
   await requireSession("client");
 
-  return (
-    <MobileSidebarProvider>
-      <div className="flex min-h-screen bg-[var(--color-canvas)]">
-        <Sidebar />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar />
-
-          <main className="panel-main min-w-0 flex-1 overflow-x-hidden">
-            <PageContainer>{children}</PageContainer>
-          </main>
-        </div>
-      </div>
-    </MobileSidebarProvider>
-  );
+  return <AppShell role="client" sidebar={<Sidebar />} navbar={<Navbar />}>{children}</AppShell>;
 }

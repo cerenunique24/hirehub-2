@@ -1,11 +1,22 @@
 "use client";
 
-import Link from "next/link";
+import Image from "next/image";
+import { Pagination } from "@/components/ui/Pagination";
+import { useProjectDiscoveryContext } from "@/components/client/useProjectDiscoveryContext";
+import { ProjectMatchContext } from "@/components/client/ProjectMatchContext";
+import { rankProjectResults } from "@/components/client/projectDiscoveryPresentation";
+import { Input } from "@/components/ui/Input";
+import { Button,buttonClasses } from "@/components/ui/Button";
+import {DiscoveryHero} from "@/components/discovery/DiscoveryHero";
+import {DiscoveryToolbar} from "@/components/discovery/DiscoveryToolbar";
+import discoveryStyles from "@/components/discovery/Discovery.module.css";
+import {panelRootClass} from "@/components/dashboard/PanelPrimitives";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Loader2,
   Users,
   Scale,
+  SlidersHorizontal,
   X,
   Search,
   ChevronDown,
@@ -40,16 +51,17 @@ const AVAILABILITY_STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "unavailable", label: "Müsait Değil" },
 ];
 
-type SortOption = "recommended" | "rate_asc" | "rate_desc" | "newest";
+type SortOption = "match" | "recommended" | "rate_asc" | "rate_desc" | "newest";
 
 const SORT_LABEL: Record<SortOption, string> = {
+  match: "En uygun · proje önerileri",
   recommended: "Önerilen",
   rate_asc: "Ücret: düşük → yüksek",
   rate_desc: "Ücret: yüksek → düşük",
   newest: "Yeni profiller",
 };
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 20;
 
 const LIST_SELECT =
   "id, first_name, avatar_url, title, bio, expertise, project_types, skills, experience, city, hourly_rate, availability_status";
@@ -153,7 +165,9 @@ export default function ClientFreelancersPage() {
   const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [page,setPage]=useState(1);
+  const [showFilters,setShowFilters]=useState(false);
+  const context=useProjectDiscoveryContext();
   const [error, setError] = useState("");
 
   const [searchInput, setSearchInput] = useState("");
@@ -164,76 +178,13 @@ export default function ClientFreelancersPage() {
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   const [sort, setSort] = useState<SortOption>("recommended");
+  const matchingSet=sort==="match" ? context.matches : null;
 
   const [compareMode, setCompareMode] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [comparison, setComparison] = useState<ComparisonRow[] | null>(null);
   const [comparing, setComparing] = useState(false);
   const [compareError, setCompareError] = useState("");
-
-  /* Arama debounce — her tuş vuruşunda query atmamak için 350ms bekletilir. */
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setSearch(sanitizeSearchTerm(searchInput));
-    }, 350);
-
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
-
-  /* Açık dropdown'ın dışına tıklanınca kapat. */
-  useEffect(() => {
-    if (!openFilter) return;
-
-    function handleClickOutside(event: MouseEvent) {
-      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
-        setOpenFilter(null);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [openFilter]);
-
-  /*
-   * Ana listing sorgusu — search/filters/sort değiştiğinde baştan
-   * (page 0) yüklenir. Tüm filtreler Supabase query seviyesinde
-   * uygulanır; hiçbir zaman "tüm freelancerları çekip JS'te filtrele"
-   * yapılmaz.
-   */
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadFreelancers() {
-      setLoading(true);
-      setError("");
-
-      const query = buildQuery();
-      const { data, error: loadError, count } = await query.range(0, PAGE_SIZE - 1);
-
-      if (cancelled) return;
-
-      if (loadError) {
-        console.error("Freelancerlar yüklenirken hata:", loadError);
-        setError(
-          "Freelancer profilleri yüklenemedi. Yetkilendirme ayarlarını kontrol edin."
-        );
-        setFreelancers([]);
-        setTotalCount(0);
-      } else {
-        setFreelancers(normalizeRows(data));
-        setTotalCount(count ?? 0);
-      }
-
-      setLoading(false);
-    }
-
-    void loadFreelancers();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase, search, filters, sort]);
 
   function normalizeRows(data: unknown[] | null): Freelancer[] {
     return ((data ?? []) as Freelancer[]).map((row) => ({
@@ -319,31 +270,80 @@ export default function ClientFreelancersPage() {
     return query;
   }
 
-  async function loadMore() {
-    if (loadingMore || freelancers.length >= totalCount) return;
 
-    setLoadingMore(true);
+  /* Arama debounce — her tuş vuruşunda query atmamak için 350ms bekletilir. */
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);setSearch(sanitizeSearchTerm(searchInput));
+    }, 350);
 
-    const from = freelancers.length;
-    const query = buildQuery();
-    const { data, error: loadError } = await query.range(from, from + PAGE_SIZE - 1);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
-    if (loadError) {
-      console.error("Daha fazla freelancer yüklenirken hata:", loadError);
-      setError("Freelancerlar yüklenirken bir hata oluştu.");
-    } else {
-      setFreelancers((current) => [...current, ...normalizeRows(data)]);
+  /* Açık dropdown'ın dışına tıklanınca kapat. */
+  useEffect(() => {
+    if (!openFilter) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
+        setOpenFilter(null);
+      }
     }
 
-    setLoadingMore(false);
-  }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openFilter]);
+
+  /*
+   * Ana listing sorgusu — search/filters/sort değiştiğinde baştan
+   * (page 0) yüklenir. Tüm filtreler Supabase query seviyesinde
+   * uygulanır; hiçbir zaman "tüm freelancerları çekip JS'te filtrele"
+   * yapılmaz.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFreelancers() {
+      setLoading(true);
+      setError("");
+
+      const query = buildQuery();
+      const ids=Object.keys(context.matches);
+      const {data,error:loadError,count}=sort==="match" ? (ids.length ? await query.in("id",ids).range(0,ids.length-1) : {data:[],error:null,count:0}) : await query.range((page-1)*PAGE_SIZE,page*PAGE_SIZE-1);
+
+      if (cancelled) return;
+
+      if (loadError) {
+        console.error("Freelancerlar yüklenirken hata:", loadError);
+        setError(
+          "Freelancer profilleri yüklenemedi. Yetkilendirme ayarlarını kontrol edin."
+        );
+        setFreelancers([]);
+        setTotalCount(0);
+      } else {
+        const rows=normalizeRows(data);
+        setFreelancers(sort==="match" ? rankProjectResults(rows,context.matches).slice((page-1)*PAGE_SIZE,page*PAGE_SIZE) : rows);
+        const lastPage=Math.max(1,Math.ceil((count??0)/PAGE_SIZE));if(page>lastPage)setPage(lastPage);
+        setTotalCount(count ?? 0);
+      }
+
+      setLoading(false);
+    }
+
+    void loadFreelancers();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, search, filters, sort, page, context.projectId, matchingSet]);
 
   function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
-    setFilters((current) => ({ ...current, [key]: value }));
+    setPage(1);setFilters((current) => ({ ...current, [key]: value }));
   }
 
   function clearAllFilters() {
-    setFilters(EMPTY_FILTERS);
+    setPage(1);setFilters(EMPTY_FILTERS);
     setSearchInput("");
     setSearch("");
   }
@@ -406,52 +406,65 @@ export default function ClientFreelancersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-7xl">
+    <div className={[panelRootClass,discoveryStyles.page].join(" ")}>
+      <div className="w-full">
         {/* HEADER */}
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.01em] text-neutral-900">
-              Freelancerlar
-            </h1>
+        <DiscoveryHero title="Projelerine uygun freelancerları keşfet" description="Proje gereksinimlerine, rollere ve uzmanlık bilgilerine uygun kişileri keşfet." illustration={<Image src="/images/mascots/client-discovery-search.png" alt="" width={240} height={240} sizes="(max-width: 639px) 80px, (max-width: 1023px) 190px, 240px" loading="eager" className={discoveryStyles.mascot} />} note={null} />
 
-            <p className="mt-1 text-sm text-neutral-500">
-              Projeniz için uygun uzmanları keşfedin.
-            </p>
+        <ProjectMatchContext projects={context.projects} projectId={context.projectId} onChange={id=>{setPage(1);context.setProjectId(id);}} loadingProjects={context.loadingProjects} projectError={context.projectError} loadingMatches={context.loadingMatches} matchError={context.matchError} onRetry={context.retryMatches} />
+
+        <DiscoveryToolbar label="Freelancer arama ve filtreleme">
+          <div className={discoveryStyles.toolbarRow}>        {/* SEARCH */}
+        <div className="relative min-w-0 flex-1">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+          />
+
+          <Input
+            type="text"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            aria-label="Freelancer, uzmanlık veya yetenek ara"
+            placeholder="Freelancer, uzmanlık veya yetenek ara..."
+            className="h-[var(--input-height)] w-full rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-[var(--color-canvas)] pl-9 pr-3 focus:bg-white"
+          />
+        </div>
+
+<div className="flex flex-wrap gap-2">          <div className="relative">
+            <select
+              aria-label="Freelancerları sırala"
+              value={sort}
+              onChange={(event) => {setPage(1);setSort(event.target.value as SortOption);}}
+              className="h-[var(--input-height)] appearance-none rounded-[var(--radius-select)] border border-[var(--color-border-subtle)] bg-white py-0 pl-3 pr-9 text-sm text-[var(--color-text-secondary)] outline-none transition focus:border-[var(--color-primary-600)]"
+            >
+              {(Object.keys(SORT_LABEL) as SortOption[]).filter(option=>option!=="match"||Boolean(context.projectId)).map((option) => (
+                <option key={option} value={option}>
+                  {SORT_LABEL[option]}
+                </option>
+              ))}
+            </select>
+
+            <ChevronDown
+              size={15}
+              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+            />
           </div>
-
-          <button
+<Button variant={showFilters||hasActiveFilters?"primary":"secondary"} aria-expanded={showFilters} aria-controls="client-discovery-filters" onClick={()=>{setShowFilters(value=>!value);setOpenFilter(null);}}><SlidersHorizontal size={16}/>Filtreler{activeFilterCount>0&&<span>{activeFilterCount}</span>}</Button>          <button
             type="button"
             onClick={() => {
               setCompareMode((current) => !current);
               setSelected([]);
               setComparison(null);
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-400"
+            className={buttonClasses({variant:"secondary"})}
           >
             <Scale size={15} />
             {compareMode ? "Karşılaştırmayı Kapat" : "Karşılaştır"}
-          </button>
-        </header>
-
-        {/* SEARCH */}
-        <div className="relative mb-3">
-          <Search
-            size={18}
-            className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400"
-          />
-
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder="Freelancer, skill veya uzmanlık ara..."
-            className="h-11 w-full rounded-lg border border-neutral-200 bg-white pl-11 pr-4 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-[var(--color-primary-600)]"
-          />
-        </div>
-
-        {/* FILTERS + SORT (compact dropdown toolbar) */}
-        <div ref={toolbarRef} className="mb-4 flex flex-wrap items-center gap-2">
+          </button></div>
+          </div>
+          {showFilters && <>        {/* FILTERS + SORT (compact dropdown toolbar) */}
+        <div ref={toolbarRef} id="client-discovery-filters" className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--color-border-subtle)] pt-4">
           <FilterDropdown
             label="Kategori"
             count={filters.category.length}
@@ -500,22 +513,22 @@ export default function ClientFreelancersPage() {
             onToggle={() => setOpenFilter((k) => (k === "rate" ? null : "rate"))}
           >
             <div className="flex items-center gap-2 p-1">
-              <input
+              <Input
                 type="number"
                 min={0}
                 value={filters.rateMin}
                 onChange={(event) => setFilter("rateMin", event.target.value)}
                 placeholder="Min ₺"
-                className="w-24 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-[var(--color-primary-600)]"
+                className="w-24 rounded-lg border border-[var(--color-border-subtle)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary-600)]"
               />
-              <span className="text-neutral-400">–</span>
-              <input
+              <span className="text-[var(--color-text-muted)]">–</span>
+              <Input
                 type="number"
                 min={0}
                 value={filters.rateMax}
                 onChange={(event) => setFilter("rateMax", event.target.value)}
                 placeholder="Maks ₺"
-                className="w-24 rounded-lg border border-neutral-200 px-3 py-2 text-sm outline-none focus:border-[var(--color-primary-600)]"
+                className="w-24 rounded-lg border border-[var(--color-border-subtle)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary-600)]"
               />
             </div>
           </FilterDropdown>
@@ -555,35 +568,20 @@ export default function ClientFreelancersPage() {
             />
           </FilterDropdown>
 
-          <div className="relative">
-            <select
-              value={sort}
-              onChange={(event) => setSort(event.target.value as SortOption)}
-              className="h-10 appearance-none rounded-lg border border-neutral-200 bg-white py-0 pl-3 pr-9 text-sm text-neutral-700 outline-none transition focus:border-[var(--color-primary-600)]"
-            >
-              {(Object.keys(SORT_LABEL) as SortOption[]).map((option) => (
-                <option key={option} value={option}>
-                  {SORT_LABEL[option]}
-                </option>
-              ))}
-            </select>
-
-            <ChevronDown
-              size={15}
-              className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
-            />
-          </div>
 
           {hasActiveFilters && (
             <button
               type="button"
               onClick={clearAllFilters}
-              className="text-sm font-medium text-neutral-500 hover:text-neutral-900"
+              className="text-sm font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
             >
               Tümünü temizle
             </button>
           )}
         </div>
+
+</>}
+        </DiscoveryToolbar>
 
         {/* ACTIVE FILTER CHIPS */}
         {hasActiveFilters && (
@@ -666,7 +664,7 @@ export default function ClientFreelancersPage() {
 
         {/* RESULT COUNT */}
         {!loading && !error && (
-          <p className="mb-5 text-sm text-neutral-500">{totalCount} freelancer bulundu</p>
+          <p className="mb-5 text-sm text-[var(--color-text-secondary)]">{totalCount} {sort==="match"?"doğrulanmış proje önerisi":"freelancer"} bulundu</p>
         )}
 
         {/* COMPARISON */}
@@ -678,20 +676,20 @@ export default function ClientFreelancersPage() {
               description="Seçtiğin freelancer'ları beceri, deneyim, saatlik ücret ve kabul oranı bazında yan yana karşılaştır."
               dismissible
             >
-              <div className="rounded-xl border border-neutral-200 bg-white p-5">
-                <p className="text-sm text-neutral-600">
+              <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
+                <p className="text-sm text-[var(--color-text-secondary)]">
                   Karşılaştırmak için 2-4 freelancer seç ({selected.length}/4 seçili).
                 </p>
 
                 {compareError && (
-                  <p className="mt-2 text-sm text-red-600">{compareError}</p>
+                  <p className="mt-2 text-sm text-[var(--color-error-600)]">{compareError}</p>
                 )}
 
                 <button
                   type="button"
                   onClick={() => void runComparison()}
                   disabled={selected.length < 2 || comparing}
-                  className="mt-3 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className={buttonClasses({variant:"primary"})}
                 >
                   {comparing ? "Karşılaştırılıyor..." : "Karşılaştır"}
                 </button>
@@ -700,7 +698,7 @@ export default function ClientFreelancersPage() {
                   <div className="mt-5 overflow-x-auto">
                     <table className="w-full min-w-[600px] text-left text-sm">
                       <thead>
-                        <tr className="border-b border-neutral-100 text-xs uppercase tracking-wide text-neutral-400">
+                        <tr className="border-b border-[var(--color-border-subtle)] text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
                           <th className="pb-2 pr-4">Freelancer</th>
                           <th className="pb-2 pr-4">Deneyim</th>
                           <th className="pb-2 pr-4">Saatlik ücret</th>
@@ -713,27 +711,27 @@ export default function ClientFreelancersPage() {
                       <tbody>
                         {comparison.map((row) => (
                           <tr key={row.id} className="border-b border-neutral-50">
-                            <td className="py-2.5 pr-4 font-medium text-neutral-900">
+                            <td className="py-2.5 pr-4 font-medium text-[var(--color-text-primary)]">
                               {row.name}
                             </td>
 
-                            <td className="py-2.5 pr-4 text-neutral-600">
+                            <td className="py-2.5 pr-4 text-[var(--color-text-secondary)]">
                               {row.experience || "—"}
                             </td>
 
-                            <td className="py-2.5 pr-4 text-neutral-600">
+                            <td className="py-2.5 pr-4 text-[var(--color-text-secondary)]">
                               {formatRate(row)}
                             </td>
 
-                            <td className="py-2.5 pr-4 text-neutral-600">
+                            <td className="py-2.5 pr-4 text-[var(--color-text-secondary)]">
                               {row.availabilityStatus ?? "—"}
                             </td>
 
-                            <td className="py-2.5 pr-4 text-neutral-600">
+                            <td className="py-2.5 pr-4 text-[var(--color-text-secondary)]">
                               %{row.profileCompletion ?? 0}
                             </td>
 
-                            <td className="py-2.5 text-neutral-600">
+                            <td className="py-2.5 text-[var(--color-text-secondary)]">
                               {row.acceptanceRate !== null
                                 ? `%${Math.round(row.acceptanceRate * 100)}`
                                 : "—"}
@@ -750,22 +748,22 @@ export default function ClientFreelancersPage() {
         )}
 
         {/* CONTENT */}
-        {loading ? (
-          <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-neutral-500">
+        {loading || (sort==="match"&&context.loadingMatches) ? (
+          <div className="flex min-h-[40vh] items-center justify-center gap-2 text-sm text-[var(--color-text-secondary)]">
             <Loader2 size={18} className="animate-spin" />
             Freelancerlar yükleniyor...
           </div>
         ) : error ? (
-          <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{error}</p>
+          <p className="rounded-lg bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">{error}</p>
         ) : freelancers.length === 0 ? (
-          <div className="rounded-xl border border-neutral-200 bg-white p-10 text-center">
-            <Users className="mx-auto text-neutral-400" />
+          <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-10 text-center">
+            <Users className="mx-auto text-[var(--color-text-muted)]" />
 
-            <h2 className="mt-4 text-lg font-semibold text-neutral-900">
-              Freelancer bulunamadı
+            <h2 className="mt-4 cc-h2 font-semibold text-[var(--color-text-primary)]">
+              {sort==="match"?"Bu filtrelerle doğrulanmış proje önerisi yok":"Freelancer bulunamadı"}
             </h2>
 
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
               Arama veya filtre kriterlerini değiştirerek tekrar deneyin.
             </p>
           </div>
@@ -796,6 +794,9 @@ export default function ClientFreelancersPage() {
                     <FreelancerCard
                       freelancer={freelancer}
                       viewerRole="client"
+                      matchScore={context.matches[freelancer.id]?.score}
+                      matchContext={context.matches[freelancer.id] ? context.matches[freelancer.id].projectTitle+" · "+context.matches[freelancer.id].role : undefined}
+                      matchReason={context.matches[freelancer.id]?.reason}
                       className={isSelected ? "border-[var(--color-primary-600)]" : ""}
                     />
                   </div>
@@ -803,22 +804,7 @@ export default function ClientFreelancersPage() {
               })}
             </div>
 
-            {/* LOAD MORE */}
-            {freelancers.length < totalCount && (
-              <div className="mt-8 flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => void loadMore()}
-                  disabled={loadingMore}
-                  className="inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-white px-5 py-2.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-400 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {loadingMore && <Loader2 size={15} className="animate-spin" />}
-                  {loadingMore
-                    ? "Yükleniyor..."
-                    : `Daha fazla yükle (${freelancers.length}/${totalCount})`}
-                </button>
-              </div>
-            )}
+            <Pagination page={page} totalPages={Math.ceil(totalCount/PAGE_SIZE)} label="Freelancer sonuç sayfaları" onChange={next=>{setPage(next);document.querySelector<HTMLElement>("[data-app-viewport]")?.scrollTo({top:0});}} />
           </>
         )}
       </div>
@@ -871,7 +857,7 @@ function FilterDropdown({
         className={`inline-flex h-10 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition ${
           active
             ? "border-[var(--color-primary-600)] bg-[var(--color-primary-50)] text-[var(--color-primary-700)]"
-            : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
+            : "border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] hover:border-neutral-400"
         }`}
       >
         {label}
@@ -884,7 +870,7 @@ function FilterDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-neutral-200 bg-white p-3 shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-2 w-64 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-3 shadow-lg">
           {children}
         </div>
       )}
@@ -902,7 +888,7 @@ function OptionList({
   onToggle: (value: string) => void;
 }) {
   if (options.length === 0) {
-    return <p className="p-1 text-sm text-neutral-400">Henüz seçenek yok.</p>;
+    return <p className="p-1 text-sm text-[var(--color-text-muted)]">Henüz seçenek yok.</p>;
   }
 
   return (
@@ -915,7 +901,7 @@ function OptionList({
             key={option}
             type="button"
             onClick={() => onToggle(option)}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm text-neutral-700 transition hover:bg-neutral-50"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
           >
             <span
               className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${

@@ -4,8 +4,9 @@ import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { DirectoryFreelancerCard } from "@/components/freelancers/DirectoryFreelancerCard";
 import { useFeatured } from "@/lib/hooks/useFeatured";
 import { splitFeatured } from "@/lib/visibility/featured";
-import { directoryReturnHref } from "@/components/freelancers/directoryPresentation";
+import { directoryReturnHref, paginateDirectory } from "@/components/freelancers/directoryPresentation";
 import { panelRootClass } from "@/components/dashboard/PanelPrimitives";
+import { Pagination } from "@/components/ui/Pagination";
 import { buttonClasses } from "@/components/ui/Button";
 import styles from "@/components/freelancers/FreelancerDirectory.module.css";
 import { useSearchParams } from "next/navigation";
@@ -55,6 +56,7 @@ function FreelancersContent() {
   const featuredIds=useFeatured("profile");
   const coalitionId = searchParams.get("coalitionId");
 
+  const [page,setPage]=useState(Number(searchParams.get("page")??1));
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [search, setSearch] = useState(searchParams.get("q")??"");
   const [categoryFilter, setCategoryFilter] = useState(searchParams.get("category")??"Tümü");
@@ -196,12 +198,15 @@ function FreelancersContent() {
 
   useEffect(()=>{
     if(loading) return;
-    const frame=requestAnimationFrame(()=>{try{const key="directory-scroll:"+directoryReturnHref(coalitionId,search,categoryFilter);const saved=sessionStorage.getItem(key);if(saved!==null){sessionStorage.removeItem(key);window.scrollTo({top:Number(saved)||0});}}catch{}});
+    const frame=requestAnimationFrame(()=>{try{const key="directory-scroll:"+directoryReturnHref(coalitionId,search,categoryFilter,page);const saved=sessionStorage.getItem(key);if(saved!==null){sessionStorage.removeItem(key);const viewport=document.querySelector<HTMLElement>("[data-freelancer-viewport]");if(viewport)viewport.scrollTo({top:Number(saved)||0});else window.scrollTo({top:Number(saved)||0});}}catch{}});
     return ()=>cancelAnimationFrame(frame);
-  },[loading,coalitionId,search,categoryFilter]);
+  },[loading,coalitionId,search,categoryFilter,page]);
 
   const featuredGroups=splitFeatured(filteredProfiles,featuredIds);
   const orderedProfiles=[...featuredGroups.featured,...featuredGroups.normal];
+  const changePage=(nextPage:number)=>{setPage(nextPage);document.querySelector<HTMLElement>("[data-freelancer-viewport]")?.scrollTo({top:0});};
+  const pagination=paginateDirectory(orderedProfiles,page);
+  const pageFeaturedCount=pagination.items.filter(profile=>featuredIds.has(profile.id)).length;
   const getFullName = (profile: Profile) => publicDisplayName(profile, "İsimsiz Freelancer");
 
   const getInitials = (profile: Profile) => displayInitial(profile);
@@ -373,7 +378,7 @@ function FreelancersContent() {
               <input
                 type="text"
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {setPage(1);setSearch(event.target.value);}}
                 aria-label="Freelancer veya beceri ara"
                 placeholder="Freelancer, uzmanlık veya yetenek ara..."
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400 focus:bg-white"
@@ -389,7 +394,7 @@ function FreelancersContent() {
               <select aria-label="Proje kategorisi"
                 value={categoryFilter}
                 onChange={(event) =>
-                  setCategoryFilter(event.target.value)
+                  {setPage(1);setCategoryFilter(event.target.value);}
                 }
                 className="w-full appearance-none rounded-xl border border-gray-200 bg-gray-50 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-gray-400 focus:bg-white"
               >
@@ -407,7 +412,7 @@ function FreelancersContent() {
 
         {!loading && !error && (
           <div className="mb-4 text-sm text-gray-500">
-            {filteredProfiles.length} freelancer gösteriliyor
+            {pagination.total ? pagination.start+1 : 0}–{pagination.end} / {pagination.total} freelancer
           </div>
         )}
 
@@ -433,25 +438,25 @@ function FreelancersContent() {
             <p className="mt-1 text-sm text-gray-500">
               Arama veya filtre kriterlerini değiştirmeyi dene.
             </p>
-            {(search || categoryFilter!=="Tümü") && <button type="button" className={buttonClasses({variant:"secondary",size:"sm",className:"mt-4"})} onClick={()=>{setSearch("");setCategoryFilter("Tümü");}}>Filtreleri temizle</button>}
+            {(search || categoryFilter!=="Tümü") && <button type="button" className={buttonClasses({variant:"secondary",size:"sm",className:"mt-4"})} onClick={()=>{setPage(1);setSearch("");setCategoryFilter("Tümü");}}>Filtreleri temizle</button>}
           </div>
         )}
 
         {!loading && !error && filteredProfiles.length > 0 && (
           <div className={styles.grid}>
-            {orderedProfiles.map((profile,index) => {
+            {pagination.items.map((profile,index) => {
               const memberStatus = getMemberStatus(profile.id);
               const suggestionAllowed = canSuggest(profile);
 
               return (
                 <Fragment key={profile.id}>
-                {index===0&&featuredGroups.featured.length>0&&<h2 className={styles.featuredHeading}>Öne Çıkan Freelancerlar</h2>}
-                {index===featuredGroups.featured.length&&featuredGroups.featured.length>0&&<h2 className={styles.featuredHeading}>Freelancerlar</h2>}
+                {index===0&&pageFeaturedCount>0&&<h2 className={styles.featuredHeading}>Öne Çıkan Freelancerlar</h2>}
+                {index===pageFeaturedCount&&pageFeaturedCount>0&&<h2 className={styles.featuredHeading}>Freelancerlar</h2>}
                 <DirectoryFreelancerCard
                   featured={featuredIds.has(profile.id)}
                   key={profile.id}
                   profile={profile}
-                  returnTo={directoryReturnHref(coalitionId,search,categoryFilter)}
+                  returnTo={directoryReturnHref(coalitionId,search,categoryFilter,pagination.page)}
                   action={
                     coalitionId ? (
                       <button
@@ -483,6 +488,7 @@ function FreelancersContent() {
             })}
           </div>
         )}
+        {!loading && !error && <Pagination page={pagination.page} totalPages={pagination.totalPages} onChange={changePage} label="Freelancer sayfaları" />}
       </div>
 
       {selectedProfile && (

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import {DiscoveryMatchBadge} from "@/components/discovery/DiscoveryMatchBadge";
 
 import { Avatar } from "@/components/ui/Avatar";
+import { Card } from "@/components/ui/Card";
+import { buttonClasses } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { publicDisplayName } from "@/lib/utils/displayName";
 
@@ -52,12 +54,16 @@ export function FreelancerCard({
   freelancer,
   viewerRole,
   matchScore,
+  matchContext,
+  matchReason,
   action,
   className = "",
 }: {
   freelancer: FreelancerCardData;
   viewerRole: "client" | "freelancer";
   matchScore?: number;
+  matchContext?: string;
+  matchReason?: string;
   /** Optional extra action rendered alongside "Profili İncele" (e.g. a coalition-invite button). */
   action?: React.ReactNode;
   className?: string;
@@ -78,9 +84,9 @@ export function FreelancerCard({
   const hasMetrics = hasRate || Boolean(freelancer.experience);
 
   return (
-    <div
+    <Card density="compact" hoverable
       className={[
-        "flex flex-col gap-4 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] p-5 transition hover:border-[var(--color-border-strong)] sm:flex-row",
+        "flex flex-col gap-4 sm:flex-row",
         className,
       ].join(" ")}
     >
@@ -99,9 +105,7 @@ export function FreelancerCard({
               </Link>
 
               {typeof matchScore === "number" && (
-                <Badge tone="ai" className="shrink-0 gap-1">
-                  <Sparkles size={11} />%{Math.round(matchScore)} eşleşme
-                </Badge>
+                <DiscoveryMatchBadge score={matchScore} />
               )}
             </div>
 
@@ -116,6 +120,9 @@ export function FreelancerCard({
             {freelancer.bio}
           </p>
         )}
+
+        {matchContext && <p className="cc-body-sm mt-2 break-words text-[var(--color-text-secondary)]">Eşleşme: {matchContext}</p>}
+        {matchReason && <p className="cc-body-sm mt-1 line-clamp-2 text-[var(--color-text-secondary)]">{matchReason}</p>}
 
         {visibleSkills.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -167,7 +174,7 @@ export function FreelancerCard({
         <div className="mt-auto flex flex-col gap-2">
           <Link
             href={href}
-            className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-[var(--color-border-subtle)] text-[13px] font-medium text-[var(--color-text-primary)] transition hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)]"
+            className={buttonClasses({variant:"secondary",size:"sm",className:"w-full"})}
           >
             Profili İncele
           </Link>
@@ -175,7 +182,7 @@ export function FreelancerCard({
           {action}
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 

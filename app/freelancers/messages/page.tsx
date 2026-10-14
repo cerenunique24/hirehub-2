@@ -1,4 +1,6 @@
 "use client";
+import { PageHeader, pageHeaderClass } from "@/components/ui/PageHeader";
+import shellStyles from "@/components/layout/FreelancerShell.module.css";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -1275,16 +1277,8 @@ function FreelancerMessagesContent() {
     );
 
   return (
-    <main className="w-full p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">
-          Mesajlar
-        </h1>
-
-        <p className="mt-2 text-sm text-gray-500">
-          Müşteriler ve ekiplerle iletişimini yönet.
-        </p>
-      </div>
+    <main className={shellStyles.workspacePage}>
+      <PageHeader className={pageHeaderClass} title="Mesajlar" description="Müşteriler ve ekiplerle iletişimini yönet." />
 
       {loadError && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1292,7 +1286,7 @@ function FreelancerMessagesContent() {
         </div>
       )}
 
-      <div className="flex h-[calc(100vh-220px)] w-full overflow-hidden rounded-2xl border border-gray-200 bg-white">
+      <div className={[shellStyles.messages,"flex w-full overflow-hidden rounded-2xl border border-gray-200 bg-white"].join(" ")}>
         {/* SOL PANEL — mobilde bir konuşma seçildiğinde gizlenir, sohbet paneli tam ekran olur */}
         <div
           className={`w-full shrink-0 flex-col border-gray-200 md:flex md:w-[340px] md:border-r ${
@@ -1836,7 +1830,7 @@ export default function FreelancerMessagesPage() {
   return (
     <Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center">
+        <main className="flex items-center justify-center">
           <div className="text-sm text-gray-400">
             Mesajlar yükleniyor...
           </div>

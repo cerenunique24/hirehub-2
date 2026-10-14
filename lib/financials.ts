@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { earningsBucketFor } from "@/lib/payments/status";
 import { calculateFreelancerNet } from "@/lib/pricing";
+import {financialAmount,approvedInMonth} from "@/lib/payments/earningsPresentation";
 
 /**
  * CollaCrew'da henüz gerçek bir ödeme altyapısı (payment gateway) yok.
@@ -15,8 +16,8 @@ import { calculateFreelancerNet } from "@/lib/pricing";
  *    / freelancer tarafında, "Tamamlanan İşler" client tarafında).
  *  - pending: henüz onaylanmamış/tamamlanmamış kısım ("Bekleyen Hakediş").
  *
- * Ödeme durumu diye bir alan YOKTUR — UI bunu ayrı ve açık şekilde
- * "ödeme altyapısı henüz aktif değil" olarak göstermelidir.
+ * Milestone ödeme durumları mevcut; bunlar bir çekilebilir cüzdan bakiyesi
+ * veya withdrawal kaydı değildir. Sağlayıcı bağlantısı ayrıca gerekir.
  */
 
 export type ProjectFinancialLine = {
@@ -30,19 +31,26 @@ export type ProjectFinancialLine = {
   commissionRate?: number | null;
 };
 
+export type FreelancerEarningMovement = {
+  id:string;projectId:string;projectTitle:string;projectStatus:string|null;
+  title:string;status:string|null;paymentStatus:string|null;
+  createdAt:string;approvedAt:string|null;gross:number|null;net:number|null;
+  freelancerDeduction:number|null;clientPlatformFee:number|null;
+  provider:string|null;paymentReference:string|null;
+};
+
 export type FreelancerEarningsSummary = {
   totalEngagement: number;
   realizedEarnings: number;
   pendingEarnings: number;
-  /**
-   * Ödeme sağlayıcısı bağlandığında dolacak gruplar (milestone.payment_status'e
-   * göre): bekleyen / serbest bırakılabilir / ödenen. Sağlayıcı olmadığı için
-   * şu an availableEarnings ve paidEarnings 0'dır — sahte değer üretilmez.
-   */
+  /** Milestone state totals; release-eligible is not a withdrawable wallet balance. */
   paymentPending: number;
   availableEarnings: number;
   paidEarnings: number;
   projects: ProjectFinancialLine[];
+  movements?:FreelancerEarningMovement[];
+  approvedThisMonth?:number|null;
+  incompleteAmounts?:boolean;
 };
 
 export type ClientPaymentsSummary = {
@@ -65,12 +73,13 @@ export async function getFreelancerEarningsSummary(
   supabase: SupabaseClient,
   freelancerId: string
 ): Promise<FreelancerEarningsSummary> {
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("project_team_members")
     .select("project_id, proposal_id, agreed_amount")
     .eq("freelancer_id", freelancerId)
     .eq("status", "active");
 
+  if(membershipError)throw new Error("Anlaşma kayıtları yüklenemedi.");
   const rows = memberships ?? [];
   if (rows.length === 0) {
     return {
@@ -80,27 +89,29 @@ export async function getFreelancerEarningsSummary(
       paymentPending: 0,
       availableEarnings: 0,
       paidEarnings: 0,
-      projects: [],
+      projects: [],movements:[],approvedThisMonth:0,incompleteAmounts:false,
     };
   }
 
   const projectIds = [...new Set(rows.map((r) => r.project_id))];
   const proposalIds = rows.map((r) => r.proposal_id).filter((id): id is string => Boolean(id));
 
-  const [{ data: projects }, { data: proposals }, { data: milestones }] = await Promise.all([
-    supabase.from("projects").select("id, title, status").in("id", projectIds),
+  const [{ data: projects, error: projectError }, { data: proposals, error: proposalError }, { data: milestones, error: milestoneError }] = await Promise.all([
+    supabase.from("projects").select("id, title, status, team_required").in("id", projectIds),
     proposalIds.length > 0
       ? supabase.from("proposals").select("id, bid_amount").in("id", proposalIds)
-      : Promise.resolve({ data: [] as Array<{ id: string; bid_amount: number }> }),
+      : Promise.resolve({ data: [] as Array<{ id: string; bid_amount: number }>, error:null }),
     supabase
       .from("project_milestones")
-      .select("project_id, budget, status, payment_status, freelancer_id, freelancer_payout_amount")
+      .select("id, project_id, title, budget, status, payment_status, freelancer_id, freelancer_payout_amount, platform_fee_amount, payment_provider, provider_payment_id, approved_at, created_at")
       .in("project_id", projectIds),
   ]);
 
+  if(projectError||proposalError||milestoneError)throw new Error("Kazanç kayıtları yüklenemedi.");
+
   // Team projelerinde diğer üyelerin aşamaları bu freelancer'ın kazancına sayılmaz.
   const ownMilestones = (milestones ?? []).filter(
-    (m) => m.freelancer_id === null || m.freelancer_id === freelancerId
+    (m) => m.freelancer_id === freelancerId || (m.freelancer_id === null && projects?.find(p=>p.id===m.project_id)?.team_required === false)
   );
 
   let paymentPending = 0;
@@ -129,11 +140,12 @@ export async function getFreelancerEarningsSummary(
     const projectMilestones = ownMilestones.filter((m) => m.project_id === project.id);
     const approvedFromMilestones = projectMilestones
       .filter((m) => m.status === "approved")
-      .reduce((sum, m) => sum + toNumber(m.budget), 0);
-
+      .reduce((sum, m) => sum + toNumber(m.freelancer_payout_amount ?? calculateFreelancerNet(toNumber(m.budget))), 0);
+    const stagedGross=projectMilestones.reduce((sum,m)=>sum+toNumber(m.budget),0);
+    const pendingFromMilestones=projectMilestones.filter(m=>m.status!=="approved"&&!['cancelled','refunded'].includes(m.payment_status??'pending')).reduce((sum,m)=>sum+toNumber(m.freelancer_payout_amount??calculateFreelancerNet(toNumber(m.budget))),0);
     const isCompleted = project.status === "completed";
-    const approvedValue = isCompleted ? engagementValue : Math.min(approvedFromMilestones, engagementValue);
-    const pendingValue = isCompleted ? 0 : Math.max(engagementValue - approvedValue, 0);
+    const approvedValue = isCompleted&&projectMilestones.length===0 ? calculateFreelancerNet(engagementValue) : Math.min(approvedFromMilestones, calculateFreelancerNet(engagementValue));
+    const pendingValue = isCompleted||project.status==='cancelled' ? 0 : Math.min(calculateFreelancerNet(engagementValue),pendingFromMilestones+calculateFreelancerNet(Math.max(engagementValue-stagedGross,0)));
 
     return {
       projectId: project.id,
@@ -145,7 +157,14 @@ export async function getFreelancerEarningsSummary(
     };
   });
 
+  const movements:FreelancerEarningMovement[]=ownMilestones.map(m=>{
+    const project=projects?.find(p=>p.id===m.project_id);
+    const gross=financialAmount(m.budget),net=financialAmount(m.freelancer_payout_amount)??(gross===null?null:calculateFreelancerNet(gross));
+    return {id:m.id,projectId:m.project_id,projectTitle:project?.title??"Proje bilgisi görünmüyor",projectStatus:project?.status??null,title:m.title,status:m.status,paymentStatus:m.payment_status,createdAt:m.created_at,approvedAt:m.approved_at,gross,net,freelancerDeduction:gross!==null&&net!==null&&net<=gross?Math.round((gross-net)*100)/100:null,clientPlatformFee:financialAmount(m.platform_fee_amount),provider:m.payment_provider,paymentReference:m.provider_payment_id};
+  }).sort((a,b)=>Date.parse(b.approvedAt??b.createdAt)-Date.parse(a.approvedAt??a.createdAt));
+  const incompleteAmounts=rows.some(row=>financialAmount(row.agreed_amount)===null&&financialAmount(proposals?.find(p=>p.id===row.proposal_id)?.bid_amount)===null)||movements.some(m=>m.net===null||m.gross===null)||rows.some(row=>!projects?.some(p=>p.id===row.project_id));
   return {
+    movements,approvedThisMonth:approvedInMonth(movements),incompleteAmounts,
     totalEngagement: lines.reduce((sum, l) => sum + l.engagementValue, 0),
     realizedEarnings: lines.reduce((sum, l) => sum + l.approvedValue, 0),
     pendingEarnings: lines.reduce((sum, l) => sum + l.pendingValue, 0),

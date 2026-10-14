@@ -1,4 +1,6 @@
 "use client";
+import { NotificationRows } from "@/components/notifications/NotificationRows";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -431,36 +433,11 @@ export default function NotificationsPage() {
     setMarkingAll(false);
   };
 
-  const getTypeBadgeClass = (type: string) => {
-    switch (type) {
-      case "Finans":
-        return "bg-green-100 text-green-700";
-
-      case "Ekip":
-        return "bg-[var(--color-info-50)] text-[var(--color-info-600)]";
-
-      case "Proje":
-        return "bg-blue-100 text-blue-700";
-
-      case "Teklif":
-        return "bg-amber-50 text-amber-700";
-
-      case "Mesaj":
-        return "bg-orange-100 text-orange-700";
-
-      case "Destek":
-        return "bg-purple-100 text-purple-700";
-
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-
   return (
-    <main className="w-full p-5 md:p-8">
+    <main className="w-full">
       <div className="mx-auto w-full max-w-[80rem]">
         {/* Başlık */}
-        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className={pageHeaderClass}>
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">
               Bildirimler
@@ -511,7 +488,7 @@ export default function NotificationsPage() {
         </div>
 
         {/* Filtreler */}
-        <div className="mb-8 flex gap-3 overflow-x-auto pb-1">
+        <div className="cc-horizontal-nav mb-8 flex gap-3 pb-1">
           <button
             type="button"
             onClick={() => setActiveFilter("all")}
@@ -633,105 +610,7 @@ export default function NotificationsPage() {
           </div>
         ) : (
           /* Bildirim Listesi */
-          <div className="w-full space-y-5">
-            {filteredNotifications.map(
-              (notification) => {
-                const type = getNotificationType(
-                  notification.type
-                );
-
-                return (
-                  <div
-                    key={notification.id}
-                    className={`
-                      flex
-                      w-full
-                      items-center
-                      justify-between
-                      gap-6
-                      rounded-2xl
-                      border
-                      bg-white
-                      p-6
-                      transition
-                      ${
-                        notification.is_read
-                          ? "border-gray-200"
-                          : "border-[var(--color-primary-600)]/20"
-                      }
-                    `}
-                  >
-                    {/* Sol Alan */}
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-3 flex flex-wrap items-center gap-3">
-                        <h2 className="text-lg font-semibold text-gray-900">
-                          {notification.title}
-                        </h2>
-
-                        <span
-                          className={`
-                            rounded-full
-                            px-3
-                            py-1
-                            text-xs
-                            ${getTypeBadgeClass(type)}
-                          `}
-                        >
-                          {type}
-                        </span>
-
-                        {!notification.is_read && (
-                          <span
-                            className="
-                              h-2
-                              w-2
-                              rounded-full
-                              bg-[var(--color-primary-600)]
-                            "
-                            aria-label="Okunmamış"
-                          />
-                        )}
-                      </div>
-
-                      {notification.message && (
-                        <p className="mb-4 text-sm leading-6 text-gray-500">
-                          {notification.message}
-                        </p>
-                      )}
-
-                      <span className="text-xs text-gray-400">
-                        {formatDate(
-                          notification.created_at
-                        )}
-                      </span>
-                    </div>
-
-                    {/* Aksiyon */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void markAsRead(notification)
-                      }
-                      className="
-                        shrink-0
-                        rounded-xl
-                        bg-gray-100
-                        px-5
-                        py-2.5
-                        text-sm
-                        font-medium
-                        text-gray-700
-                        transition
-                        hover:bg-gray-200
-                      "
-                    >
-                      Görüntüle
-                    </button>
-                  </div>
-                );
-              }
-            )}
-          </div>
+          <NotificationRows notifications={filteredNotifications} getType={getNotificationType} formatDate={formatDate} onOpen={notification => void markAsRead(notification as Notification)} />
         )}
       </div>
     </main>

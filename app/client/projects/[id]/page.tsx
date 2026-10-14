@@ -1,15 +1,16 @@
 ﻿"use client";
 
+import { buttonClasses } from "@/components/ui/Button";
 import Link from "next/link";
 import { Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft,
-  CheckCircle2,
   PlayCircle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ProjectDetailSurface, ProjectDetailState } from "@/components/projects/ProjectDetailSurface";
+
 import ProjectWorkroom from "@/components/projects/ProjectWorkroom";
 import ProjectAnalyticsPanel from "@/components/premium/client/ProjectAnalyticsPanel";
 import AiShortlistPanel from "@/components/premium/client/AiShortlistPanel";
@@ -45,55 +46,6 @@ type TeamMember = {
   memberRole: string;
   proposalId: string | null;
 };
-
-function getStatusLabel(status: string | null) {
-  switch (status) {
-    case "open":
-      return "Yayında";
-    case "ready_to_start":
-      return "Ekip hazır";
-    case "in_progress":
-      return "Devam ediyor";
-    case "completed":
-      return "Tamamlandı";
-    case "cancelled":
-      return "İptal edildi";
-    default:
-      return status || "Bilinmiyor";
-  }
-}
-
-// Semantik renk sistemi: aktif/devam eden/yayında → primary blue,
-// tamamlanan/kabul edilen → yeşil, bekleyen → amber, iptal/reddedilen →
-// kırmızı-nötr.
-function getStatusClass(status: string | null) {
-  switch (status) {
-    case "open":
-      return "border-[var(--color-primary-600)]/20 bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
-    case "ready_to_start":
-      return "border-amber-200 bg-amber-50 text-amber-700";
-    case "in_progress":
-      return "border-[var(--color-primary-600)]/20 bg-[var(--color-primary-50)] text-[var(--color-primary-700)]";
-    case "completed":
-      return "border-green-200 bg-green-50 text-green-700";
-    case "cancelled":
-      return "border-red-200 bg-red-50 text-red-700";
-    default:
-      return "border-gray-200 bg-gray-50 text-gray-600";
-  }
-}
-
-function formatCurrency(value: number | null) {
-  if (value === null || value === undefined) {
-    return "Belirtilmedi";
-  }
-
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 function ClientProjectDetailContent() {
   const params = useParams();
@@ -324,214 +276,20 @@ function ClientProjectDetailContent() {
     setStarting(false);
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
-            <p className="text-sm text-gray-500">
-              Proje yükleniyor...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !project) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-        <div className="mx-auto max-w-5xl">
-          <Link
-            href="/client/projects"
-            className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Projelere dön
-          </Link>
-
-          <div className="rounded-xl border border-red-100 bg-white p-6 shadow-sm">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Proje görüntülenemedi
-            </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              {error || "Aradığınız proje bulunamadı."}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const isStarted =
-    project.status === "in_progress" ||
-    project.status === "completed";
-
+  if (loading) return <ProjectDetailState backHref="/client/projects" loading/>;
+  if (error || !project) return <ProjectDetailState backHref="/client/projects" error={error}/>;
+  const isStarted = project.status === "in_progress" || project.status === "completed";
   const canStart = project.status === "ready_to_start";
-
-  return (
-    <div className="min-h-screen bg-gray-50 p-5 sm:p-8">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <Link
-            href="/client/projects"
-            className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
-          >
-            <ArrowLeft size={16} />
-            Projelere dön
-          </Link>
-
-          {cameFromMessages && backToMessagesUser && (
-            <Link
-              href={`/client/messages?user=${encodeURIComponent(
-                backToMessagesUser
-              )}${
-                backToMessagesProposal
-                  ? `&proposal=${encodeURIComponent(
-                      backToMessagesProposal
-                    )}`
-                  : ""
-              }`}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-gray-300"
-            >
-              <ArrowLeft size={16} />
-              Mesaja dön
-            </Link>
-          )}
-        </div>
-
-        <div className="space-y-5">
-          {/* HEADER */}
-          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-              <div className="min-w-0">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <span
-                    className={
-                      "rounded-full border px-3 py-1 text-xs font-medium " +
-                      getStatusClass(project.status)
-                    }
-                  >
-                    {getStatusLabel(project.status)}
-                  </span>
-
-                  {project.project_type && (
-                    <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
-                      {project.project_type}
-                    </span>
-                  )}
-                </div>
-
-                <h1 className="text-3xl font-semibold tracking-[-0.01em] text-gray-900">
-                  {project.title}
-                </h1>
-
-                <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-gray-600">
-                  {project.description}
-                </p>
-              </div>
-
-              <div className="shrink-0 rounded-xl border border-gray-100 bg-gray-50 px-5 py-4">
-                <p className="text-xs font-medium text-gray-500">
-                  Bütçe
-                </p>
-                <p className="mt-1 text-xl font-semibold text-gray-900">
-                  {formatCurrency(project.budget)}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* ÇALIŞMA ALANI — Genel Bakış / Aşamalar / Ekip / Dosyalar /
-              Mesajlar / Teslimler. Proje henüz başlamamış olsa bile burada
-              (accept edilen ekip üyeleri, coalition mesajlaşması, dosyalar
-              zaten proje başlamadan önce de kullanılabilir durumda). */}
-          <ProjectWorkroom
-            project={{
-              id: project.id,
-              client_id: project.client_id,
-              title: project.title,
-              budget: project.budget,
-              status: project.status,
-              deadline: project.deadline,
-              requirements_confirmed_at: project.requirements_confirmed_at,
-              requirements_note: project.requirements_note,
-            }}
-            onProjectChanged={() => void loadProject()}
-            teamMembers={teamMembers}
-            viewerRole="client"
-            messagesBasePath="/client/messages"
-            isTeamProject={Boolean(project.team_required)}
-            coalitionId={coalitionId}
-            onProjectCompleted={() =>
-              setProject((current) => (current ? { ...current, status: "completed" } : current))
-            }
-          />
-
-          {!isStarted && (
-            <>
-          {/* PROJECT INFO */}
-          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 size={20} className="text-gray-700" />
-
-              <h2 className="text-lg font-semibold text-gray-900">
-                Proje bilgileri
-              </h2>
-            </div>
-
-            <div className="mt-6">
-              <p className="text-xs font-medium text-gray-500">
-                Proje tipi
-              </p>
-
-              <p className="mt-2 text-sm text-gray-800">
-                {project.project_type || "Belirtilmedi"}
-              </p>
-            </div>
-          </section>
-
-          {/* SKILLS */}
-          {project.skills && project.skills.length > 0 && (
-            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm sm:p-8">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Gerekli yetenekler
-              </h2>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {project.skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-700"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* PREMIUM: PROJECT ANALYTICS + AI SHORTLIST */}
-          <ProjectAnalyticsPanel />
-          <AiShortlistPanel projectId={project.id} />
-
-          {canStart && (
-            <RequirementsConfirmation
-              ready={requirementsReady}
-              note={requirementsNote}
-              onReadyChange={setRequirementsReady}
-              onNoteChange={setRequirementsNote}
-            />
-          )}
-
-          {/* ACTIONS */}
-          <div className="flex flex-wrap gap-3">
+  const messageHref = cameFromMessages && backToMessagesUser
+    ? `/client/messages?user=${encodeURIComponent(backToMessagesUser)}${backToMessagesProposal?"&proposal="+encodeURIComponent(backToMessagesProposal):""}` : undefined;
+  return <ProjectDetailSurface role="client" project={project} backHref="/client/projects" messageHref={messageHref} memberCount={teamMembers.length} coalitionId={coalitionId}
+    actions={!isStarted?<>
             {canStart && (
               <button
                 type="button"
                 onClick={() => void handleStartProject()}
                 disabled={starting || !requirementsReady}
-                className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-50"
+                className={buttonClasses({variant:"primary"})}
               >
                 <PlayCircle size={16} />
                 {starting ? "Başlatılıyor..." : "Projeyi Başlat"}
@@ -542,43 +300,43 @@ function ClientProjectDetailContent() {
               <>
                 <Link
                   href={`/client/projects/${project.id}/edit`}
-                  className="rounded-xl bg-[var(--color-primary-600)] px-5 py-3 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                  className={buttonClasses({variant:"primary"})}
                 >
                   Projeyi düzenle
                 </Link>
 
                 <Link
                   href="/client/proposals"
-                  className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
                 >
                   Teklifleri görüntüle ({proposalCount})
                 </Link>
               </>
             )}
 
-            <Link
-              href="/client/projects"
-              className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-            >
-              Projelere dön
-            </Link>
-          </div>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+    </>:null}>
+    {canStart&&<RequirementsConfirmation ready={requirementsReady} note={requirementsNote} onReadyChange={setRequirementsReady} onNoteChange={setRequirementsNote}/>}
+    <ProjectWorkroom
+      identityShownAbove
+      key={searchParams.get("tab")==="milestones"?"milestones":"overview"}
+      initialTab={searchParams.get("tab")==="milestones"?"milestones":"overview"}
+      project={project}
+      onProjectChanged={()=>void loadProject()}
+      teamMembers={teamMembers}
+      viewerRole="client"
+      messagesBasePath="/client/messages"
+      isTeamProject={Boolean(project.team_required)}
+      coalitionId={coalitionId}
+      onProjectCompleted={()=>setProject(current=>current?{...current,status:"completed"}:current)}
+    />
+    {!isStarted&&<><ProjectAnalyticsPanel/><AiShortlistPanel projectId={project.id}/></>}
+  </ProjectDetailSurface>;
 }
 
 export default function ClientProjectDetailPage() {
   return (
     <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
-          <p className="text-sm text-gray-500">Proje yükleniyor...</p>
-        </div>
-      }
+      fallback={<ProjectDetailState backHref="/client/projects" loading/>}
     >
       <ClientProjectDetailContent />
     </Suspense>

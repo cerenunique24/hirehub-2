@@ -465,11 +465,11 @@ export default function OffersPage() {
   return (
     <main className={[panelRootClass, styles.page].join(" ")}>
       <header className={styles.header}>
-        <div><span className={styles.eyebrow}>Teklif merkezi</span>
-          <h1>Tekliflerin</h1>
+        <div className={styles.headerCopy}>
+          <h1>Tekliflerim</h1>
           <p>Gönderdiğin teklifleri takip et, gelen davetlerini incele ve yeni fırsatlara hazırlan.</p>
         </div>
-        <DashboardMascot pose="pencil" size={130} className={styles.mascot} eager />
+        <DashboardMascot pose="pencil" size={160} className={styles.mascot} eager />
       </header>
 
       {justSubmitted && (
@@ -479,15 +479,15 @@ export default function OffersPage() {
       )}
 
       {/* Üst tablar: Gönderilen / Gelen */}
-      <div className="mb-6 flex gap-2 border-b border-gray-200">
+      <div className={`cc-horizontal-nav ${styles.typeTabs}`}>
         <button
           type="button"
           aria-pressed={activeTab === "sent"}
           onClick={() => setActiveTab("sent")}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "sent"
-              ? "border-[var(--color-primary-600)] text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-800"
+              ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           }`}
         >
           <ArrowUpFromLine className="h-4 w-4" />
@@ -503,8 +503,8 @@ export default function OffersPage() {
           onClick={() => setActiveTab("received")}
           className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
             activeTab === "received"
-              ? "border-[var(--color-primary-600)] text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-800"
+              ? "border-[var(--color-primary-600)] text-[var(--color-primary-600)]"
+              : "border-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
           }`}
         >
           <ArrowDownToLine className="h-4 w-4" />

@@ -1,0 +1,13 @@
+.root{--nav-font-size:var(--font-size-label);--nav-font-weight:var(--weight-label);--nav-active-weight:var(--weight-h2);--nav-item-height:var(--control-height-lg);--nav-item-radius:var(--radius-nav)}
+.navigation{padding-top:var(--space-4)}
+.root .item{height:var(--nav-item-height);border-radius:var(--nav-item-radius);font-size:var(--nav-font-size);font-weight:var(--nav-font-weight);line-height:var(--line-height-body-sm)}
+.root .item[aria-current=page]{font-weight:var(--nav-active-weight)}
+.root .item:focus-visible{outline:2px solid var(--color-primary-600);outline-offset:var(--space-1)}
+.navigation .groups{margin:0}.navigation .groups>div+div{margin-top:var(--space-3)}.navigation .divider{margin-top:var(--space-3)}
+.root .collapsedItem{padding-inline:0;gap:0;justify-content:center}
+
+.root{height:100dvh;min-height:0;max-height:100dvh;overflow:hidden}
+.root .navigation{flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-width:none;padding-bottom:var(--space-4);overscroll-behavior:contain}
+.root .navigation::-webkit-scrollbar{display:none}
+
+.header{composes:header from "./ShellHeader.module.css"}

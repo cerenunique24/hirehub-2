@@ -28,17 +28,17 @@ function ReviewSkeleton() {
 export function ProfileReviews({reviews,rating,failed,loading,hasMore,onLoadMore}:{reviews:ProfileReview[];rating:ProfileRating|null;failed:boolean;loading:boolean;hasMore:boolean;onLoadMore:()=>void}) {
  return <section id="reviews" className={styles.section} aria-busy={loading} aria-labelledby="reviews-heading">
   <h2 id="reviews-heading">Değerlendirmeler</h2>
-  {rating && <div className={styles.reviewSummary}><strong className={styles.reviewAverage}>{rating.average.toFixed(1)}<span>/ 5</span></strong><div><ReviewStars rating={rating.average}/><p>{rating.count} değerlendirme</p></div></div>}
+  {rating && <div className={styles.reviewSummary}><strong className={styles.reviewAverage}>{rating.average.toFixed(1)}</strong><div><ReviewStars rating={rating.average}/><p>{rating.count} değerlendirme</p></div></div>}
   {failed ? <p role="alert" className={styles.muted}>Değerlendirmeler yüklenemedi.</p>
   : loading && reviews.length===0 ? <ReviewSkeleton/>
-  : reviews.length===0 ? <div className={styles.reviewEmpty}><p>Henüz değerlendirme yok</p><p className={styles.muted}>Bu freelancer tamamlanan projelerden sonra değerlendirme aldığında burada görünecek.</p></div>
+  : reviews.length===0 ? <div className={styles.reviewEmpty}><p>Henüz değerlendirme yok</p><p className={styles.muted}>Tamamlanan projelerden sonra alınan değerlendirmeler burada görünür.</p></div>
   : <ul className={styles.reviews}>{reviews.map(review=>{
    const name=review.reviewerName || "Değerlendiren kullanıcı";
    return <li key={review.id} className={styles.reviewCard}><div className={styles.reviewHeading}>
-    <div className={styles.reviewIdentity}><ProfileAvatar src={review.reviewerAvatar} name={name} className={styles.reviewAvatar}/><div><strong>{name}</strong>{review.projectTitle && <p className={styles.reviewProject}>{review.projectTitle}</p>}<time className={styles.reviewMeta} dateTime={review.created_at}>{new Date(review.created_at).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"})}</time></div></div>
-    <div className={styles.reviewScore}><strong>{review.rating}/5</strong><ReviewStars rating={review.rating}/></div>
+    <div className={styles.reviewIdentity}><ProfileAvatar src={review.reviewerAvatar} name={name} className={styles.reviewAvatar}/><div><strong>{name}</strong>{review.projectTitle && <p className={styles.reviewProject}>{review.projectTitle}</p>}<span className={styles.reviewMeta}>{review.reviewer_role==="client"?"Client · ":review.reviewer_role==="freelancer"?"Freelancer · ":""}<time dateTime={review.created_at}>{new Date(review.created_at).toLocaleDateString("tr-TR",{day:"numeric",month:"long",year:"numeric"})}</time></span></div></div>
+    <div className={styles.reviewScore}><ReviewStars rating={review.rating}/><strong aria-label={`${review.rating} / 5 puan`}>{review.rating.toFixed(1)}</strong></div>
    </div>{review.comment ? <ReviewComment comment={review.comment}/> : <p className={styles.muted}>Yazılı yorum eklenmemiş.</p>}</li>;
   })}</ul>}
-  {hasMore && !failed && <button type="button" disabled={loading} className={styles.textAction} onClick={onLoadMore}>{loading ? "Yükleniyor…" : "Daha fazla yorum göster"}</button>}
+  {hasMore && !failed && <button type="button" disabled={loading} className={styles.textAction} onClick={onLoadMore}>{loading ? "Yükleniyor…" : "Daha fazla değerlendirme göster"}</button>}
  </section>;
 }

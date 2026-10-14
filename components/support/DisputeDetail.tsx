@@ -1,6 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Input";
+import { Loading } from "@/components/common/Loading";
+import { Card } from "@/components/ui/Card";
+import { panelRootClass } from "@/components/dashboard/PanelPrimitives";
+import styles from "./SupportCenter.module.css";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileText, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -126,21 +132,18 @@ export default function DisputeDetail({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center gap-2 p-12 text-sm text-gray-500">
-        <Loader2 size={18} className="animate-spin" />
-        Uyuşmazlık yükleniyor...
-      </div>
+      <div role="status"><Loading label="Uyuşmazlık yükleniyor…" /></div>
     );
   }
 
   if (!dispute) {
     return (
-      <div className="p-6">
-        <Link href={backHref} className="inline-flex items-center gap-2 text-sm text-gray-500">
+      <div className={panelRootClass+" "+styles.root}>
+        <Link href={backHref} className="inline-flex items-center gap-2 text-sm text-[var(--color-text-secondary)]">
           <ArrowLeft size={16} />
           Yardım
         </Link>
-        <p className="mt-6 rounded-xl bg-gray-50 p-4 text-sm text-gray-600">
+        <p className="mt-6 rounded-xl bg-[var(--panel-subtle)] p-4 text-sm text-[var(--color-text-secondary)]">
           Bu uyuşmazlık bulunamadı veya görüntüleme yetkiniz yok.
         </p>
       </div>
@@ -191,73 +194,73 @@ export default function DisputeDetail({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <Link href={backHref} className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900">
+    <div className={panelRootClass+" "+styles.root}>
+      <Link href={backHref} className={buttonClasses({variant:"secondary"})}>
         <ArrowLeft size={16} />
         Yardım
       </Link>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Uyuşmazlık</p>
-        <h1 className="mt-1 text-xl font-semibold text-gray-900">{projectTitle}</h1>
-        <p className="mt-1 text-sm text-gray-600">{DISPUTE_REASON_LABEL[dispute.reason] ?? dispute.reason}</p>
+      <Card className={styles.section}>
+        <p className="cc-body-sm font-medium uppercase tracking-wide text-[var(--color-text-secondary)]">Uyuşmazlık</p>
+        <h1 className="mt-1 cc-page-title text-[var(--color-text-primary)]">{projectTitle}</h1>
+        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{DISPUTE_REASON_LABEL[dispute.reason] ?? dispute.reason}</p>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
           <div>
-            <dt className="text-xs text-gray-400">Uyuşmazlığı açan</dt>
-            <dd className="font-medium text-gray-900">{openerRoleLabel}</dd>
+            <dt className="text-xs text-[var(--color-text-secondary)]">Uyuşmazlığı açan</dt>
+            <dd className="font-medium text-[var(--color-text-primary)]">{openerRoleLabel}</dd>
           </div>
           <div>
-            <dt className="text-xs text-gray-400">Karşı taraf</dt>
-            <dd className="font-medium text-gray-900">{counterpartyRoleLabel}</dd>
+            <dt className="text-xs text-[var(--color-text-secondary)]">Karşı taraf</dt>
+            <dd className="font-medium text-[var(--color-text-primary)]">{counterpartyRoleLabel}</dd>
           </div>
           <div>
-            <dt className="text-xs text-gray-400">Senin rolün</dt>
-            <dd className="font-medium text-gray-900">{myRoleLabel}</dd>
+            <dt className="text-xs text-[var(--color-text-secondary)]">Senin rolün</dt>
+            <dd className="font-medium text-[var(--color-text-primary)]">{myRoleLabel}</dd>
           </div>
         </dl>
-        <p className="mt-3 text-xs text-gray-400">Açılış: {formatDate(dispute.created_at)}</p>
-      </div>
+        <p className="mt-3 text-xs text-[var(--color-text-secondary)]">Açılış: {formatDate(dispute.created_at)}</p>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">Açıklama</h2>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+      <Card className={styles.section}>
+        <h2 className="cc-h2 text-[var(--color-text-primary)]">Açıklama</h2>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-secondary)]">
           {dispute.description || "Açıklama eklenmemiş."}
         </p>
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">Yanıtlar</h2>
+      <Card className={styles.section}>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Yanıtlar</h2>
         {noteEvidence.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">Henüz yazılı yanıt yok.</p>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Henüz yazılı yanıt yok.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-gray-100">
+          <ul className="mt-3 divide-y divide-[var(--color-border-subtle)]">
             {noteEvidence.map((e) => (
               <li key={e.id} className="py-3">
-                <p className="text-xs font-medium text-gray-500">
+                <p className="text-xs font-medium text-[var(--color-text-secondary)]">
                   {e.submitted_by === dispute.opened_by ? `${openerRoleLabel} · Açan taraf` : `${counterpartyRoleLabel} · Karşı taraf yanıtı`}
                   {e.submitted_by === currentUserId ? " (sen)" : ""}
                 </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-800">{e.note}</p>
-                <p className="mt-1 text-xs text-gray-400">{formatDate(e.created_at)}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-primary)]">{e.note}</p>
+                <p className="mt-1 text-xs text-[var(--color-text-secondary)]">{formatDate(e.created_at)}</p>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">Kanıtlar</h2>
+      <Card className={styles.section}>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Kanıtlar</h2>
         {fileEvidence.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">Henüz dosya kanıtı eklenmemiş.</p>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Henüz dosya kanıtı eklenmemiş.</p>
         ) : (
-          <ul className="mt-3 divide-y divide-gray-100">
+          <ul className="mt-3 divide-y divide-[var(--color-border-subtle)]">
             {fileEvidence.map((e) => (
               <li key={e.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <div>
-                  <p className="text-sm text-gray-800">
+                  <p className="text-sm text-[var(--color-text-primary)]">
                     {e.note || e.file_name || "Kanıt"}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-[var(--color-text-secondary)]">
                     {e.submitted_by === currentUserId ? "Sen ekledin" : "Karşı taraf ekledi"} · {formatDate(e.created_at)}
                   </p>
                 </div>
@@ -272,64 +275,64 @@ export default function DisputeDetail({
           </ul>
         )}
         {counterpartyEvidence.filter((e) => e.file_path).length === 0 && fileEvidence.length > 0 && (
-          <p className="mt-3 text-xs text-gray-400">Karşı taraf henüz dosya kanıtı eklemedi.</p>
+          <p className="mt-3 text-xs text-[var(--color-text-secondary)]">Karşı taraf henüz dosya kanıtı eklemedi.</p>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">Karşı taraf yanıtı</h2>
+      <Card className={styles.section}>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Karşı taraf yanıtı</h2>
         {canRespond ? (
           <div className="mt-3 space-y-3">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-[var(--color-text-secondary)]">
               Yanıtın resmi uyuşmazlık kaydına eklenir ve açan tarafa gösterilir. Bu alandan gönderilen yanıt sonradan
               değiştirilemez.
             </p>
-            <textarea
+            <Textarea
               value={responseDraft}
               onChange={(e) => setResponseDraft(e.target.value)}
               rows={4}
               maxLength={2000}
               placeholder="Uyuşmazlık hakkındaki açıklamanı yaz..."
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:border-gray-400"
+
             />
             {responseError && <p className="text-sm text-red-600">{responseError}</p>}
-            <button
+            <Button
               type="button"
               onClick={() => void submitResponse()}
               disabled={submittingResponse || responseDraft.trim().length === 0}
-              className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+
             >
               {submittingResponse && <Loader2 size={15} className="animate-spin" />}
               Yanıtı gönder
-            </button>
+            </Button>
           </div>
         ) : (
-          <p className="mt-2 text-sm text-gray-500">
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
             {isOpener
               ? "Uyuşmazlığı sen açtığın için yanıt alanı karşı tarafa aittir."
               : "Bu uyuşmazlık artık yanıt kabul etmiyor."}
           </p>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">İnceleme durumu</h2>
-        <p className="mt-2 text-sm text-gray-700">{DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}</p>
-        <p className="mt-3 text-sm text-gray-600">{NEXT_STEP[dispute.status] ?? ""}</p>
-      </section>
+      <Card className={styles.section}>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">İnceleme durumu</h2>
+        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{DISPUTE_STATUS_LABEL[dispute.status] ?? dispute.status}</p>
+        <p className="mt-3 text-sm text-[var(--color-text-secondary)]">{NEXT_STEP[dispute.status] ?? ""}</p>
+      </Card>
 
-      <section className="rounded-xl border border-gray-200 bg-white p-6">
-        <h2 className="text-sm font-semibold text-gray-900">Sonuç</h2>
+      <Card className={styles.section}>
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Sonuç</h2>
         {dispute.status === "resolved" || dispute.status === "closed" ? (
-          <div className="mt-2 space-y-2 text-sm text-gray-700">
+          <div className="mt-2 space-y-2 text-sm text-[var(--color-text-secondary)]">
             <p>{dispute.resolution_outcome ? DISPUTE_OUTCOME_LABEL[dispute.resolution_outcome] ?? dispute.resolution_outcome : "—"}</p>
-            {dispute.resolution && <p className="whitespace-pre-wrap text-gray-600">{dispute.resolution}</p>}
-            <p className="text-xs text-gray-400">Sonuçlanma: {formatDate(dispute.resolved_at)}</p>
+            {dispute.resolution && <p className="whitespace-pre-wrap text-[var(--color-text-secondary)]">{dispute.resolution}</p>}
+            <p className="text-xs text-[var(--color-text-secondary)]">Sonuçlanma: {formatDate(dispute.resolved_at)}</p>
           </div>
         ) : (
-          <p className="mt-2 text-sm text-gray-500">Henüz karar verilmedi.</p>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">Henüz karar verilmedi.</p>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

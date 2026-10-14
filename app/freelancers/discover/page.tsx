@@ -12,7 +12,6 @@ import {
   MapPin,
   Search,
   SlidersHorizontal,
-  Sparkles,
   Users,
   Wallet,
   X,
@@ -24,6 +23,8 @@ import EarlyAccessBanner from "@/components/premium/EarlyAccessBanner";
 import { selectBestEligibleRole } from "@/lib/matching/roleEligibility";
 import type { FreelancerRoleMatch } from "@/lib/ai/match-talent";
 import { getDaysRemaining } from "@/lib/utils/deadline";
+import { DiscoveryToolbar } from "@/components/discovery/DiscoveryToolbar";
+import { DiscoveryMatchBadge } from "@/components/discovery/DiscoveryMatchBadge";
 import { DiscoveryHero } from "@/components/discovery/DiscoveryHero";
 import styles from "@/components/discovery/Discovery.module.css";
 import { panelRootClass, PanelAction } from "@/components/dashboard/PanelPrimitives";
@@ -1024,7 +1025,7 @@ export default function DiscoverPage() {
         {/* Search / sort / filters                                          */}
         {/* ---------------------------------------------------------------- */}
 
-        <section className={styles.toolbar} aria-label="Proje arama ve filtreleme">
+        <DiscoveryToolbar label="Proje arama ve filtreleme">
           <div className={styles.toolbarRow}>
             {/* Search */}
 
@@ -1234,7 +1235,7 @@ export default function DiscoverPage() {
               )}
             </div>
           )}
-        </section>
+        </DiscoveryToolbar>
         <div className={styles.premiumNote}><EarlyAccessBanner /></div>
 
         {/* ---------------------------------------------------------------- */}
@@ -1382,10 +1383,7 @@ export default function DiscoverPage() {
                           <div className="mb-3 flex flex-wrap items-center gap-1.5">
                             {featuredGroups.featured.some(item=>item.id===project.id)&&<Badge tone="ai" className={styles.match}>Öne Çıkan</Badge>}
                             {project.category && <Badge tone="neutral" className={styles.category}>{project.category}</Badge>}
-                            <Badge tone="ai" className={["gap-1", styles.match].join(" ")}>
-                              <Sparkles className="h-3 w-3" />
-                              %{project.matchPercentage} eşleşme
-                            </Badge>
+                            <DiscoveryMatchBadge score={project.matchPercentage} />
                           </div>
 
                           <Link href={`/freelancers/discover/${project.id}`} className="block">

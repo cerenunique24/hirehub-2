@@ -1,0 +1,5 @@
+import type {ClientWorkspace} from "@/lib/ai/workspace";
+export type ProjectMatch={score:number;role:string;reason:string;projectId:string;projectTitle:string};
+/** Preserve one actual role result, never average unrelated roles or projects. */
+export function projectMatchResults(workspace:ClientWorkspace|null,projectId:string){const result:Record<string,ProjectMatch>={};if(!workspace?.project||workspace.project.id!==projectId)return result;for(const role of workspace.roles)for(const candidate of role.candidates){if(!Number.isFinite(candidate.score)||candidate.score<0||candidate.score>100)continue;const previous=result[candidate.freelancerId];if(!previous||candidate.score>previous.score)result[candidate.freelancerId]={score:candidate.score,role:role.role,reason:candidate.reason,projectId,projectTitle:workspace.project.title};}return result;}
+export function rankProjectResults<T extends {id:string}>(items:T[],matches:Record<string,ProjectMatch>){return [...items].sort((a,b)=>(matches[b.id]?.score??-1)-(matches[a.id]?.score??-1)||a.id.localeCompare(b.id));}

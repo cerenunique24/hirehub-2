@@ -1,12 +1,13 @@
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 export default function ClientInvitationsPage() {
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-semibold text-neutral-900">Invitations</h1>
-        <p className="mt-2 text-neutral-500">
+    <div className="w-full">
+      <div className={pageHeaderClass}>
+        <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">Invitations</h1>
+        <p className="mt-2 text-[var(--color-text-secondary)]">
           Send and manage invitations to freelancers and coalitions.
         </p>
-        <p className="mt-8 text-sm text-neutral-400">
+        <p className="mt-8 text-sm text-[var(--color-text-muted)]">
           No pending invitations. Invitations appear here after you publish a project.
         </p>
       </div>

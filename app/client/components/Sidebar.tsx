@@ -24,7 +24,7 @@ const menuGroups: SidebarMenuItem[][] = [
     { name: "Proje Oluştur", href: "/client/projects/new", icon: Plus },
   ],
   [
-    { name: "Freelancerlar", href: "/client/freelancers", icon: Users },
+    { name: "Freelancer Keşfet", href: "/client/freelancers", icon: Users },
     { name: "Projelerim", href: "/client/projects", icon: FolderKanban },
     { name: "Teklifler / Davetler", href: "/client/proposals", icon: FileText },
     { name: "Koalisyonlar", href: "/client/coalitions", icon: UsersRound },

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { PanelNavbarFrame } from "@/components/layout/PanelNavbarFrame";
 import {
   Search,
   Bell,
@@ -327,7 +328,7 @@ export default function DashboardNavbar() {
   };
 
   return (
-    <header className="relative flex h-16 items-center justify-between border-b border-gray-100 bg-white px-5 sm:px-8">
+    <PanelNavbarFrame>
       {/* Mobil menü butonu */}
       <button
         type="button"
@@ -611,6 +612,6 @@ export default function DashboardNavbar() {
           </Link>
         </div>
       )}
-    </header>
+    </PanelNavbarFrame>
   );
 }

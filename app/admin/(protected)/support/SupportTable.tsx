@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, LifeBuoy } from "lucide-react";
 
+import { TICKET_STATUS_LABEL, type TicketStatus } from "@/lib/support";
 import EmptyState from "../components/EmptyState";
 import Badge from "../components/Badge";
 import type { AdminSupportTicketListItem } from "./data";
@@ -17,9 +18,10 @@ function formatDate(value: string): string {
 }
 
 function statusVariant(status: string): "warning" | "info" | "success" | "neutral" {
-  if (status === "open") return "warning";
-  if (status === "in_progress" || status === "waiting_user") return "info";
-  if (status === "resolved" || status === "closed") return "success";
+  if (status === "open") return "info";
+  if (status === "in_progress") return "info";
+  if (status === "waiting_user") return "warning";
+  if (status === "resolved") return "success";
   return "neutral";
 }
 
@@ -67,7 +69,7 @@ export default function SupportTable({ tickets }: { tickets: AdminSupportTicketL
             <option value="all">Tüm durumlar</option>
             {statuses.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {TICKET_STATUS_LABEL[s as TicketStatus] ?? s}
               </option>
             ))}
           </select>
@@ -96,7 +98,7 @@ export default function SupportTable({ tickets }: { tickets: AdminSupportTicketL
                 <th className="px-4 py-3 font-medium">Kullanıcı</th>
                 <th className="px-4 py-3 font-medium">Öncelik</th>
                 <th className="px-4 py-3 font-medium">Durum</th>
-                <th className="px-4 py-3 font-medium">Tarih</th>
+                <th className="px-4 py-3 font-medium">Tarih / Son güncelleme</th>
               </tr>
             </thead>
             <tbody>
@@ -106,15 +108,16 @@ export default function SupportTable({ tickets }: { tickets: AdminSupportTicketL
                     <Link href={`/admin/support/${ticket.id}`} className="font-medium text-[#111111] hover:text-[#2563EB]">
                       {ticket.subject}
                     </Link>
+                    <p className="mt-1 text-[13px] text-[#4B5563]">{ticket.category ?? "Genel"}</p>
                   </td>
                   <td className="px-4 py-3 text-[#4B5563]">{ticket.requesterName}</td>
                   <td className="px-4 py-3">
                     <Badge>{ticket.priority}</Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={statusVariant(ticket.status)}>{ticket.status}</Badge>
+                    <Badge variant={statusVariant(ticket.status)}>{TICKET_STATUS_LABEL[ticket.status as TicketStatus] ?? ticket.status}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-[#4B5563]">{formatDate(ticket.createdAt)}</td>
+                  <td className="px-4 py-3 text-[#4B5563]">{formatDate(ticket.createdAt)}<p className="mt-1 text-[13px]">Güncellendi: {formatDate(ticket.updatedAt)}</p></td>
                 </tr>
               ))}
             </tbody>

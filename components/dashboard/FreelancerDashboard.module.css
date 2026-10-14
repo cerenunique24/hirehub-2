@@ -1,3 +1,4 @@
+.welcome { composes: header from "../ui/PageHeader.module.css"; }
 .dashboard {
   --surface-page: var(--panel-page);
   --surface-card: var(--panel-card);
@@ -14,19 +15,19 @@
   --success: #166534;
   --warning: #92400e;
   --danger: #b42318;
-  max-width: 1320px;
+
   margin: 0 auto;
-  padding: 4px 0 24px;
+  padding:0;
   color: var(--text);
   background: var(--surface-page);
   position: relative;
   isolation: isolate;
 }
 .dashboard::before { content: ""; position: absolute; inset: -32px -32px; background: var(--surface-page); z-index: -1; }
-.welcome { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 100px; margin-bottom: 18px; }
+
 .eyebrow { color: var(--blue); font-size: var(--panel-meta); font-weight: 600; letter-spacing: .045em; }
-.welcome h1 { font-size: 28px; font-weight: 600; line-height: 1.25; letter-spacing: -.03em; margin-top: 7px; }
-.welcomeCopy p { max-width: 580px; margin-top: 9px; font-size: var(--panel-body); line-height: 1.65; color: var(--secondary); }
+
+
 .welcomeActions { display: flex; flex-shrink: 0; align-items: center; gap: 18px; }
 .wave { width: 80px; height: 80px; flex-shrink: 0; object-fit: contain; }
 .buttonPrimary, .buttonSecondary { flex-shrink: 0; }
@@ -135,7 +136,7 @@
 .profileLink { display: inline-flex; align-items: center; gap: 7px; color: var(--secondary); font-size: var(--panel-meta); line-height: 1.6; padding: 0 3px; }
 @media (max-width: 1199px) {
   .welcomeActions { gap: 5px; }
-  .welcomeCopy p { max-width: 470px; }
+
   .grid { gap: 16px; }
 
   .taskList, .projectList { padding-inline: 15px; }
@@ -151,14 +152,14 @@
   .profileLink { grid-column: 1 / -1; }
   .wave { width: 80px; height: 80px; }
   .welcomeActions { flex-direction: column; gap: 4px; }
-  .welcome h1 { font-size: 25px; }
+
 }
 @media (max-width: 639px) {
   .dashboard { padding-top: 0; }
   .dashboard::before { inset: -20px -16px; }
-  .welcome { align-items: flex-start; gap: 10px; margin-bottom: 20px; }
-  .welcome h1 { font-size: 23px; }
-  .welcomeCopy p { font-size: var(--panel-body); }
+
+
+
   .welcomeActions { flex-shrink: 1; }
   .wave { width: 65px; height: 65px; }
   .welcomeActions .buttonPrimary svg { display: none; }
@@ -190,4 +191,4 @@
 
 .welcomeGroup { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .welcomeCopy { min-width: 0; }
-@media(max-width:639px) { .welcome { flex-wrap: wrap; } .welcomeGroup { align-items: flex-start; gap: 12px; width: 100%; } .welcomeActions { margin-left: 77px; flex-direction: row; } .welcomeActions .buttonPrimary svg { display: block; } .projectFooter .buttonSecondary { margin-left: auto; } }
+@media(max-width:639px) {  .welcomeGroup { align-items: flex-start; gap: 12px; width: 100%; } .welcomeActions {  flex-direction: row; } .welcomeActions .buttonPrimary svg { display: block; } .projectFooter .buttonSecondary { margin-left: auto; } }

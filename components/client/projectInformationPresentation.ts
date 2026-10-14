@@ -1,0 +1,3 @@
+export type DescriptionBlock={type:"paragraph"|"list";lines:string[]};
+/** Recognize explicit stored bullet/numbered lines only. Do not infer or rewrite requirements. */
+export function projectDescriptionBlocks(description:string):DescriptionBlock[]{const blocks:DescriptionBlock[]=[];let current:DescriptionBlock|null=null;for(const line of description.replace(/\r\n/g,"\n").split("\n")){if(!line.trim()){current=null;continue;}const bullet=line.match(/^\s*(?:[-*•✓]|\d+[.)])\s+(.+)$/u);const type=bullet?"list":"paragraph";if(!current||current.type!==type){current={type,lines:[]};blocks.push(current);}current.lines.push(bullet?bullet[1]:line);}return blocks;}

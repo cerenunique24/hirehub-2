@@ -277,8 +277,8 @@ export default function NewCoalitionPage() {
   };
 
   return (
-    <main className="w-full p-6">
-      <div className="mx-auto max-w-5xl">
+    <main className="w-full">
+      <div className="w-full">
         <Link
           href="/freelancers/coalitions"
           className="mb-6 inline-flex items-center gap-2 text-sm text-gray-500 transition hover:text-gray-900"
@@ -288,7 +288,7 @@ export default function NewCoalitionPage() {
         </Link>
 
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="cc-page-title text-[var(--color-text-primary)]">
             Koalisyon Oluştur
           </h1>
 

@@ -1,0 +1,6 @@
+.frame{composes:frame from "./AppShell.module.css";}
+.column{composes:column from "./AppShell.module.css";}
+.viewport{composes:viewport from "./AppShell.module.css";}
+.workspacePage{composes:workspacePage from "./AppShell.module.css";}
+.messages{composes:messages from "./AppShell.module.css";}
+.drawerOpen{composes:drawerOpen from "./AppShell.module.css";}

@@ -1,5 +1,9 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/Button";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { Tabs } from "@/components/ui/Tabs";
+import { pageHeaderClass } from "@/components/ui/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -14,7 +18,6 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { publicDisplayName } from "@/lib/utils/displayName";
-import { calculateClientPricing, formatRatePercent, getProjectCommissionRate } from "@/lib/pricing";
 import {
   checkAndUpdateProjectReadiness,
   describeAcceptPlacementError,
@@ -910,114 +913,34 @@ useEffect(() => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mx-auto max-w-7xl">
-        <div>
-          <h1 className="text-3xl font-semibold text-neutral-900">
+    <div className="w-full">
+      <div className="w-full">
+        <div className={pageHeaderClass}>
+          <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">
             Teklifler
           </h1>
 
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
             Freelancerlardan gelen teklifleri ve ekiplere gönderdiğiniz
             davetleri buradan yönetin.
           </p>
         </div>
 
         {/* Üst tablar: Gelen / Gönderilen */}
-        <div className="mt-6 flex gap-2 border-b border-neutral-200">
-          <button
-            type="button"
-            onClick={() => setActiveTab("received")}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-              activeTab === "received"
-                ? "border-[var(--color-primary-600)] text-neutral-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-800"
-            }`}
-          >
-            <ArrowDownToLine className="h-4 w-4" />
-            Gelen Teklifler
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-              {receivedCounts.all}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("sent")}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-              activeTab === "sent"
-                ? "border-[var(--color-primary-600)] text-neutral-900"
-                : "border-transparent text-neutral-500 hover:text-neutral-800"
-            }`}
-          >
-            <ArrowUpFromLine className="h-4 w-4" />
-            Gönderilen Teklifler
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
-              {sentCounts.all}
-            </span>
-          </button>
-        </div>
+<Tabs className="mb-6" value={activeTab} onChange={value=>setActiveTab(value as typeof activeTab)} items={[{value:"received",label:"Gelen Teklifler",count:receivedCounts.all,icon:<ArrowDownToLine size={16}/>},{value:"sent",label:"Gönderilen Teklifler",count:sentCounts.all,icon:<ArrowUpFromLine size={16}/> }]} />
 
         {/* Alt tablar: Tümü / Bekleyen / Kabul Edilen / Reddedilen */}
-        <div className="mt-6 flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => setFilterValue("all")}
-            className={`rounded-lg px-4 py-1.5 text-sm transition ${
-              filterValue === "all"
-                ? "bg-[var(--color-primary-600)] text-white"
-                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-            }`}
-          >
-            Tümü ({counts.all})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterValue("pending")}
-            className={`rounded-lg px-4 py-1.5 text-sm transition ${
-              filterValue === "pending"
-                ? "bg-[var(--color-primary-600)] text-white"
-                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-            }`}
-          >
-            Bekleyen ({counts.pending})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterValue("accepted")}
-            className={`rounded-lg px-4 py-1.5 text-sm transition ${
-              filterValue === "accepted"
-                ? "bg-[var(--color-primary-600)] text-white"
-                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-            }`}
-          >
-            Kabul Edilen ({counts.accepted})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setFilterValue("rejected")}
-            className={`rounded-lg px-4 py-1.5 text-sm transition ${
-              filterValue === "rejected"
-                ? "bg-[var(--color-primary-600)] text-white"
-                : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
-            }`}
-          >
-            Reddedilen ({counts.rejected})
-          </button>
-        </div>
+        <FilterBar label="Teklif durumuna göre filtrele" value={filterValue} onChange={value=>setFilterValue(value as typeof filterValue)} items={[{value:"all",label:"Tümü",count:counts.all},{value:"pending",label:"Bekleyen",count:counts.pending},{value:"accepted",label:"Kabul Edilen",count:counts.accepted},{value:"rejected",label:"Reddedilen",count:counts.rejected}]} />
 
         {activeTab === "received" && loading && (
-          <div className="mt-8 flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white p-10 text-sm text-neutral-500">
+          <div className="mt-8 flex items-center justify-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-sm text-[var(--color-text-secondary)]">
             <Loader2 size={18} className="animate-spin" />
             Teklifler yükleniyor...
           </div>
         )}
 
         {activeTab === "received" && !loading && error && (
-          <div className="mt-6 flex gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <div className="mt-6 flex gap-3 rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
             <AlertCircle
               size={18}
               className="mt-0.5 shrink-0"
@@ -1030,16 +953,16 @@ useEffect(() => {
           !loading &&
           !error &&
           filteredProposals.length === 0 && (
-          <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-10 text-center">
-            <Send className="mx-auto text-neutral-400" />
+          <div className="mt-8 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-center">
+            <Send className="mx-auto text-[var(--color-text-muted)]" />
 
-            <h2 className="mt-4 text-lg font-semibold text-neutral-900">
+            <h2 className="mt-4 cc-h2 font-semibold text-[var(--color-text-primary)]">
               {receivedFilter === "all"
                 ? "Henüz teklif gelmedi"
                 : "Bu kategoride teklif bulunmuyor"}
             </h2>
 
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
               Projeleriniz yayınlandığında freelancerların
               teklifleri burada görünür.
             </p>
@@ -1054,35 +977,35 @@ useEffect(() => {
             return (
               <article
                 key={proposal.id}
-                className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
+                className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm text-neutral-500">
+                    <p className="text-sm text-[var(--color-text-secondary)]">
                       {proposal.project?.title ?? "Proje"}
                     </p>
 
                     {proposal.freelancer ? (
                       <Link
                         href={`/client/freelancers/${proposal.freelancer.id}`}
-                        className="mt-1 block text-lg font-semibold text-neutral-900 hover:underline"
+                        className="mt-1 block text-lg font-semibold text-[var(--color-text-primary)] hover:underline"
                       >
                         {freelancerName}
                       </Link>
                     ) : (
-                      <h2 className="mt-1 text-lg font-semibold text-neutral-900">
+                      <h2 className="mt-1 cc-h2 font-semibold text-[var(--color-text-primary)]">
                         Freelancer bilgisi bulunamadı
                       </h2>
                     )}
 
                     {proposal.freelancer?.title && (
-                      <p className="mt-1 text-sm text-neutral-500">
+                      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                         {proposal.freelancer.title}
                       </p>
                     )}
 
                     {proposal.freelancer && (
-                      <span className="mt-2 inline-block rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700">
+                      <span className="mt-2 inline-block rounded-full bg-[var(--color-surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                         {AVAILABILITY_LABEL[
                           proposal.freelancer.availability_status ??
                             "available"
@@ -1104,21 +1027,21 @@ useEffect(() => {
                 <div className="mt-4 flex items-center gap-2">
                   <Users
                     size={15}
-                    className="text-neutral-400"
+                    className="text-[var(--color-text-muted)]"
                   />
 
                   {proposal.role ? (
-                    <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
+                    <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                       {proposal.role}
                     </span>
                   ) : (
-                    <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
+                    <span className="rounded-full bg-[var(--color-error-50)] px-3 py-1 text-xs font-medium text-[var(--color-error-600)]">
                       Rol belirtilmemiş
                     </span>
                   )}
 
                   {proposal.project?.status && (
-                    <span className="text-xs text-neutral-400">
+                    <span className="text-xs text-[var(--color-text-muted)]">
                       ·{" "}
                       {projectStatusLabel(
                         proposal.project.status
@@ -1129,7 +1052,7 @@ useEffect(() => {
 
                 {proposal.freelancer?.skills?.length ? (
                   <div className="mt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
                       Yetenekler
                     </p>
 
@@ -1138,7 +1061,7 @@ useEffect(() => {
                         (skill) => (
                           <span
                             key={skill}
-                            className="rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-700"
+                            className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs text-[var(--color-text-secondary)]"
                           >
                             {skill}
                           </span>
@@ -1148,46 +1071,31 @@ useEffect(() => {
                   </div>
                 ) : null}
 
-                <div className="mt-5 border-t border-neutral-100 pt-5">
-                  <p className="text-sm leading-6 text-neutral-600">
+                <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
+                  <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                     {proposal.cover_letter ||
                       "Teklif mesajı eklenmemiş."}
                   </p>
 
-                  <p className="mt-4 text-sm font-medium text-neutral-700">
-                    {formatCurrency(
-                      Number(proposal.bid_amount ?? 0)
-                    )}
-                    {" · "}
-                    {proposal.delivery_days
-                      ? `${proposal.delivery_days} gün`
-                      : "Teslim süresi belirtilmedi"}
-                  </p>
-
-                  {proposal.project && Number(proposal.bid_amount ?? 0) > 0 && (() => {
-                    // Rate frozen on the project at creation — not the client's current plan.
-                    const pricing = calculateClientPricing(
-                      Number(proposal.bid_amount),
-                      getProjectCommissionRate(proposal.project)
-                    );
-                    return (
-                      <dl className="mt-3 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-1 text-[13px] text-neutral-500">
-                        <dt>Freelancer bedeli</dt>
-                        <dd className="text-right tabular-nums text-neutral-700">{formatCurrency(pricing.freelancerAmount)}</dd>
-                        <dt>Platform hizmet bedeli ({formatRatePercent(pricing.rate)})</dt>
-                        <dd className="text-right tabular-nums text-neutral-700">{formatCurrency(pricing.platformFee)}</dd>
-                        <dt className="font-medium text-neutral-800">Toplam maliyet</dt>
-                        <dd className="text-right font-medium tabular-nums text-neutral-900">{formatCurrency(pricing.clientTotal)}</dd>
-                      </dl>
-                    );
-                  })()}
+                  <dl className="mt-4 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-sm">
+                    <dt className="text-[var(--color-text-secondary)]">Teklif Tutarı</dt>
+                    <dd className="text-right font-semibold tabular-nums text-[var(--color-text-primary)]">
+                      {proposal.bid_amount !== null && Number.isFinite(Number(proposal.bid_amount))
+                        ? formatCurrency(Number(proposal.bid_amount))
+                        : "Belirtilmedi"}
+                    </dd>
+                    <dt className="text-[var(--color-text-secondary)]">Teslim süresi</dt>
+                    <dd className="text-right text-[var(--color-text-secondary)]">
+                      {proposal.delivery_days ? `${proposal.delivery_days} gün` : "Belirtilmedi"}
+                    </dd>
+                  </dl>
                 </div>
 
                 <div className="mt-5 flex flex-wrap items-center gap-3">
                   {proposal.project && (
                     <Link
                       href={`/client/projects/${proposal.project.id}`}
-                      className="text-sm font-medium text-neutral-700 transition hover:text-[var(--color-text-primary)]"
+                      className="text-sm font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
                     >
                       Projeyi görüntüle
                     </Link>
@@ -1200,7 +1108,7 @@ useEffect(() => {
                           type="button"
                           disabled={updatingId === proposal.id}
                           onClick={() => void updateProposalStatus(proposal.id, "shortlisted")}
-                          className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                          className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
                         >
                           Kısa listeye al
                         </button>
@@ -1217,7 +1125,7 @@ useEffect(() => {
                             "accepted"
                           )
                         }
-                        className="rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:opacity-50"
+                        className={buttonClasses({variant:"primary"})}
                       >
                         {updatingId === proposal.id
                           ? "İşleniyor..."
@@ -1235,7 +1143,7 @@ useEffect(() => {
                             "rejected"
                           )
                         }
-                        className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                        className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
                       >
                         Reddet
                       </button>
@@ -1245,7 +1153,7 @@ useEffect(() => {
                   {proposal.status === "accepted" && (
                     <Link
                       href={`/client/messages?user=${proposal.freelancer_id}&proposal=${proposal.id}`}
-                      className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                      className={buttonClasses({variant:"primary"})}
                     >
                       <MessageCircle size={15} />
                       Freelancer&apos;a mesaj gönder
@@ -1260,14 +1168,14 @@ useEffect(() => {
 
         {/* GÖNDERİLEN TEKLİFLER (ekip davetleri) */}
         {activeTab === "sent" && invitationsLoading && (
-          <div className="mt-8 flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white p-10 text-sm text-neutral-500">
+          <div className="mt-8 flex items-center justify-center gap-2 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-sm text-[var(--color-text-secondary)]">
             <Loader2 size={18} className="animate-spin" />
             Davetler yükleniyor...
           </div>
         )}
 
         {activeTab === "sent" && !invitationsLoading && invitationsError && (
-          <div className="mt-6 flex gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <div className="mt-6 flex gap-3 rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
             <AlertCircle size={18} className="mt-0.5 shrink-0" />
             <div>{invitationsError}</div>
           </div>
@@ -1277,16 +1185,16 @@ useEffect(() => {
           !invitationsLoading &&
           !invitationsError &&
           filteredSentInvitations.length === 0 && (
-            <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-10 text-center">
-              <ArrowUpFromLine className="mx-auto text-neutral-400" />
+            <div className="mt-8 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-center">
+              <ArrowUpFromLine className="mx-auto text-[var(--color-text-muted)]" />
 
-              <h2 className="mt-4 text-lg font-semibold text-neutral-900">
+              <h2 className="mt-4 cc-h2 font-semibold text-[var(--color-text-primary)]">
                 {sentFilter === "all"
                   ? "Henüz bir freelancer'a davet göndermediniz"
                   : "Bu kategoride davet bulunmuyor"}
               </h2>
 
-              <p className="mt-2 text-sm text-neutral-500">
+              <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
                 Eşleşme sonuçlarından bir freelancer&apos;ı ekibinize davet
                 ettiğinizde burada görünür.
               </p>
@@ -1301,29 +1209,29 @@ useEffect(() => {
               return (
                 <article
                   key={invitation.id}
-                  className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm"
+                  className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm text-neutral-500">
+                      <p className="text-sm text-[var(--color-text-secondary)]">
                         {invitation.project?.title ?? "Proje"}
                       </p>
 
                       {invitation.freelancer ? (
                         <Link
                           href={`/client/freelancers/${invitation.freelancer.id}`}
-                          className="mt-1 block text-lg font-semibold text-neutral-900 hover:underline"
+                          className="mt-1 block text-lg font-semibold text-[var(--color-text-primary)] hover:underline"
                         >
                           {freelancerName}
                         </Link>
                       ) : (
-                        <h2 className="mt-1 text-lg font-semibold text-neutral-900">
+                        <h2 className="mt-1 cc-h2 font-semibold text-[var(--color-text-primary)]">
                           Freelancer bilgisi bulunamadı
                         </h2>
                       )}
 
                       {invitation.freelancer?.title && (
-                        <p className="mt-1 text-sm text-neutral-500">
+                        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
                           {invitation.freelancer.title}
                         </p>
                       )}
@@ -1339,19 +1247,19 @@ useEffect(() => {
                   </div>
 
                   <div className="mt-4 flex items-center gap-2">
-                    <Users size={15} className="text-neutral-400" />
+                    <Users size={15} className="text-[var(--color-text-muted)]" />
 
-                    <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-medium text-neutral-700">
+                    <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                       {invitation.role}
                     </span>
                   </div>
 
-                  <div className="mt-5 border-t border-neutral-100 pt-5">
-                    <p className="text-sm leading-6 text-neutral-600">
+                  <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
+                    <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
                       {invitation.message || "Davet mesajı eklenmemiş."}
                     </p>
 
-                    <p className="mt-4 text-sm font-medium text-neutral-700">
+                    <p className="mt-4 text-sm font-medium text-[var(--color-text-secondary)]">
                       {invitation.budget_per_person !== null
                         ? formatCurrency(invitation.budget_per_person)
                         : "Bütçe belirtilmedi"}
@@ -1364,7 +1272,7 @@ useEffect(() => {
                     {invitation.project && (
                       <Link
                         href={`/client/projects/${invitation.project.id}`}
-                        className="text-sm font-medium text-neutral-700 transition hover:text-[var(--color-text-primary)]"
+                        className="text-sm font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
                       >
                         Projeyi görüntüle
                       </Link>
@@ -1377,7 +1285,7 @@ useEffect(() => {
                         onClick={() =>
                           void cancelInvitation(invitation.id)
                         }
-                        className="rounded-lg border border-neutral-200 px-4 py-2 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50"
+                        className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
                       >
                         {cancellingId === invitation.id
                           ? "İşleniyor..."
@@ -1388,7 +1296,7 @@ useEffect(() => {
                     {invitation.status === "accepted" && (
                       <Link
                         href={`/client/messages?user=${invitation.freelancer_id}&project=${invitation.project_id}`}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[var(--color-primary-600)] px-4 py-2 text-xs font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+                        className={buttonClasses({variant:"primary"})}
                       >
                         <MessageCircle size={15} />
                         Freelancer&apos;a mesaj gönder

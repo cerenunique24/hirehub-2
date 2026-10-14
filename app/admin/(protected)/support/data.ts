@@ -7,6 +7,7 @@ export type AdminSupportTicketListItem = {
   priority: string;
   status: string;
   createdAt: string;
+  updatedAt: string;
   requesterId: string;
   requesterName: string;
 };
@@ -38,7 +39,7 @@ export async function listAdminSupportTickets(
 ): Promise<{ items: AdminSupportTicketListItem[]; error: boolean }> {
   const { data, error } = await supabase
     .from("support_tickets")
-    .select("id, subject, category, priority, status, created_at, user_id")
+    .select("id, subject, category, priority, status, created_at, updated_at, user_id")
     .order("created_at", { ascending: false });
 
   if (error || !data) {
@@ -69,6 +70,7 @@ export async function listAdminSupportTickets(
       priority: t.priority,
       status: t.status,
       createdAt: t.created_at,
+      updatedAt: t.updated_at,
       requesterId: t.user_id,
       requesterName: namesById.get(t.user_id) ?? "Bilinmeyen kullanıcı",
     })),
@@ -82,7 +84,7 @@ export async function getAdminSupportTicketDetail(
 ): Promise<AdminSupportTicketDetail | null> {
   const { data: ticket, error } = await supabase
     .from("support_tickets")
-    .select("id, subject, category, priority, status, description, created_at, user_id, related_project_id")
+    .select("id, subject, category, priority, status, description, created_at, updated_at, user_id, related_project_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -124,6 +126,7 @@ export async function getAdminSupportTicketDetail(
     status: ticket.status,
     description: ticket.description,
     createdAt: ticket.created_at,
+    updatedAt: ticket.updated_at,
     requesterId: ticket.user_id,
     requesterName: fullNameOf(requester?.first_name ?? null, requester?.last_name ?? null),
     requesterEmail: requester?.email ?? null,
