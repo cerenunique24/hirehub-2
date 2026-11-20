@@ -38,11 +38,34 @@ test("review actions forward real skill and optional role callbacks without writ
 
 test("quota exhaustion preserves base analysis without a placeholder premium panel",()=>{const value=html(true,false,{advancedAnalysis:null,aiUsage:{count:5,monthlyLimit:5,limitReached:true}});assert.ok(!value.includes("5 / 5"));assert.ok(!value.includes("Analizi derinleştir"));assert.ok(value.includes("Colla AI analizi"));});
 
-test("analysis and result use distinct existing mascots without fabricated progress",()=>{const loading=loadLoading();const markup=renderToStaticMarkup(React.createElement(loading.ProjectAnalysisLoading));assert.ok(markup.includes('aria-busy="true"'));assert.ok(markup.includes('/analysis-rig/sheet.png'));assert.ok(!markup.includes('progressbar'));const result=html();assert.ok(!result.includes("<img"));assert.ok(!result.includes('aria-busy="true"'));});
+test("analysis uses the floating mascot while the result has no loading artwork", () => {
+  const { ProjectAnalysisLoading } = loadLoading();
+  const markup = renderToStaticMarkup(React.createElement(ProjectAnalysisLoading));
+  const styles = fs.readFileSync("components/projects/creation/ProjectAnalysisLoading.module.css", "utf8");
+  assert.match(markup, /class="scene" aria-hidden="true"/);
+  assert.match(markup, /class="mascotFloat"><img[^>]*src="\/images\/mascots\/client-discovery-search\.png"/);
+  assert.match(styles, /\.mascotFloat\s*\{[^}]*animation:\s*mascotFloat\b/);
+  assert.match(markup, /role="status" aria-live="polite" aria-busy="true"/);
+  const inactive = renderToStaticMarkup(React.createElement(ProjectAnalysisLoading, { active: false }));
+  assert.match(inactive, /<div class="loading" hidden="" aria-hidden="true"/);
+  assert.doesNotMatch(inactive, /role="status"|aria-busy="true"/);
+  assert.doesNotMatch(html(), /<img\b|aria-busy="true"/);
+});
 
 test("processing copy distinguishes the two real operations without fake completion",()=>{const loadingExports=loadLoading();const project=renderToStaticMarkup(React.createElement(loadingExports.ProjectAnalysisLoading));const match=renderToStaticMarkup(React.createElement(loadingExports.ProjectAnalysisLoading,{kind:"matching"}));assert.ok(project.includes("Proje detayları inceleniyor"));assert.ok(match.includes("Rol ihtiyaçları değerlendiriliyor"));assert.ok(!match.includes("progressbar"));assert.ok(!match.includes("incelendi"));});
 
-test("scanning loader uses ambient copy without completed or numbered progress",()=>{const l=loadLoading();for(const kind of ["project","matching"]){const value=renderToStaticMarkup(React.createElement(l.ProjectAnalysisLoading,{kind}));assert.ok(value.includes('class="rig"'));assert.equal((value.match(/class="statusLine"/g)||[]).length,4);assert.ok(value.includes('aria-hidden="true"'));assert.ok(!/<li(?:\s|>)/.test(value));assert.ok(!value.includes('progressbar'));assert.ok(!value.includes('processingActive'));assert.ok(!value.includes('bilgileri hazır'));}});
+test("loader describes four areas of work without reporting completion", () => {
+  const { ProjectAnalysisLoading } = loadLoading();
+  for (const kind of ["project", "matching"]) {
+    const markup = renderToStaticMarkup(React.createElement(ProjectAnalysisLoading, { kind }));
+    assert.match(markup, /ANALİZ KAPSAMI.*İşleniyor/);
+    const scope = markup.match(/<ol>(.*?)<\/ol>/)?.[1] ?? "";
+    const items = Array.from(scope.matchAll(/<li class="([^"]+)">/g), ([, state]) => state);
+    assert.deepEqual(items, ["current", "pending", "pending", "pending"]);
+    assert.equal(Array.from(scope.matchAll(/class="indicator" aria-hidden="true"/g)).length, 4);
+    assert.doesNotMatch(markup, /progressbar|aria-valuenow|<progress\b|bilgileri hazır/);
+  }
+});
 
  test("numbered sprites retain independent limbs, prop and authored expressions",()=>{const rig=loadRig();const value=renderToStaticMarkup(React.createElement(rig.AnalysisMascot));for(const id of [2,3,4,5,6,7,8,10,13])assert.ok(value.includes(`data-mascot-part="${id}"`));assert.equal((value.match(/class="rightAssembly"/g)||[]).length,1);assert.ok(!value.includes("client-discovery-search.png"));const manifest=JSON.parse(fs.readFileSync("public/images/mascots/analysis-rig/parts.json","utf8"));assert.equal(new Set(manifest.parts.map(p=>p.id)).size,21);for(const part of manifest.parts){assert.ok(part.x>=0&&part.y>=0&&part.x+part.width<=manifest.width&&part.y+part.height<=manifest.height);}});
 
