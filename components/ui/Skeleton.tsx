@@ -2,7 +2,7 @@
 export function Skeleton({ className = "" }: { className?: string }) {
   return (
     <div
-      className={["animate-pulse rounded-md bg-[var(--color-surface-2)]", className].join(" ")}
+      className={["animate-pulse rounded-md bg-[var(--color-surface-soft)]", className].join(" ")}
       aria-hidden="true"
     />
   );

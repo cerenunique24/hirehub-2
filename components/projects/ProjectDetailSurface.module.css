@@ -13,3 +13,31 @@
 .error h1 { font-size:var(--font-size-h2); font-weight:var(--weight-h2); color:var(--color-text-primary); }
 .error p { margin-top:var(--space-2); }
 @media(max-width:639px) { .actions { align-items:stretch; } .navigation { gap:var(--space-3); } }
+.detailBody,.projectSummary { display:contents; }
+
+/* Client project workspace typography stays local to this detail surface. */
+.clientHeader .identity { flex-direction:column; align-items:flex-start; gap:var(--space-2); }
+.clientPage .clientHeader { padding:var(--space-6); }
+.clientHeader .identity h1 { font-size:20px; font-weight:650; line-height:1.3; max-width:100%; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.clientHeader .identity [data-panel-tone] { height:22px; line-height:1; }
+.clientHeader .identity [data-panel-tone]>span { height:22px; min-height:22px; padding:1px var(--space-2); font-size:13px; font-weight:500; line-height:18px; box-sizing:border-box; }
+.clientHeader .detailBody { display:block; margin-top:var(--space-4); }
+.clientHeader .detailBody>section { min-width:0; padding-block:0; border:0; }
+.clientHeader .detailBody>section>p,.clientHeader .detailBody>section>ul { font-size:14px; font-weight:400; line-height:1.55; margin-top:var(--space-3); }
+.clientHeader .detailBody>section>:first-child { margin-top:0; }
+.clientHeader .detailBody>section>ul { columns:2; column-gap:var(--space-6); }
+.clientHeader .detailBody>section>ul li { break-inside:avoid; }
+.clientHeader .detailBody>section>div { margin-top:var(--space-5); }
+.clientHeader .detailBody>section h3 { font-size:14px; font-weight:600; line-height:1.35; }
+.clientHeader .projectSummary { display:block; min-width:0; margin-top:var(--space-6); padding-top:var(--space-5); border-top:1px solid var(--color-border-subtle); }
+.clientHeader .projectSummary dl { display:flex; flex-wrap:wrap; gap:var(--space-4) var(--space-8); margin-top:0; }
+.clientHeader .projectSummary dl>div { min-width:0; flex:1 1 120px; }
+.clientHeader .projectSummary dt { font-size:12px; font-weight:500; line-height:1.5; }
+.clientHeader .projectSummary dd { margin-top:var(--space-1); font-size:14px; font-weight:500; line-height:1.6; overflow-wrap:anywhere; }
+.clientHeader .actions { display:flex; flex-wrap:wrap; gap:var(--space-3); margin-top:var(--space-5); }
+.clientHeader .actions>a,.clientHeader .actions>button { display:inline-flex; justify-content:center; align-items:center; min-height:40px; padding:10px 16px; font-size:14px; }
+@media(max-width:900px) { .clientHeader .detailBody>section>ul { columns:1; } }
+.clientPage .content { grid-template-columns:minmax(0,1fr); }
+.clientPage .content>* { min-width:0; }
+
+

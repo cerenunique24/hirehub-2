@@ -42,7 +42,8 @@ test("missing data and long titles remain profile content without fake price",()
 });
 
 const normalize=compile("lib/utils/normalizeStringArray.ts");
-const ProfileView=compile("components/freelancers/FreelancerProfileView.tsx",request=>{
+function profileDeps(request){
+ if(request==="./PublicFreelancerProfile")return compile("components/freelancers/PublicFreelancerProfile.tsx",profileDeps);
  if(request==="react")return React;
  if(request==="react/jsx-runtime")return jsx;
  if(request==="next/link")return {default:({children,...props})=>React.createElement("a",props,children),__esModule:true};
@@ -58,20 +59,21 @@ const ProfileView=compile("components/freelancers/FreelancerProfileView.tsx",req
  if(request.includes("RatingSummary"))return {__esModule:true,default:()=>React.createElement("span",null,"Henüz değerlendirme yok")};
  if(request.endsWith(".css"))return {__esModule:true,default:new Proxy({},{get:(_,k)=>String(k)})};
  throw Error(request);
-}).FreelancerProfileView;
+}
+const ProfileView=compile("components/freelancers/FreelancerProfileView.tsx",profileDeps).FreelancerProfileView;
 const baseProfile={id:"p",first_name:"Ada",avatar_url:null,title:"Designer",bio:null,expertise:null,skills:null,availability_status:null,experience:null,hourly_rate:null,city:null};
-const renderProfile=props=>renderToStaticMarkup(React.createElement(ProfileView,{profile:baseProfile,portfolio:[],experiences:[],portfolioError:false,experienceError:false,returnTo:"/freelancers/freelancers",...props}));
+const renderProfile=props=>renderToStaticMarkup(React.createElement(ProfileView,{viewerRole:"client",profile:baseProfile,portfolio:[],experiences:[],portfolioError:false,experienceError:false,returnTo:"/freelancers/freelancers",...props}));
 test("professional profile offers progressive disclosure for long bio and many skills",()=>{
  const html=renderProfile({profile:{...baseProfile,bio:"a".repeat(900),skills:Array.from({length:10},(_,i)=>"skill-"+i)}});
- assert.ok(html.includes("Devamını göster"));assert.ok(html.includes("Tüm yetenekleri göster · 10"));assert.equal(html.includes("skill-9"),false);assert.equal(html.includes("a".repeat(900)),false);assert.ok(html.includes('aria-expanded="false"'));
+ assert.ok(html.includes("Devamını göster"));assert.ok(html.includes(">+2<"));assert.equal(html.includes("skill-9"),false);assert.ok(html.includes("clamped"));assert.ok(html.includes('aria-expanded="false"'));
 });
 test("profile specialties normalize existing text instead of inventing a role family",()=>{
  const html=renderProfile({profile:{...baseProfile,expertise:'["Brand Design","UI Design"]'}});
- assert.ok(html.includes("Brand Design · UI Design"));assert.equal(html.includes('[&quot;Brand'),false);
+ assert.ok(html.includes("Brand Design"));assert.ok(html.includes("UI Design"));assert.equal(html.includes('[&quot;Brand'),false);
 });
 test("profile portfolio has a meaningful visual fallback and safe external links",()=>{
  const html=renderProfile({portfolio:[{id:"w",title:"Real work",category:"Branding",description:"Real description",image_url:null,project_url:"https://portfolio.example/work"}]});
- assert.ok(html.includes("Real work"));assert.ok(html.includes("Branding"));assert.ok(html.includes("Portfolyoyu Gör"));assert.ok(html.includes('rel="noopener noreferrer"'));
+ assert.ok(html.includes("Real work"));assert.ok(html.includes("Branding"));assert.ok(html.includes("Çalışmayı gör"));assert.ok(html.includes('rel="noopener noreferrer"'));
  const unsafe=renderProfile({portfolio:[{id:"w",title:"Work",image_url:null,project_url:"javascript:alert(1)"}]});assert.equal(unsafe.includes("javascript:"),false);
 });
 test("profile without action permissions never fabricates invitation or message CTA",()=>{
@@ -79,7 +81,7 @@ test("profile without action permissions never fabricates invitation or message 
 });
 test("profile displays actual work history and separates unavailable data from empty data",()=>{
  const html=renderProfile({experiences:[{id:"e",company_name:"Studio",position:"Designer",description:"Brand projects",start_date:"2024-01-01",end_date:null}]});assert.ok(html.includes("Studio"));assert.ok(html.includes("Brand projects"));
- const error=renderProfile({portfolioError:true,experienceError:true});assert.ok(error.includes("Portföy yüklenemedi"));assert.ok(error.includes("Deneyim kayıtları yüklenemedi"));assert.equal(error.includes("Henüz çalışma örneği paylaşılmamış"),false);
+ const error=renderProfile({portfolioError:true,experienceError:true});assert.ok(error.includes("Portfolyo yüklenemedi"));assert.ok(error.includes("Deneyim kayıtları yüklenemedi"));assert.equal(error.includes("Henüz çalışma örneği paylaşılmamış"),false);
 });
 
 const reviewsPresentation=compile("components/freelancers/reviewPresentation.ts");
@@ -100,15 +102,15 @@ test("profile uses editorial sections instead of tab-like navigation",()=>{
  const html=renderProfile({});assert.equal(html.includes('aria-label="Profil bölümleri"'),false);assert.ok(html.includes('id="reviews"'));assert.equal(html.includes('role="tab"'),false);
 });
 
-test("evaluation workspace starts with four portfolio samples and six skills",()=>{
+test("shared public workspace starts with three portfolio samples and eight skills",()=>{
  const portfolio=Array.from({length:7},(_,i)=>({id:"w"+i,title:"Work-"+i,image_url:null,project_url:null,category:"Design",description:null}));
  const html=renderProfile({portfolio,profile:{...baseProfile,skills:Array.from({length:9},(_,i)=>"skill-"+i)}});
- assert.ok(html.includes("Work-3"));assert.equal(html.includes("Work-4"),false);assert.ok(html.includes("Tüm portfolyoyu gör"));assert.ok(html.includes("skill-5"));assert.equal(html.includes("skill-6"),false);assert.ok(html.includes('aria-label="Uzmanlık ve çalışma bilgileri"'));
+ assert.ok(html.includes("Work-2"));assert.equal(html.includes("Work-3"),false);assert.ok(html.includes("Tüm çalışmalarını gör"));assert.ok(html.includes("skill-7"));assert.equal(html.includes("skill-8"),false);assert.ok(html.includes('aria-label="Çalışma bilgileri ve uzmanlıklar"'));
 });
 test("evaluation workspace limits initial experience and keeps section order",()=>{
  const experiences=Array.from({length:5},(_,i)=>({id:"e"+i,position:"Position-"+i,company_name:"Studio",start_date:null,end_date:null,description:null}));
  const html=renderProfile({experiences});assert.ok(html.includes("Position-2"));assert.equal(html.includes("Position-3"),false);assert.ok(html.includes("Daha fazla deneyim göster"));
- assert.ok(html.indexOf('id="about"')<html.indexOf('id="portfolio"'));assert.ok(html.indexOf('id="portfolio"')<html.indexOf('id="experience"'));assert.ok(html.indexOf('id="experience"')<html.indexOf('id="reviews"'));
+ assert.ok(html.indexOf('id="public-about-heading"')<html.indexOf('id="public-portfolio-heading"'));assert.ok(html.indexOf('id="public-portfolio-heading"')<html.indexOf('id="reviews"'));assert.ok(html.indexOf('id="reviews"')<html.indexOf('id="public-experience-heading"'));
 });
 
 test("profile rating and permitted CTA belong to full-width header, not supporting column",()=>{

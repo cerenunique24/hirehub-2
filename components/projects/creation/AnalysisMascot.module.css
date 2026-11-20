@@ -1,0 +1,43 @@
+.rig { position: relative; width: 100%; height: 100%; }
+.character { position: absolute; inset: 0; transform-origin: 50% 87%; animation: weightShift 4s ease-in-out infinite; }
+.character svg { position: absolute; display: block; }
+.leftFoot { left: 27%; top: 70%; width: 22%; height: 28%; transform-origin: 60% 8%; animation: leftStep 4s ease-in-out infinite; }
+.rightFoot { left: 50%; top: 70%; width: 27%; height: 28%; transform-origin: 30% 8%; animation: rightStep 4s ease-in-out infinite; }
+.leftArm { left: 8%; top: 47%; width: 25%; height: 34%; transform-origin: 85% 12%; animation: counterArm 4s ease-in-out infinite; }
+.body { position: absolute; left: 19%; top: 20%; width: 63%; height: 58%; }
+.body svg { inset: 0; width: 100%; height: 100%; }
+.neutral { animation: neutralFace 4s steps(1, end) infinite; }
+.blink { opacity: 0; animation: blinkFace 4s steps(1, end) infinite; }
+.found { opacity: 0; animation: foundFace 4s steps(1, end) infinite; }
+.rightAssembly { position: absolute; inset: 0; transform-origin: 70% 53%; animation: scanArm 4s ease-in-out infinite; }
+.magnifier { left: 60%; top: 27%; width: 30%; height: 39%; }
+.rightArm { left: 63%; top: 44.5%; width: 28%; height: 29%; transform-origin: 79% 64%; transform: rotate(-55deg); }
+.reaction { left: 82%; top: 10%; width: 14%; height: 19%; opacity: 0; transform-origin: 20% 90%; animation: foundSignal 4s ease-in-out infinite; }
+@keyframes weightShift {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  25% { transform: translateY(-4px) rotate(1deg); }
+  55% { transform: translateY(-1px) rotate(-1deg); }
+  75% { transform: translateY(-3px) rotate(0deg); }
+  79% { transform: translateY(-5px) rotate(1deg); }
+  83% { transform: translateY(-2px) rotate(0deg); }
+}
+@keyframes scanArm {
+  0%, 100% { transform: rotate(-9deg); }
+  27% { transform: rotate(10deg); }
+  55% { transform: rotate(-8deg); }
+  75% { transform: rotate(5deg); }
+  79% { transform: rotate(-3deg); }
+  83% { transform: rotate(4deg); }
+}
+@keyframes counterArm { 0%,100% { transform: rotate(4deg); } 27% { transform: rotate(-4deg); } 55% { transform: rotate(3deg); } 79% { transform: rotate(-5deg); } }
+@keyframes leftStep { 0%,100% { transform: rotate(1deg); } 27% { transform: rotate(-2deg); } 55% { transform: rotate(1deg); } }
+@keyframes rightStep { 0%,100% { transform: rotate(-1deg); } 27% { transform: rotate(2deg); } 55% { transform: rotate(-1deg); } }
+@keyframes neutralFace { 0%,36%,83% { opacity: 1; } 33%,75% { opacity: 0; } }
+@keyframes blinkFace { 0%,36%,100% { opacity: 0; } 33% { opacity: 1; } }
+@keyframes foundFace { 0%,83%,100% { opacity: 0; } 75% { opacity: 1; } }
+@keyframes foundSignal { 0%,73%,88%,100% { opacity: 0; transform: scale(.9); } 77%,82% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .character, .character svg, .rightAssembly { animation: none; }
+  .neutral { opacity: 1; }
+  .blink, .found, .reaction { display: none; }
+}

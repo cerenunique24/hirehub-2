@@ -14,6 +14,9 @@ const BORDER = "border-[var(--color-border-subtle)] focus:border-[var(--color-pr
 const BORDER_ERROR =
   "border-[var(--color-error-600)] bg-[var(--color-error-50)] focus:border-[var(--color-error-600)] focus:ring-2 focus:ring-[var(--color-error-50)]";
 
+/** Shared input foundation for existing custom select/combobox triggers. */
+export function inputClasses(className = "") { return [BASE, BORDER, className].join(" "); }
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { hasError, className = "", ...props },
   ref

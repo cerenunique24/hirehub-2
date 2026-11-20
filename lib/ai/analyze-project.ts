@@ -1,3 +1,4 @@
+import { CORE_TEAM_POLICY, assertCoreTeamLimit } from "./coreTeamPolicy";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { ProjectBrief, ProjectAnalysis } from "@/types/ai";
 
@@ -47,6 +48,7 @@ export async function analyzeProject(
     "",
     "Müşterinin proje brief'ini kısa ve profesyonel şekilde analiz et.",
     "",
+    CORE_TEAM_POLICY,
     "Kurallar:",
     "- Sadece geçerli JSON döndür.",
     "- Markdown kullanma.",
@@ -71,8 +73,8 @@ export async function analyzeProject(
     '  "complexity": "Low | Medium | High",',
     '  "goals": ["En fazla 3 hedef"],',
     '  "keyRequirements": ["En fazla 5 gereksinim"],',
-    '  "requiredExpertise": ["En fazla 4 uzmanlık"],',
-    '  "requiredRoles": ["En fazla 4 rol"],',
+    '  "requiredExpertise": ["Çekirdek ekipteki uzmanlıklar"],',
+    '  "requiredRoles": ["En fazla 5 çekirdek rol"],',
     '  "requiredSkills": ["En fazla 8 beceri"],',
     '  "roleDetails": [{',
     '    "role": "Rol adı",',
@@ -86,7 +88,7 @@ export async function analyzeProject(
     '  "estimatedBudget": "Bütçe",',
     '  "recommendedTeamSize": 1,',
     '  "insights": "En fazla 2 cümlelik analiz",',
-    '  "recommendations": ["En fazla 3 öneri"],',
+    '  "recommendations": ["Varsa isteğe bağlı uzmanlık ve hangi koşulda gerekli olduğu; yoksa boş dizi"],',
     '  "considerations": ["En fazla 3 dikkat noktası"]',
     "}",
     "",
@@ -144,6 +146,7 @@ export async function analyzeProject(
           throw new Error("AI analiz sonucu beklenen rol detaylarını içermiyor.");
         }
 
+        assertCoreTeamLimit(parsed);
         return parsed;
       } catch {
         throw new Error("Gemini geçerli bir analiz formatı döndürmedi.");

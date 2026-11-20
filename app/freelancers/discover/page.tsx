@@ -1283,17 +1283,17 @@ export default function DiscoverPage() {
                 key={item}
                 className="animate-pulse rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5"
               >
-                <div className="mb-5 h-5 w-2/3 rounded bg-[var(--color-surface-2)]" />
+                <div className="mb-5 h-5 w-2/3 rounded bg-[var(--color-surface-soft)]" />
 
-                <div className="mb-2 h-4 w-full rounded bg-[var(--color-surface-2)]" />
+                <div className="mb-2 h-4 w-full rounded bg-[var(--color-surface-soft)]" />
 
-                <div className="mb-5 h-4 w-4/5 rounded bg-[var(--color-surface-2)]" />
+                <div className="mb-5 h-4 w-4/5 rounded bg-[var(--color-surface-soft)]" />
 
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
-                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
-                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
-                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
+                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
+                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
+                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
+                  <div className="h-12 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
                 </div>
               </div>
             ))}

@@ -3,7 +3,7 @@
 import { CoalitionCard } from "@/components/coalitions/CoalitionCard";
 import { clientCoalitionNextStep, coalitionUpdatedDate } from "@/components/coalitions/clientCoalitionPresentation";
 import { coalitionProjectLabel } from "@/components/coalitions/coalitionPresentation";
-import { panelRootClass, PanelBadge, PanelAction } from "@/components/dashboard/PanelPrimitives";
+import { panelRootClass, PanelAction } from "@/components/dashboard/PanelPrimitives";
 import type { TeamCompletion } from "@/lib/projects/teamReadiness";
 import styles from "@/components/coalitions/Coalitions.module.css";
 import { Input } from "@/components/ui/Input";
@@ -381,7 +381,9 @@ export default function ClientCoalitionsPage() {
                 ...(coalition.team ? [{label:"Açık roller",value:coalition.openRoles.length ? coalition.openRoles.length+" · "+coalition.openRoles.join(", ") : "Açık rol yok"}] : []),
                 ...(coalition.project?.updated_at ? [{label:"Proje güncellendi",value:coalitionUpdatedDate(coalition.project.updated_at)}] : []),
               ]}
-              statusContent={coalition.project ? <><span>Proje</span><PanelBadge>{coalitionProjectLabel(coalition.project.status)}</PanelBadge></> : <span>Proje durumu doğrulanamadı</span>}
+              projectStatus={coalition.project?.status}
+              projectStatusLabel={coalition.project ? coalitionProjectLabel(coalition.project.status) : undefined}
+              statusContent={coalition.project ? null : <span>Proje durumu doğrulanamadı</span>}
               nextStep={clientCoalitionNextStep(coalition.project,coalition.team)}
               actions={<>
                 <PanelAction href={"/client/coalitions/"+coalition.id} variant="primary">Ekip Alanını Aç</PanelAction>

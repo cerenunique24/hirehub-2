@@ -21,8 +21,9 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import PremiumVisibilityManager from "@/components/premium/PremiumVisibilityManager";
 import AccountDeletionCard from "@/components/settings/AccountDeletionCard";
+import {ClientSettingsView} from "./ClientSettingsView";
 
-type Profile = {
+export type Profile = {
   first_name: string | null;
   last_name: string | null;
   phone: string | null;
@@ -31,7 +32,7 @@ type Profile = {
   marketing_consent: boolean | null;
 };
 
-type Tab = "hesap" | "bildirimler" | "gizlilik" | "guvenlik" | "uyelik" | "hesap-islemleri";
+export type Tab = "hesap" | "bildirimler" | "gizlilik" | "guvenlik" | "uyelik" | "hesap-islemleri";
 
 const TABS: Array<{ id: Tab; label: string; icon: React.ElementType }> = [
   { id: "hesap", label: "Hesap", icon: User },
@@ -51,7 +52,7 @@ const NOTIFICATION_KEYS: Array<{ key: string; label: string; description: string
   { key: "marketing", label: "Pazarlama bildirimleri", description: "Yeni özellik ve kampanya duyuruları." },
 ];
 
-export default function AccountSettings({ profileHref }: { profileHref: string }) {
+export default function AccountSettings({ profileHref, presentation = "default" }: { profileHref: string; presentation?: "default" | "client" }) {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
   const { status: subscription, loading: subscriptionLoading } = usePremium();
@@ -64,6 +65,9 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
 
   const [savingField, setSavingField] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -72,52 +76,41 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
   const [passwordSuccess, setPasswordSuccess] = useState("");
 
   useEffect(() => {
+    let active = true;
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        setEmail(user.email ?? "");
-
-        // `phone`/`notification_preferences`/`profile_visibility` are
-        // private columns no longer selectable via a plain table query
-        // (see supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
-        // Reading one's OWN full row goes through this RPC instead.
-        const { data: rows } = await supabase.rpc("get_my_full_profile");
+      setLoading(true);
+      setLoadError("");
+      try {
+        const {data: {user}, error: authError} = await supabase.auth.getUser();
+        if (authError || !user) throw new Error("Hesap ayarlarını görüntülemek için tekrar giriş yapın.");
+        const {data: rows, error} = await supabase.rpc("get_my_full_profile");
+        if (error) throw new Error("Hesap bilgileri alınamadı. Bağlantınızı kontrol edip tekrar deneyin.");
         const data = Array.isArray(rows) ? (rows[0] as Profile | undefined) : undefined;
-
-        if (data) {
-          setProfile(data);
-          setPhone(data.phone ?? "");
-        }
-      }
-
-      setLoading(false);
+        if (!data) throw new Error("Hesap bilgileri bulunamadı. Profil sayfanızı kontrol edip tekrar deneyin.");
+        if (active) { setEmail(user.email ?? ""); setProfile(data); setPhone(data.phone ?? ""); }
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : "Hesap bilgileri yüklenemedi. Tekrar deneyin.");
+      } finally { if (active) setLoading(false); }
     }
     void load();
-  }, [supabase]);
+    return () => { active = false; };
+  }, [supabase, reloadKey]);
 
   async function persistProfile(patch: Partial<Profile>, fieldKey: string) {
     setSavingField(fieldKey);
     setSaveMessage("");
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      setSavingField(null);
-      return;
-    }
-
-    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
-
-    setSavingField(null);
-    if (!error) {
-      setProfile((current) => (current ? { ...current, ...patch } : current));
-      setSaveMessage("Kaydedildi.");
+    setSaveError("");
+    try {
+      const {data: {user}, error: authError} = await supabase.auth.getUser();
+      if (authError || !user) throw new Error("Oturumunuz sona ermiş olabilir. Tekrar giriş yapıp değişikliklerinizi kaydedin.");
+      const {error} = await supabase.from("profiles").update(patch).eq("id", user.id);
+      if (error) throw new Error("Değişiklikler kaydedilemedi. Bağlantınızı kontrol edip tekrar deneyin.");
+      setProfile(current => current ? {...current, ...patch} : current);
+      setSaveMessage(presentation === "client" ? "Değişiklikler kaydedildi." : "Kaydedildi.");
       setTimeout(() => setSaveMessage(""), 2000);
-    }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Değişiklikler kaydedilemedi. Tekrar deneyin.");
+    } finally { setSavingField(null); }
   }
 
   async function handleChangePassword() {
@@ -134,7 +127,9 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
     }
 
     setPasswordSaving(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    let error: {message: string} | null = null;
+    try { ({ error } = await supabase.auth.updateUser({ password: newPassword })); }
+    catch { error = { message: "Bağlantınızı kontrol edip tekrar deneyin." }; }
     setPasswordSaving(false);
 
     if (error) {
@@ -142,7 +137,7 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
       return;
     }
 
-    setPasswordSuccess("Şifren güncellendi.");
+    setPasswordSuccess(presentation === "client" ? "Şifreniz güncellendi." : "Şifren güncellendi.");
     setNewPassword("");
     setConfirmPassword("");
   }
@@ -154,6 +149,16 @@ export default function AccountSettings({ profileHref }: { profileHref: string }
   }
 
   const notificationPrefs = profile?.notification_preferences ?? {};
+
+  if (presentation === "client") return <ClientSettingsView
+    tab={tab} onTabChange={setTab} profileHref={profileHref} profile={profile} email={email}
+    phone={phone} onPhoneChange={setPhone} onSavePhone={() => void persistProfile({phone}, "phone")}
+    savingField={savingField} saveMessage={saveMessage} saveError={saveError} loading={loading} loadError={loadError} onRetry={() => setReloadKey(key => key + 1)}
+    newPassword={newPassword} confirmPassword={confirmPassword} onNewPasswordChange={setNewPassword} onConfirmPasswordChange={setConfirmPassword}
+    passwordSaving={passwordSaving} passwordError={passwordError} passwordSuccess={passwordSuccess} onPasswordSave={() => void handleChangePassword()}
+    subscription={subscription} subscriptionLoading={subscriptionLoading} onManagePlan={() => router.push("/premium")} onLogout={() => void handleLogout()}
+    onPersist={(patch, key) => void persistProfile(patch, key)}
+  />;
 
   if (loading) {
     return (

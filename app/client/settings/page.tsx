@@ -1,14 +1,12 @@
-import { pageHeaderClass } from "@/components/ui/PageHeader";
 import AccountSettings from "@/components/settings/AccountSettings";
+import styles from "@/components/settings/ClientSettings.module.css";
 
 export default function ClientSettingsPage() {
-  return (
-    <div className="w-full">
-      <div className={pageHeaderClass}>
-        <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">Ayarlar</h1>
-        <p className="mt-2 text-[var(--color-text-secondary)]">Hesabın üzerindeki kontrol merkezin.</p>
-      </div>
-      <AccountSettings profileHref="/client/profile" />
-    </div>
-  );
+  return <main className={styles.page}>
+    <header className={styles.pageHeader}>
+      <h1>Ayarlar</h1>
+      <p>Hesap ve uygulama tercihlerinizi yönetin.</p>
+    </header>
+    <AccountSettings profileHref="/client/profile" presentation="client"/>
+  </main>;
 }

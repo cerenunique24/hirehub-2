@@ -14,7 +14,7 @@ type DeletionRequest = { id: string; status: string; requested_at: string };
  * CollaCrew ekibi talebi işleme alır. Talep `account_deletion_requests`
  * tablosunda tutulur ve kullanıcı bekleyen talebini geri çekebilir.
  */
-export default function AccountDeletionCard() {
+export default function AccountDeletionCard({settingsPresentation = false}: {settingsPresentation?: boolean} = {}) {
   const supabase = useMemo(() => createClient(), []);
   const [request, setRequest] = useState<DeletionRequest | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ export default function AccountDeletionCard() {
         tone: "error",
         text:
           error.code === "23505"
-            ? "Zaten bekleyen bir silme talebin var."
+            ? settingsPresentation ? "İncelenmeyi bekleyen bir silme talebiniz zaten var." : "Zaten bekleyen bir silme talebin var."
             : friendlyRpcError(error, "Talep oluşturulamadı. Lütfen tekrar dene."),
       });
       return;
@@ -80,7 +80,7 @@ export default function AccountDeletionCard() {
 
     setConfirming(false);
     setReason("");
-    setFeedback({ tone: "success", text: "Hesap silme talebin alındı. CollaCrew ekibi en kısa sürede seninle iletişime geçecek." });
+    setFeedback({ tone: "success", text: settingsPresentation ? "Hesap silme talebiniz alındı. İnceleme tamamlandığında sizinle iletişime geçilecek." : "Hesap silme talebin alındı. CollaCrew ekibi en kısa sürede seninle iletişime geçecek." });
     setReloadKey((key) => key + 1);
   }
 
@@ -103,7 +103,7 @@ export default function AccountDeletionCard() {
       return;
     }
 
-    setFeedback({ tone: "success", text: "Hesap silme talebin geri çekildi." });
+    setFeedback({ tone: "success", text: settingsPresentation ? "Hesap silme talebiniz geri çekildi." : "Hesap silme talebin geri çekildi." });
     setReloadKey((key) => key + 1);
   }
 
@@ -113,14 +113,14 @@ export default function AccountDeletionCard() {
 
   return (
     <div className="rounded-lg bg-[var(--color-canvas)] px-4 py-4">
-      <p className="text-sm font-medium text-[var(--color-text-primary)]">Hesabı sil</p>
+      {settingsPresentation ? <h3>Hesap silme talebi</h3> : <p className="text-sm font-medium text-[var(--color-text-primary)]">Hesabı sil</p>}
 
       {request ? (
         <>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
             {request.status === "processing"
-              ? "Silme talebin işleme alındı."
-              : "Silme talebin alındı ve inceleme bekliyor."}{" "}
+              ? settingsPresentation ? "Silme talebiniz işleme alındı." : "Silme talebin işleme alındı."
+              : settingsPresentation ? "Silme talebiniz inceleme bekliyor." : "Silme talebin alındı ve inceleme bekliyor."}{" "}
             Talep tarihi: {new Date(request.requested_at).toLocaleDateString("tr-TR")}
           </p>
           {request.status === "pending" && (
@@ -138,8 +138,7 @@ export default function AccountDeletionCard() {
       ) : (
         <>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-            Hesabını ve kişisel verilerini silmek için talep oluşturabilirsin. Devam eden projelerin veya
-            tamamlanmamış ödeme yükümlülüklerin varsa talep bunlar çözüldükten sonra işleme alınır.
+            {settingsPresentation ? "Hesabınızın ve kişisel verilerinizin silinmesi için talep oluşturabilirsiniz. Talep; devam eden projeler, ödeme yükümlülükleri ve yasal saklama süreleri kontrol edildikten sonra işleme alınır." : "Hesabını ve kişisel verilerini silmek için talep oluşturabilirsin. Devam eden projelerin veya tamamlanmamış ödeme yükümlülüklerin varsa talep bunlar çözüldükten sonra işleme alınır."}
           </p>
 
           {!confirming ? (
@@ -148,11 +147,13 @@ export default function AccountDeletionCard() {
               onClick={() => setConfirming(true)}
               className="mt-3 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
             >
-              Hesap Silme Talebi Oluştur
+              {settingsPresentation ? "Silme talebi oluştur" : "Hesap Silme Talebi Oluştur"}
             </button>
           ) : (
             <div className="mt-3 space-y-2">
+              {settingsPresentation && <label htmlFor="client-settings-deletion-reason">Ayrılma nedeni (opsiyonel)</label>}
               <textarea
+                id={settingsPresentation ? "client-settings-deletion-reason" : undefined}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
@@ -168,7 +169,7 @@ export default function AccountDeletionCard() {
                   className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                 >
                   {busy && <Loader2 size={14} className="animate-spin" />}
-                  Talebi Gönder
+                  {settingsPresentation ? "Silme talebini gönder" : "Talebi Gönder"}
                 </button>
                 <button
                   type="button"
@@ -184,7 +185,7 @@ export default function AccountDeletionCard() {
       )}
 
       {feedback && (
-        <p className={`mt-3 text-xs ${feedback.tone === "success" ? "text-green-700" : "text-red-700"}`}>
+        <p role={settingsPresentation ? feedback.tone === "error" ? "alert" : "status" : undefined} className={`mt-3 text-xs ${feedback.tone === "success" ? "text-green-700" : "text-red-700"}`}>
           {feedback.text}
         </p>
       )}

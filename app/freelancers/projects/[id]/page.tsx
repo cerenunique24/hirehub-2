@@ -147,7 +147,7 @@ function FreelancerWorkroomContent() {
   const messageHref = cameFromMessages && backToMessagesUser
     ? `/freelancers/messages?user=${encodeURIComponent(backToMessagesUser)}${backToMessagesProposal?"&proposal="+encodeURIComponent(backToMessagesProposal):""}` : undefined;
   return <ProjectDetailSurface role="freelancer" project={project} backHref="/freelancers/projects" messageHref={messageHref} memberCount={teamMembers.length} personalRole={personalRole} coalitionId={coalitionId}>
-    <ProjectWorkroom identityShownAbove
+    <ProjectWorkroom identityShownAbove personalRole={personalRole}
       key={searchParams.get("tab")==="milestones"?"milestones":"overview"}
       initialTab={searchParams.get("tab")==="milestones"?"milestones":"overview"}
       project={project} teamMembers={teamMembers} viewerRole="freelancer"

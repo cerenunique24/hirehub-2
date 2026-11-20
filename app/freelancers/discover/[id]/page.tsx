@@ -1021,21 +1021,21 @@ function FreelancerProjectDetailContent({
       <main className="bg-white">
         <div className="w-full">
           <div className="animate-pulse">
-            <div className="mb-8 h-5 w-32 rounded bg-gray-100" />
+            <div className="mb-8 h-5 w-32 rounded bg-[var(--color-surface-soft)]" />
 
             <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
               <div>
-                <div className="mb-4 h-10 w-3/4 rounded bg-gray-100" />
-                <div className="mb-8 h-5 w-48 rounded bg-gray-100" />
+                <div className="mb-4 h-10 w-3/4 rounded bg-[var(--color-surface-soft)]" />
+                <div className="mb-8 h-5 w-48 rounded bg-[var(--color-surface-soft)]" />
 
                 <div className="space-y-3">
-                  <div className="h-4 w-full rounded bg-gray-100" />
-                  <div className="h-4 w-full rounded bg-gray-100" />
-                  <div className="h-4 w-4/5 rounded bg-gray-100" />
+                  <div className="h-4 w-full rounded bg-[var(--color-surface-soft)]" />
+                  <div className="h-4 w-full rounded bg-[var(--color-surface-soft)]" />
+                  <div className="h-4 w-4/5 rounded bg-[var(--color-surface-soft)]" />
                 </div>
               </div>
 
-              <div className="h-96 rounded-2xl bg-gray-100" />
+              <div className="h-96 rounded-2xl bg-[var(--color-surface-soft)]" />
             </div>
           </div>
         </div>
@@ -1914,7 +1914,7 @@ function AiProposalAssistant({
         {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
 
         {result && (
-          <div className="mt-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/40 p-3">
+          <div className="mt-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-soft)] p-3">
             <p className="text-xs text-[var(--color-text-muted)]">
               {result.source === "ai" ? "AI taslağı" : "Profil verinden hazırlanan taslak"} · {result.facts.role}
               {result.facts.matchingSkills.length > 0 && <> · Kullanılan beceriler: {result.facts.matchingSkills.slice(0, 4).join(", ")}</>}

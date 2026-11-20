@@ -52,6 +52,11 @@ import styles from "./ProjectWorkroom.module.css";
 import { PanelBadge } from "@/components/dashboard/PanelPrimitives";
 import { Button } from "@/components/ui/Button";
 import { resolveProjectWorkflowState } from "@/lib/projects/workflow-state";
+import FreelancerProjectOverview, { FreelancerProjectHeader, FreelancerStatusBand, freelancerPayout } from "./FreelancerProjectOverview";
+import ClientProposalsPanel from "@/components/client/ClientProposalsPanel";
+import ClientProjectOverview, { ClientStatusBand } from "./ClientProjectOverview";
+import type { RoleCompletion } from "@/lib/projects/teamReadiness";
+import freelancerStyles from "./FreelancerProjectOverview.module.css";
 
 export type WorkroomTeamMember = {
   teamMemberId: string;
@@ -73,9 +78,13 @@ export type WorkroomProject = {
   /** Client'ın projeyi başlatırken onayladığı "gereksinimler hazır" bilgisi. */
   requirements_confirmed_at?: string | null;
   requirements_note?: string | null;
+  skills?: string[] | null;
+  project_type?: string | null;
+  created_at?: string | null;
+  team_size?: number | null;
 };
 
-type Tab = "overview" | "milestones" | "team" | "files" | "messages" | "deliveries" | "operations";
+type Tab = "overview" | "milestones" | "team" | "files" | "messages" | "deliveries" | "operations" | "proposals";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "overview", label: "Genel Bakış" },
@@ -84,7 +93,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: "files", label: "Dosyalar" },
   { id: "messages", label: "Mesajlar" },
   { id: "deliveries", label: "Teslimler" },
-  { id: "operations", label: "Yönetim" },
+  { id: "operations", label: "Proje işlemleri" },
 ];
 
 const DEADLINE_STATUS_CLASS: Record<DeadlineStatus, string> = {
@@ -162,6 +171,11 @@ export default function ProjectWorkroom({
   coalitionId = null,
   initialTab = "overview",
   identityShownAbove = false,
+  startActionShownAbove = false,
+  personalRole = null,
+  openRoles = [],
+  proposalCount = 0,
+  clientExtras,
 }: {
   project: WorkroomProject;
   teamMembers: WorkroomTeamMember[];
@@ -185,9 +199,15 @@ export default function ProjectWorkroom({
    * coalition detay sayfasındaki mesaj alanıyla AYNI konuşma.
    */
   coalitionId?: string | null;
-  initialTab?: "overview" | "milestones";
+  initialTab?: "overview" | "milestones" | "proposals";
   /** Suppress duplicated project identity when the containing detail page already shows it. */
   identityShownAbove?: boolean;
+  /** The containing Client page owns the start action; avoid a competing milestone CTA before start. */
+  startActionShownAbove?: boolean;
+  personalRole?: string | null;
+  openRoles?: RoleCompletion[];
+  proposalCount?: number;
+  clientExtras?: React.ReactNode;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const isClient = viewerRole === "client";
@@ -212,9 +232,12 @@ export default function ProjectWorkroom({
   const [revisionDrafts, setRevisionDrafts] = useState<Record<string, string>>({});
   const [expandedMilestoneId, setExpandedMilestoneId] = useState<string | null>(null);
   const [filesOpenMilestoneId, setFilesOpenMilestoneId] = useState<string | null>(null);
+  const [activityError, setActivityError] = useState(false);
 
   const loadMilestones = useCallback(async () => {
     setLoading(true);
+    setError("");
+    setActivityError(false);
     const { data, error: loadError } = await fetchMilestones(supabase, project.id);
     if (loadError) {
       setError("Aşamalar yüklenemedi.");
@@ -232,6 +255,7 @@ export default function ProjectWorkroom({
     if (!eventsError) {
       setEvents((eventData ?? []) as MilestoneEvent[]);
     }
+    setActivityError(Boolean(eventsError));
 
     const { data: deliveryData } = await fetchMilestoneDeliveries(supabase, project.id);
     const loadedDeliveries = (deliveryData ?? []) as MilestoneDelivery[];
@@ -293,7 +317,7 @@ export default function ProjectWorkroom({
   const [clientName, setClientName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!coalitionId) return;
+    if (!coalitionId && isClient) return;
 
     let active = true;
 
@@ -310,7 +334,7 @@ export default function ProjectWorkroom({
     return () => {
       active = false;
     };
-  }, [coalitionId, project.client_id, supabase]);
+  }, [coalitionId, isClient, project.client_id, supabase]);
 
   const teamMessageLabels = useMemo(() => {
     const labels = teamMembers.map((member) => ({ id: member.id, name: getFullName(member) }));
@@ -347,8 +371,6 @@ export default function ProjectWorkroom({
   /** Team project'te aşamaları FREELANCER oluşturur; tek freelancer projede (eski davranış) client oluşturur. */
   const canCreateMilestone = isTeamProject ? !isClient : isClient;
 
-  const approvedCount = milestones.filter((m) => m.status === "approved").length;
-  const progress = milestones.length > 0 ? Math.round((approvedCount / milestones.length) * 100) : 0;
 
   const workflowState = useMemo(
     () => resolveProjectWorkflowState({
@@ -592,10 +614,12 @@ export default function ProjectWorkroom({
 
   const viewerMember=teamMembers.find(member=>member.id===currentUserId);
   const projectStatusLabel=({open:"Ekip kuruluyor",ready_to_start:"Ekip hazır · Başlamadı",in_progress:"Çalışma devam ediyor",completed:"Tamamlandı",paused:"Duraklatıldı",cancelled:"İptal edildi"} as Record<string,string>)[project.status??""]??"Tanımsız";
+  const operationsPanel = currentUserId ? <ProjectOperationsPanel project={project} teamMembers={teamMembers} milestones={milestones} viewerRole={viewerRole} currentUserId={currentUserId} onChanged={()=>{void loadMilestones();onProjectChanged?.();}} /> : null;
 
   return (
-    <div className="space-y-5">
-      {!identityShownAbove && <header className={styles.header}>
+    <div className={freelancerStyles.root}>
+      {!isClient && <FreelancerProjectHeader project={project} personalRole={personalRole ?? viewerMember?.memberRole ?? null} payout={loading || error ? null : freelancerPayout(milestones, currentUserId, isTeamProject)} clientName={clientName} />}
+      {isClient && !identityShownAbove && <header className={styles.header}>
         <div className={styles.headerTitle}><div><p className={styles.eyebrow}>Proje detayları</p><h2>{project.title}</h2></div><PanelBadge>{projectStatusLabel}</PanelBadge></div>
         <dl className={styles.metadata}>
           <div><dt>{isClient ? "Proje sahibi" : "Projede rolün"}</dt><dd>{isClient ? "Client" : viewerMember?.memberRole || (currentUserId ? "Rol bilgisi bulunmuyor" : "Yükleniyor")}</dd></div>
@@ -603,40 +627,17 @@ export default function ProjectWorkroom({
           <div><dt>Son tarih</dt><dd>{formatDate(project.deadline)}</dd></div>
         </dl>
       </header>}
-      <section className={styles.status} data-action-required={!loading && workflowState.currentUserMustAct} aria-label="Şu anki durum" aria-live="polite">
-        <div className={styles.statusBody}>
-          <div><p className={styles.eyebrow}>Şu anki durum</p><h3>{loading ? "Durum yükleniyor" : error ? "Durum doğrulanamadı" : workflowState.state}</h3><p className={styles.nextStep}>{loading ? "Proje aşamaları kontrol ediliyor." : error ? "Aşama bilgileri alınamadı; yeniden kontrol et." : workflowState.nextStep}</p>
-            {!loading && !error && <p className={styles.actionOwner}>Aksiyon sahibi: <strong>{workflowState.currentUserMustAct ? "Sen" : workflowState.actionOwner}</strong> · {workflowState.currentUserMustAct ? "Senden işlem bekleniyor" : "Şu an senden işlem beklenmiyor"}</p>}
-          </div>
-          {!loading && !error && workflowState.currentUserMustAct && (isClient && allMilestonesApproved && project.status==="in_progress" ?
-            <Button onClick={()=>void handleCompleteProject()} disabled={busyId==="complete-project"}>{busyId==="complete-project" && <Loader2 size={16} className="animate-spin" />}Projeyi Tamamla</Button> :
-            <Button onClick={()=>setTab("milestones")}>Aşamaları Aç</Button>)}
-        </div>
-        {projectClosedMessage && <p className={styles.systemMeta}>{projectClosedMessage}</p>}
-        {project.requirements_confirmed_at && <p className={styles.systemMeta}><CheckCircle2 size={15} aria-hidden="true" />Gereksinimler hazır · Client {formatDate(project.requirements_confirmed_at)} tarihinde onayladı.</p>}
-      </section>
-      <Tabs items={TABS.map(item=>({value:item.id,label:item.label}))} value={tab} onChange={value=>setTab(value as Tab)} />
+      {!isClient ? <FreelancerStatusBand project={project} milestones={milestones} workflow={workflowState} loading={loading} error={error} /> : <ClientStatusBand project={project} milestones={milestones} events={events} workflow={workflowState} loading={loading} error={error} memberCount={teamMembers.length} proposalCount={proposalCount}>
+          {!loading && !error && workflowState.currentUserMustAct && !(startActionShownAbove && project.status === "ready_to_start") && (allMilestonesApproved && project.status === "in_progress" ? <Button onClick={()=>void handleCompleteProject()} disabled={busyId === "complete-project"}>Projeyi Tamamla</Button> : <Button onClick={()=>setTab("milestones")}>Aşamaları incele</Button>)}
+          {!loading && !error && project.status === "open" && <Button onClick={()=>setTab("proposals")}>Teklifleri görüntüle ({proposalCount})</Button>}
+          {projectClosedMessage && <p>{projectClosedMessage}</p>}
+        </ClientStatusBand>}
+      <Tabs className={freelancerStyles.tabs} items={[...TABS.filter(item=>isClient ? !["deliveries","operations"].includes(item.id) : !["team","operations"].includes(item.id)).map(item=>({value:item.id,label:item.label})), ...(isClient ? [{value:"proposals",label:`Teklifler (${proposalCount})`}, ...TABS.filter(item=>["deliveries","operations"].includes(item.id)).map(item=>({value:item.id,label:item.label}))] : [])]} value={tab} onChange={value=>setTab(value as Tab)} />
       {error && <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {!identityShownAbove && tab==="overview" && project.description && <section className={styles.context}><h3>Proje kapsamı</h3><p>{project.description}</p></section>}
-      {tab==="overview" && project.requirements_note && <section className={styles.clientNote}><h3>Client notu</h3><p>{project.requirements_note}</p></section>}
+      {!isClient && tab === "overview" && <FreelancerProjectOverview project={project} milestones={milestones} events={events} workflow={workflowState} currentUserId={currentUserId} isTeamProject={isTeamProject} loading={loading} error={error} activityError={activityError} onMilestone={milestone=>{setTab("milestones");if (milestone) setExpandedMilestoneId(milestone.id);else setShowCreate(true);}} />}
 
-      {tab === "overview" && (
-        <section className="grid gap-4 sm:grid-cols-2">
-          {!identityShownAbove && <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-medium text-gray-500">Bütçe</p>
-            <p className="mt-1 font-semibold text-gray-900">{project.budget==null?"Belirtilmedi":formatCurrency(Number(project.budget))}</p>
-          </div>}
-          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-            <p className="text-xs font-medium text-gray-500">Aşama ilerlemesi</p>
-            <p className="mt-1 font-semibold text-gray-900">
-              {approvedCount}/{milestones.length || 0}
-            </p>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-100">
-              <div className="h-full rounded-full bg-[var(--color-primary-600)]" style={{ width: `${progress}%` }} />
-            </div>
-          </div>
-        </section>
-      )}
+      {isClient && tab === "overview" && <ClientProjectOverview project={project} milestones={milestones} events={events} openRoles={openRoles} loading={loading} error={error} activityError={activityError} isTeamProject={isTeamProject}/>}
+      {isClient && tab === "proposals" && <><ClientProposalsPanel key={project.id} projectId={project.id} embedded onChanged={onProjectChanged}/>{clientExtras}</>}
 
       {tab === "milestones" && (
         <section className="space-y-4">
@@ -766,8 +767,8 @@ export default function ProjectWorkroom({
                           )}
                           {milestone.budget !== null && (
                             <span>
-                              {isClient && milestone.client_total_amount !== null
-                                ? `Toplam ödeme: ${formatCurrency(Number(milestone.client_total_amount))} (bütçe ${formatCurrency(Number(milestone.budget))} + platform ücreti ${formatCurrency(Number(milestone.platform_fee_amount ?? 0))})`
+                              {isClient
+                                ? `Toplam ödeme: ${formatCurrency(Number(milestone.client_total_amount ?? milestone.budget))} (bütçe ${formatCurrency(Number(milestone.budget))} + platform ücreti ${formatCurrency(Number(milestone.platform_fee_amount ?? 0))})`
                                 : `Net kazanç: ${formatCurrency(Number(milestone.freelancer_payout_amount ?? milestone.budget))}`}
                             </span>
                           )}
@@ -1121,19 +1122,8 @@ export default function ProjectWorkroom({
         </section>
       )}
 
-      {tab === "operations" && currentUserId && (
-        <ProjectOperationsPanel
-          project={project}
-          teamMembers={teamMembers}
-          milestones={milestones}
-          viewerRole={viewerRole}
-          currentUserId={currentUserId}
-          onChanged={() => {
-            void loadMilestones();
-            onProjectChanged?.();
-          }}
-        />
-      )}
+      {isClient && tab === "operations" && operationsPanel}
+      {!isClient && tab === "milestones" && operationsPanel && <details className={freelancerStyles.operations}><summary>Süre, uyuşmazlık ve proje işlemleri</summary>{operationsPanel}</details>}
     </div>
   );
 }

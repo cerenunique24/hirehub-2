@@ -1,5 +1,8 @@
+"use client";
+
+import { useId, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, FileText, Info, Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { DashboardMascot } from "./DashboardMascot";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
@@ -70,7 +73,10 @@ function Deadline({ value }: { value: string | null }) {
   return <span className={styles.deadline} data-tone={tone}><CalendarDays size={16} aria-hidden="true" />{formatDeadlineDate(value) ?? "Tarih belirtilmemiş"}</span>;
 }
 
-function ProjectCard({ project }: { project: FreelancerProject }) {
+function ProjectCard({ project, defaultExpanded }: { project: FreelancerProject; defaultExpanded: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const panelId = useId();
+  const triggerId = useId();
   const { work } = project;
   const href = `/freelancers/projects/${project.id}`;
   const team = project.team ?? [];
@@ -78,42 +84,58 @@ function ProjectCard({ project }: { project: FreelancerProject }) {
   const progress = work.totalMilestones ? Math.round(work.approvedMilestones / work.totalMilestones * 100) : 0;
   return (
     <article className={styles.projectCard}>
-      <div className={styles.projectTop}>
-        <div className={styles.projectTitle}>
-          <Link href={href}>{project.title}</Link>
+      <button type="button" className={styles.projectTop} id={triggerId} aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(value => !value)}>
+        <span className={styles.projectTitle}>
+          <span className={styles.projectName}>{project.title}</span>
           <span className={styles.role}>{project.role ?? "Rol belirtilmemiş"}</span>
-        </div>
+        </span>
         <Badge >
           {project.currentMilestone?.status === "revision" ? "Revizyon" : project.status === "paused" ? "Duraklatıldı" : "Aktif"}
         </Badge>
-      </div>
-      <div className={styles.people}>
-        <div className={styles.client}>
-          <Avatar src={project.client?.avatarUrl} name={clientName} size="sm" className={styles.personAvatar} />
-          <span>{clientName}</span>
-        </div>
-        {team.length > 0 && (
-          <div className={styles.team}>
-            <div className={styles.avatarStack} aria-label={`${team.length} kişilik proje ekibi`}>
-              {team.slice(0, 3).map(person => <Avatar key={person.id} src={person.avatarUrl} name={person.name ?? "Ekip üyesi"} size="sm" className={styles.personAvatar} />)}
-              {team.length > 3 && <span className={styles.extraPeople}>+{team.length - 3}</span>}
+        <span className={styles.projectMeta}>
+          <span>{formatDeadlineDate(project.currentMilestone?.due_date ?? project.deadline) ?? "Tarih belirtilmemiş"}</span>
+          <strong>{project.amount === null ? "Belirtilmemiş" : formatCurrency(project.amount)}</strong>
+        </span>
+        <ChevronDown className={styles.chevron} aria-hidden="true" />
+      </button>
+      <div id={panelId} role="region" aria-labelledby={triggerId} aria-hidden={!expanded} inert={!expanded} className={styles.projectPanel} data-expanded={expanded}>
+        <div className={styles.projectPanelInner}>
+          <div className={styles.projectMetadata}>
+            <div className={styles.ownerBlock}>
+              <span className={styles.microLabel}>Proje sahibi</span>
+              <div className={styles.client}>
+                <Avatar src={project.client?.avatarUrl} name={clientName} size="sm" className={styles.personAvatar} />
+                <span>{clientName}</span>
+              </div>
             </div>
-            <span>{team.length} kişilik ekip</span>
+            <div className={styles.stageBlock}>
+              <div className={styles.progressLabel}>
+                <span>{work.totalMilestones ? `${work.approvedMilestones} / ${work.totalMilestones} aşama onaylandı` : "Aşamalar henüz tanımlanmadı"}</span>
+              </div>
+              {work.totalMilestones > 0 && <div className={styles.progressRow}>
+                <progress className={styles.progress} aria-label={`${project.title}: onaylanan aşamalar`} max={work.totalMilestones} value={work.approvedMilestones} />
+                <strong>%{progress}</strong>
+              </div>}
+              <div className={styles.projectDetails}>
+                <span className={styles.microLabel}>Mevcut aşama</span>
+                <strong>{compactNextStep(project)}</strong>
+              </div>
+            </div>
+            <div className={styles.teamBlock}>
+              <span className={styles.microLabel}>Ekip</span>
+              {team.length > 0 ? <div className={styles.team}>
+                <div className={styles.avatarStack} aria-label={`${team.length} kişilik proje ekibi`}>
+                  {team.slice(0, 2).map(person => <Avatar key={person.id} src={person.avatarUrl} name={person.name ?? "Ekip üyesi"} size="sm" className={styles.personAvatar} />)}
+                  {team.length > 2 && <span className={styles.extraPeople}>+{team.length - 2}</span>}
+                </div>
+                <span>{team.length} kişilik ekip</span>
+              </div> : <span className={styles.microLabel}>Ekip bilgisi yok</span>}
+            </div>
           </div>
-        )}
-      </div>
-      <div className={styles.progressLabel}>
-        <span>{work.totalMilestones ? `${work.approvedMilestones}/${work.totalMilestones} aşama onaylandı` : "Aşamalar henüz tanımlanmadı"}</span>
-        {work.totalMilestones > 0 && <strong>%{progress}</strong>}
-      </div>
-      {work.totalMilestones > 0 && <progress className={styles.progress} aria-label={`${project.title}: onaylanan aşamalar`} max={work.totalMilestones} value={work.approvedMilestones} />}
-      <div className={styles.projectDetails}>
-        <div><span className={styles.microLabel}>Mevcut aşama</span><strong>{project.currentMilestone?.title ?? work.workflow.state}</strong></div>
-        <div><span className={styles.microLabel}>Anlaşma tutarın</span><strong>{project.amount === null ? "Belirtilmemiş" : formatCurrency(project.amount)}</strong></div>
-      </div>
-      <div className={styles.projectFooter}>
-        <Deadline value={project.currentMilestone?.due_date ?? project.deadline} />
-        <PanelAction href={href} className={styles.buttonSecondary}>Çalışma alanına git<ArrowRight size={16} aria-hidden="true" /></PanelAction>
+          <div className={styles.projectFooter}>
+            <PanelAction href={href} className={styles.buttonSecondary}>Çalışma alanına git<ArrowRight size={16} aria-hidden="true" /></PanelAction>
+          </div>
+        </div>
       </div>
     </article>
   );
@@ -170,8 +192,7 @@ export function FreelancerDashboardView({
                   <div key={project.id} className={styles.taskRow}>
                     <div className={styles.taskInfo}>
                       <Link href={`/freelancers/projects/${project.id}`} className={styles.itemTitle}>{project.title}</Link>
-                      <span className={styles.roleText}>{project.role ?? "Rol belirtilmemiş"}</span>
-                      <p>{compactNextStep(project)}</p>
+                      <p className={styles.taskSecondary}><span>{project.role ?? "Rol belirtilmemiş"}</span><span aria-hidden="true"> · </span>{compactNextStep(project)}</p>
                     </div>
                     <div className={styles.taskActions}>
                       <Badge >{project.work.workflow.state}</Badge>
@@ -189,7 +210,7 @@ export function FreelancerDashboardView({
 
           <Section title="Aktif Projeler" count={data.activeProjects.length} href="/freelancers/projects">
             {data.activeProjects.length ? (
-              <div className={styles.projectList}>{data.activeProjects.map(project => <ProjectCard key={project.id} project={project} />)}</div>
+              <div className={styles.projectList}>{data.activeProjects.map((project, index) => <ProjectCard key={project.id} project={project} defaultExpanded={index === 0} />)}</div>
             ) : (
               <div className={styles.emptyProjects}>
                 <DashboardMascot pose="laptop" size={112} />
@@ -216,7 +237,7 @@ export function FreelancerDashboardView({
                   </div>
                 ))}
               </div>
-            ) : <div className={styles.quietState}><strong>Henüz teklif veya davet yok</strong><p>Sana uygun bir proje bulduğunda ilk teklifini gönderebilirsin.</p><Link href="/freelancers/discover" className={styles.textLink}>Fırsatları keşfet<ArrowRight size={16} aria-hidden="true" /></Link></div>}
+            ) : <div className={styles.proposalEmpty}><span className={styles.emptyIcon}><FileText aria-hidden="true" /></span><div><strong>Henüz aktif teklif veya davet yok.</strong><p>Sana uygun bir proje bulduğunda ilk teklifini gönderebilirsin.</p></div><PanelAction href="/freelancers/discover">Projeleri keşfet<ArrowRight size={16} aria-hidden="true" /></PanelAction></div>}
           </Section>
         </div>
 
@@ -238,7 +259,7 @@ export function FreelancerDashboardView({
                     </Link>
                   ))}
                 </div>
-              ) : <p className={styles.suggestionState}>Şu an yüksek uyumlu bir öneri yok. Yayındaki diğer projeleri keşfedebilirsin.</p>}
+              ) : <div className={styles.suggestionState}><strong>Henüz güçlü bir eşleşme yok.</strong><p>Yeni projeler yayınlandıkça burada sana uygun fırsatları göstereceğiz.</p></div>}
             <Link href="/freelancers/discover" className={styles.suggestionFooter}>Tüm fırsatları keşfet<ArrowRight size={16} aria-hidden="true" /></Link>
           </Section>
 
@@ -269,9 +290,8 @@ export function FreelancerDashboardView({
               <div><dt>Beklenen iş değeri</dt><dd>{formatCurrency(data.earnings.remaining)}</dd></div>
               <div><dt>Bu ay onaylanan iş</dt><dd>{formatCurrency(data.earnings.monthly)}</dd></div>
             </dl>
-            <div className={styles.paymentNote}><Badge>Ödeme altyapısı aktif değil</Badge><p>İş değeri özeti; ödeme gerçekleştiğini göstermez.{data.earnings.missingAmounts && " Eksik tutarlar hariç."}</p></div>
+            <div className={styles.paymentNote}><Info aria-hidden="true" /><div><strong>Ödeme altyapısı aktif değil</strong><p>İş değeri özeti; ödeme gerçekleştiğini göstermez.{data.earnings.missingAmounts && " Eksik tutarlar hariç."}</p></div></div>
           </Section>
-          <Link href="/freelancers/profile" className={styles.profileLink}>Profilini ve çalışma uygunluğunu düzenle<ArrowRight size={16} aria-hidden="true" /></Link>
         </aside>
       </div>
     </div>

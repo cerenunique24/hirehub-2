@@ -587,8 +587,8 @@ export default function NotificationsPage() {
           </div>
         ) : filteredNotifications.length === 0 ? (
           /* Boş durum */
-          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white px-6 text-center">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-surface-soft)] px-6 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-surface-1)]">
               {activeFilter === "unread" ? (
                 <Check className="h-5 w-5 text-gray-500" />
               ) : (

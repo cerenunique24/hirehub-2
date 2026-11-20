@@ -1,0 +1,36 @@
+.page { width:100%; min-width:0; max-width:none; }
+.page [aria-invalid="true"] { border-color:var(--color-error-600); }
+.hero { margin-bottom:var(--space-5); }
+.hero > button { margin-bottom:var(--space-3); }
+.heroBody { display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); }
+.heroMascot { width:var(--space-20); height:var(--space-20); object-fit:contain; flex-shrink:0; }
+.stepper { margin-bottom:var(--space-6); }
+.desktop { position:relative; padding:var(--space-3) 0; }
+.steps { display:grid; grid-template-columns:repeat(var(--creation-step-count),minmax(0,1fr)); gap:var(--space-2); list-style:none; }
+.steps li { display:flex; flex-direction:column; align-items:center; gap:var(--space-2); text-align:center; color:var(--color-text-secondary); font-size:var(--font-size-label); line-height:var(--line-height-label); }
+.steps li[data-state="active"] { color:var(--color-primary-700); font-weight:var(--weight-h2); }
+.steps li[data-state="completed"] { color:var(--color-text-primary); }
+.anchor { height:var(--control-height-lg); display:flex; align-items:center; justify-content:center; position:relative; z-index:1; color:var(--color-primary-700); }
+.anchor svg { background:var(--color-canvas); }
+.marker { width:var(--space-2); height:var(--space-2); border:var(--border-width) solid var(--color-border-strong); border-radius:var(--radius-pill); background:var(--color-canvas); }
+.steps li[data-state="active"] .marker { visibility:hidden; }
+.connector { position:absolute; top:calc(var(--space-3) + var(--control-height-lg)/2); left:calc(50%/var(--creation-step-count)); right:calc(50%/var(--creation-step-count)); height:var(--border-width); background:var(--color-border-subtle); }
+.connector span { display:block; height:100%; background:var(--color-primary-600); transition:width 240ms ease; }
+.activeCharacter { position:absolute; top:var(--space-3); left:calc((var(--creation-step-index) + .5)*100%/var(--creation-step-count)); width:var(--control-height-lg); height:var(--control-height-lg); transform:translateX(-50%); display:flex; align-items:center; justify-content:center; z-index:2; transition:left 240ms ease; }
+.activeCharacter img { width:100%; height:100%; object-fit:contain; }
+.activeMarker { display:block; width:var(--space-4); height:var(--space-4); border:var(--space-1) solid var(--color-primary-600); border-radius:var(--radius-pill); background:var(--color-canvas); }
+.mobile { display:none; }
+.formGroup { padding-block:var(--space-5); border-top:var(--border-width) solid var(--color-border-subtle); }
+.shortFields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-5); }
+.navigation { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); border-top:var(--border-width) solid var(--color-border-subtle); padding-top:var(--space-5); margin-top:var(--space-5); }
+@media(max-width:639px) { .heroMascot { display:none; } .desktop { display:none; } .mobile { display:flex; align-items:center; gap:var(--space-3); padding-block:var(--space-3); border-block:var(--border-width) solid var(--color-border-subtle); } .mobile > span { display:flex; align-items:center; justify-content:center; width:var(--control-height-lg); height:var(--control-height-lg); } .mobile p { color:var(--color-text-secondary); } .shortFields { grid-template-columns:minmax(0,1fr); } }
+@media(prefers-reduced-motion:reduce) { .activeCharacter,.connector span { transition:none; } }
+
+.characterArt { width:var(--control-height-lg); height:var(--control-height-lg); display:flex; align-items:center; justify-content:center; transform-origin:50% 85%; }
+.characterArt img { width:100%; height:100%; object-fit:contain; }
+.anchor img { object-fit:contain; }
+.steps li[data-state="upcoming"] .anchor img { filter:saturate(.25) brightness(1.08); opacity:.8; }
+.steps li[data-state="completed"] .anchor img { filter:saturate(.7); }
+
+/* Only project creation opts out of the shared readable-page width cap. Padding stays shared. */
+:global(.panel-page-shell):has(> .page) { max-width:none; min-width:0; }

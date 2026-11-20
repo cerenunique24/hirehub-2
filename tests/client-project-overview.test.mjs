@@ -1,0 +1,21 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {compile,deps,project,props,workflow} from './freelancer-project-overview.test.mjs';
+const client=compile('components/projects/ClientProjectOverview.tsx',deps);
+const base={...props,openRoles:[{role:'Frontend',capacity:2,filled:1,isFull:false}]};
+const render=(Component,data)=>renderToStaticMarkup(React.createElement(Component,data));
+test('client summary clamps description and exposes only five skills with the real remainder',()=>{const html=render(client.default,base);assert.ok(html.includes('clamped'));assert.ok(html.includes('aria-expanded="false"'));assert.ok(html.includes('+3'));assert.equal(html.includes('>Figma<'),false);assert.ok(html.includes('Açık roller (1)'));assert.ok(html.includes('1 açık pozisyon'));assert.equal(html.includes('Freelancer bul'),false);const open=render(client.default,{...base,project:{...project,status:'open'}});assert.ok(open.includes('Freelancer bul'));assert.equal(open.includes('Kazancın'),false);});
+test('client preparation progress uses proposals, membership and actual lifecycle; unknown and failed state has no progress',()=>{for(const [status,members,proposals,stage] of [['open',0,0,1],['open',0,2,2],['open',1,2,3],['ready_to_start',1,2,3]]){const html=render(client.ClientStatusBand,{...base,project:{...project,status},memberCount:members,proposalCount:proposals});assert.ok(html.includes(`value="${stage}"`));}for(const extra of [{error:'failed'},{project:{...project,status:'unknown'}}])assert.equal(render(client.ClientStatusBand,{...base,memberCount:0,proposalCount:0,...extra}).includes('<progress'),false);});
+test('active client progress reflects approved stages and registered activity only',()=>{const html=render(client.ClientStatusBand,{...base,workflow,memberCount:2,proposalCount:3,milestones:[{...props.milestones[0],status:'approved'},{...props.milestones[0],id:'other',status:'active'}]});assert.ok(html.includes('value="1" max="2"'));assert.equal(html.includes('Proje yayınlandı'),false);assert.equal(html.includes('İlk eşleşmeler'),false);});
+test('client description and remaining skills expand and collapse accessibly',()=>{
+  const state=[false,false];let cursor=0;
+  const react={useState:()=>{const index=cursor++;return [state[index],value=>state[index]=value];}};
+  const component=compile('components/projects/ClientProjectOverview.tsx',name=>name==='react'?react:deps(name));
+  const nodes=tree=>!tree||typeof tree!=='object'?[]:[tree,...[tree.props?.children].flat(Infinity).flatMap(nodes)];
+  const tree=()=>{cursor=0;return component.default(base);};
+  let description=nodes(tree()).find(node=>node.props?.['aria-controls']==='client-description');
+  description.props.onClick();assert.equal(state[0],true);description=nodes(tree()).find(node=>node.props?.['aria-controls']==='client-description');assert.equal(description.props['aria-expanded'],true);description.props.onClick();assert.equal(state[0],false);
+  let skills=nodes(tree()).find(node=>node.props?.['aria-controls']==='client-skills');skills.props.onClick();assert.equal(state[1],true);assert.ok(renderToStaticMarkup(tree()).includes('>Figma<'));skills=nodes(tree()).find(node=>node.props?.['aria-controls']==='client-skills');skills.props.onClick();assert.equal(state[1],false);
+});
