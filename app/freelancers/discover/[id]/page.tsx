@@ -1075,6 +1075,10 @@ function FreelancerProjectDetailContent({
     );
   }
 
+  const requirements = Array.isArray(project.requirements)
+    ? project.requirements.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+
   const formattedDate =
     new Date(
       project.created_at
@@ -1212,6 +1216,19 @@ function FreelancerProjectDetailContent({
                   "Proje açıklaması eklenmemiş."}
               </div>
             </div>
+
+            {requirements.length > 0 && (
+              <section className="mt-10" aria-labelledby="project-requirements">
+                <h2 id="project-requirements" className="text-lg font-semibold text-gray-950">
+                  Proje gereksinimleri
+                </h2>
+                <ul className="mt-4 list-disc space-y-1.5 pl-5 text-[15px] leading-7 text-gray-600">
+                  {requirements.map((requirement, index) => (
+                    <li key={index} className="whitespace-pre-wrap wrap-anywhere">{requirement}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {Array.isArray(
               project.skills

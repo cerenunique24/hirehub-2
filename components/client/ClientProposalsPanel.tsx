@@ -1,10 +1,11 @@
 "use client";
 
 import { buttonClasses } from "@/components/ui/Button";
+import { ProposalCard } from "@/components/proposals/ProposalCard";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { Tabs } from "@/components/ui/Tabs";
 import { pageHeaderClass } from "@/components/ui/PageHeader";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Loader2,
@@ -13,7 +14,6 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   MessageCircle,
-  Users,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
@@ -78,16 +78,6 @@ function invitationStatusLabel(status: string | null) {
   if (normalized === "rejected") return "Reddedildi";
 
   return "Bekleyen";
-}
-
-function invitationStatusClass(status: string | null) {
-  const normalized = (status ?? "").toLowerCase();
-
-  if (normalized === "cancelled") return "bg-gray-100 text-gray-600";
-  if (normalized === "accepted") return "bg-green-50 text-green-700";
-  if (normalized === "rejected") return "bg-red-50 text-red-700";
-
-  return "bg-amber-50 text-amber-700";
 }
 
 type Freelancer = {
@@ -158,26 +148,6 @@ function statusLabel(status: string | null) {
   return labels[status ?? ""] ?? "Bilinmiyor";
 }
 
-function statusClass(status: string | null) {
-  if (status === "accepted") {
-    return "bg-green-50 text-green-700";
-  }
-
-  if (status === "rejected") {
-    return "bg-red-50 text-red-700";
-  }
-
-  if (status === "withdrawn" || status === "expired") {
-    return "bg-gray-100 text-gray-600";
-  }
-
-  if (status === "shortlisted") {
-    return "bg-blue-50 text-blue-700";
-  }
-
-  return "bg-amber-50 text-amber-700";
-}
-
 function projectStatusLabel(status: string | null) {
   const labels: Record<string, string> = {
     open: "Başvurular açık",
@@ -188,6 +158,38 @@ function projectStatusLabel(status: string | null) {
   };
 
   return labels[status ?? ""] ?? status ?? "Bilinmiyor";
+}
+
+const skillTagClass = "rounded-full bg-[var(--color-surface-2)] px-2.5 py-0.5 text-xs wrap-anywhere text-[var(--color-text-secondary)]";
+
+function OfferSkills({ skills, detailsId, expanded, onToggle }: {
+  skills: string[];
+  detailsId: string;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const extraSkills = skills.slice(5);
+  return (
+    <div>
+      <p className="mb-1 text-xs font-medium text-[var(--color-text-secondary)]">Yetenekler</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {skills.slice(0, 5).map((skill, index) => <span key={index} className={skillTagClass}>{skill}</span>)}
+        {extraSkills.length > 0 && (
+          <>
+            <div id={detailsId} hidden={!expanded} className={expanded ? "contents" : undefined}>
+              {extraSkills.map((skill, index) => <span key={index} className={skillTagClass}>{skill}</span>)}
+            </div>
+            <button type="button" aria-controls={detailsId} aria-expanded={expanded}
+              aria-label={expanded ? "Ek yetenekleri gizle" : `${extraSkills.length} ek yeteneği göster`}
+              onClick={onToggle}
+              className={`${skillTagClass} font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary-600)]`}>
+              +{extraSkills.length}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ClientProposalsPanel({projectId, embedded = false, onChanged}: {projectId?: string; embedded?: boolean; onChanged?: () => void}) {
@@ -210,6 +212,14 @@ export default function ClientProposalsPanel({projectId, embedded = false, onCha
   const [invitationsLoading, setInvitationsLoading] = useState(true);
   const [invitationsError, setInvitationsError] = useState("");
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [expandedProposalId, setExpandedProposalId] = useState<string | null>(null);
+  const proposalDetailsPrefix = useId();
+  const [showExtraSkills, setShowExtraSkills] = useState(false);
+
+  function toggleOfferDetails(id: string) {
+    setExpandedProposalId(current => current === id ? null : id);
+    setShowExtraSkills(false);
+  }
 
   async function loadSentInvitations() {
     setInvitationsLoading(true);
@@ -972,197 +982,109 @@ useEffect(() => {
         )}
 
         {activeTab === "received" && !loading && !error && (
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-3">
           {filteredProposals.map((proposal) => {
-            const freelancerName = publicDisplayName(proposal.freelancer, "Freelancer");
+            const detailsId = `${proposalDetailsPrefix}-${proposal.id}`;
+            const isExpanded = expandedProposalId === detailsId;
+            const amount = proposal.bid_amount !== null && Number.isFinite(Number(proposal.bid_amount))
+              ? formatCurrency(Number(proposal.bid_amount))
+              : "Belirtilmedi";
 
             return (
-              <article
+              <ProposalCard
                 key={proposal.id}
-                className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                      {proposal.project?.title ?? "Proje"}
-                    </p>
-
-                    {proposal.freelancer ? (
-                      <Link
-                        href={`/client/freelancers/${proposal.freelancer.id}`}
-                        className="mt-1 block text-lg font-semibold text-[var(--color-text-primary)] hover:underline"
-                      >
-                        {freelancerName}
-                      </Link>
-                    ) : (
-                      <h2 className="mt-1 cc-h2 font-semibold text-[var(--color-text-primary)]">
-                        Freelancer bilgisi bulunamadı
-                      </h2>
-                    )}
-
-                    {proposal.freelancer?.title && (
-                      <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                        {proposal.freelancer.title}
-                      </p>
-                    )}
-
-                    {proposal.freelancer && (
-                      <span className="mt-2 inline-block rounded-full bg-[var(--color-surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                        {AVAILABILITY_LABEL[
-                          proposal.freelancer.availability_status ??
-                            "available"
-                        ] ?? AVAILABILITY_LABEL.available}
-                      </span>
-                    )}
-                  </div>
-
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${statusClass(
-                      proposal.status
-                    )}`}
-                  >
-                    {statusLabel(proposal.status)}
-                  </span>
-                </div>
-
-                {/* Role */}
-                <div className="mt-4 flex items-center gap-2">
-                  <Users
-                    size={15}
-                    className="text-[var(--color-text-muted)]"
-                  />
-
-                  {proposal.role ? (
-                    <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                      {proposal.role}
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-[var(--color-error-50)] px-3 py-1 text-xs font-medium text-[var(--color-error-600)]">
-                      Rol belirtilmemiş
-                    </span>
-                  )}
-
-                  {proposal.project?.status && (
-                    <span className="text-xs text-[var(--color-text-muted)]">
-                      ·{" "}
-                      {projectStatusLabel(
-                        proposal.project.status
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                {proposal.freelancer?.skills?.length ? (
-                  <div className="mt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-                      Yetenekler
-                    </p>
-
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {proposal.freelancer.skills.map(
-                        (skill) => (
-                          <span
-                            key={skill}
-                            className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs text-[var(--color-text-secondary)]"
+                title={proposal.freelancer ? publicDisplayName(proposal.freelancer, "Freelancer") : "Freelancer bilgisi bulunamadı"}
+                titleHref={proposal.freelancer ? `/client/freelancers/${proposal.freelancer.id}` : undefined}
+                subtitle={proposal.project?.title ?? "Proje"}
+                projectHref={proposal.project ? `/client/projects/${proposal.project.id}` : undefined}
+                status={proposal.status}
+                statusLabel={statusLabel(proposal.status)}
+                metrics={[
+                  { label: "Teklif Tutarı", value: amount },
+                  { label: "Teslim süresi", value: proposal.delivery_days ? `${proposal.delivery_days} gün` : "Belirtilmedi" },
+                ]}
+                detailsId={detailsId}
+                expanded={isExpanded}
+                onToggle={() => toggleOfferDetails(detailsId)}
+                actions={
+                  <>
+                    {(proposal.status === "pending" || proposal.status === "shortlisted") && (
+                      <>
+                        {proposal.status === "pending" && (
+                          <button
+                            type="button"
+                            disabled={updatingId === proposal.id}
+                            onClick={() => void updateProposalStatus(proposal.id, "shortlisted")}
+                            className={buttonClasses({variant:"secondary", size:"sm", className:"@min-[46rem]:w-32"})}
                           >
-                            {skill}
-                          </span>
-                        )
-                      )}
-                    </div>
-                  </div>
-                ) : null}
+                            Kısa listeye al
+                          </button>
+                        )}
 
-                <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
-                  <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                    {proposal.cover_letter ||
-                      "Teklif mesajı eklenmemiş."}
-                  </p>
-
-                  <dl className="mt-4 grid max-w-sm grid-cols-[1fr_auto] gap-x-6 gap-y-2 text-sm">
-                    <dt className="text-[var(--color-text-secondary)]">Teklif Tutarı</dt>
-                    <dd className="text-right font-semibold tabular-nums text-[var(--color-text-primary)]">
-                      {proposal.bid_amount !== null && Number.isFinite(Number(proposal.bid_amount))
-                        ? formatCurrency(Number(proposal.bid_amount))
-                        : "Belirtilmedi"}
-                    </dd>
-                    <dt className="text-[var(--color-text-secondary)]">Teslim süresi</dt>
-                    <dd className="text-right text-[var(--color-text-secondary)]">
-                      {proposal.delivery_days ? `${proposal.delivery_days} gün` : "Belirtilmedi"}
-                    </dd>
-                  </dl>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3">
-                  {proposal.project && (
-                    <Link
-                      href={`/client/projects/${proposal.project.id}`}
-                      className="text-sm font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
-                    >
-                      Projeyi görüntüle
-                    </Link>
-                  )}
-
-                  {(proposal.status === "pending" || proposal.status === "shortlisted") && (
-                    <>
-                      {proposal.status === "pending" && (
                         <button
                           type="button"
-                          disabled={updatingId === proposal.id}
-                          onClick={() => void updateProposalStatus(proposal.id, "shortlisted")}
-                          className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
+                          disabled={
+                            updatingId === proposal.id
+                          }
+                          onClick={() =>
+                            void updateProposalStatus(
+                              proposal.id,
+                              "accepted"
+                            )
+                          }
+                          className={buttonClasses({variant:"primary", size:"sm", className:"@min-[46rem]:w-20"})}
                         >
-                          Kısa listeye al
+                          {updatingId === proposal.id
+                            ? "İşleniyor..."
+                            : "Kabul et"}
                         </button>
-                      )}
 
-                      <button
-                        type="button"
-                        disabled={
-                          updatingId === proposal.id
-                        }
-                        onClick={() =>
-                          void updateProposalStatus(
-                            proposal.id,
-                            "accepted"
-                          )
-                        }
-                        className={buttonClasses({variant:"primary"})}
+                        <button
+                          type="button"
+                          disabled={
+                            updatingId === proposal.id
+                          }
+                          onClick={() =>
+                            void updateProposalStatus(
+                              proposal.id,
+                              "rejected"
+                            )
+                          }
+                          className={buttonClasses({variant:"ghost", size:"sm", className:"@min-[46rem]:w-[4.5rem]"})}
+                        >
+                          Reddet
+                        </button>
+                      </>
+                    )}
+
+                    {proposal.status === "accepted" && (
+                      <Link
+                        href={`/client/messages?user=${proposal.freelancer_id}&proposal=${proposal.id}`}
+                        className={buttonClasses({variant:"primary", size:"sm", className:"@min-[46rem]:w-32"})}
                       >
-                        {updatingId === proposal.id
-                          ? "İşleniyor..."
-                          : "Kabul et"}
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={
-                          updatingId === proposal.id
-                        }
-                        onClick={() =>
-                          void updateProposalStatus(
-                            proposal.id,
-                            "rejected"
-                          )
-                        }
-                        className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
-                      >
-                        Reddet
-                      </button>
-                    </>
+                        <MessageCircle size={15} />
+                        Mesaj Gönder
+                      </Link>
+                    )}
+                  </>
+                }
+                metadata={<>
+                  {proposal.freelancer?.title && <span>{proposal.freelancer.title}</span>}
+                  {proposal.freelancer && (
+                    <span>{AVAILABILITY_LABEL[proposal.freelancer.availability_status ?? "available"] ?? AVAILABILITY_LABEL.available}</span>
                   )}
-
-                  {proposal.status === "accepted" && (
-                    <Link
-                      href={`/client/messages?user=${proposal.freelancer_id}&proposal=${proposal.id}`}
-                      className={buttonClasses({variant:"primary"})}
-                    >
-                      <MessageCircle size={15} />
-                      Freelancer&apos;a mesaj gönder
-                    </Link>
-                  )}
-                </div>
-              </article>
+                  <span>{proposal.role || "Rol belirtilmemiş"}</span>
+                  {proposal.project?.status && <span>{projectStatusLabel(proposal.project.status)}</span>}
+                </>}
+                message={{ label: "Teklif mesajı", text: proposal.cover_letter || "Teklif mesajı eklenmemiş." }}
+              >
+                {!!proposal.freelancer?.skills?.length && (
+                  <OfferSkills skills={proposal.freelancer.skills}
+                    detailsId={`${detailsId}-skills`}
+                    expanded={isExpanded && showExtraSkills}
+                    onToggle={() => setShowExtraSkills(current => !current)} />
+                )}
+              </ProposalCard>
             );
           })}
         </div>
@@ -1204,108 +1126,63 @@ useEffect(() => {
           )}
 
         {activeTab === "sent" && !invitationsLoading && !invitationsError && (
-          <div className="mt-8 space-y-4">
+          <div className="mt-8 space-y-3">
             {filteredSentInvitations.map((invitation) => {
-              const freelancerName = publicDisplayName(invitation.freelancer, "Freelancer");
-
+              const detailsId = `${proposalDetailsPrefix}-invitation-${invitation.id}`;
               return (
-                <article
+                <ProposalCard
                   key={invitation.id}
-                  className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-[var(--color-text-secondary)]">
-                        {invitation.project?.title ?? "Proje"}
-                      </p>
-
-                      {invitation.freelancer ? (
-                        <Link
-                          href={`/client/freelancers/${invitation.freelancer.id}`}
-                          className="mt-1 block text-lg font-semibold text-[var(--color-text-primary)] hover:underline"
+                  title={invitation.freelancer ? publicDisplayName(invitation.freelancer, "Freelancer") : "Freelancer bilgisi bulunamadı"}
+                  titleHref={invitation.freelancer ? `/client/freelancers/${invitation.freelancer.id}` : undefined}
+                  subtitle={invitation.project?.title ?? "Proje"}
+                  projectHref={invitation.project ? `/client/projects/${invitation.project.id}` : undefined}
+                  status={invitation.status}
+                  statusLabel={invitationStatusLabel(invitation.status)}
+                  metrics={[
+                    { label: "Davet bütçesi", value: invitation.budget_per_person !== null ? formatCurrency(invitation.budget_per_person) : "Belirtilmedi" },
+                    { label: "Süre", value: invitation.duration || "Belirtilmedi" },
+                  ]}
+                  detailsId={detailsId}
+                  expanded={expandedProposalId === detailsId}
+                  onToggle={() => toggleOfferDetails(detailsId)}
+                  actions={
+                    <>
+                      {filterStatusKey(invitation.status) === "pending" && (
+                        <button
+                          type="button"
+                          disabled={cancellingId === invitation.id}
+                          onClick={() =>
+                            void cancelInvitation(invitation.id)
+                          }
+                          className={buttonClasses({
+                            variant: "ghost",
+                            size: "sm",
+                            className: "@min-[46rem]:w-32 border border-[var(--color-error-600)] bg-[var(--color-surface-1)]! text-[var(--color-error-600)]! enabled:hover:bg-[var(--color-error-50)]! enabled:hover:text-[color-mix(in_srgb,var(--color-error-600),black_25%)]! focus-visible:ring-[var(--color-error-600)]! disabled:opacity-60",
+                          })}
                         >
-                          {freelancerName}
+                          {cancellingId === invitation.id
+                            ? "İşleniyor..."
+                            : "Daveti İptal Et"}
+                        </button>
+                      )}
+
+                      {invitation.status === "accepted" && (
+                        <Link
+                          href={`/client/messages?user=${invitation.freelancer_id}&project=${invitation.project_id}`}
+                          className={buttonClasses({ variant: "primary", size: "sm", className: "@min-[46rem]:w-32" })}
+                        >
+                          <MessageCircle size={15} />
+                          Mesaj Gönder
                         </Link>
-                      ) : (
-                        <h2 className="mt-1 cc-h2 font-semibold text-[var(--color-text-primary)]">
-                          Freelancer bilgisi bulunamadı
-                        </h2>
                       )}
-
-                      {invitation.freelancer?.title && (
-                        <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                          {invitation.freelancer.title}
-                        </p>
-                      )}
-                    </div>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${invitationStatusClass(
-                        invitation.status
-                      )}`}
-                    >
-                      {invitationStatusLabel(invitation.status)}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 flex items-center gap-2">
-                    <Users size={15} className="text-[var(--color-text-muted)]" />
-
-                    <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                      {invitation.role}
-                    </span>
-                  </div>
-
-                  <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
-                    <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                      {invitation.message || "Davet mesajı eklenmemiş."}
-                    </p>
-
-                    <p className="mt-4 text-sm font-medium text-[var(--color-text-secondary)]">
-                      {invitation.budget_per_person !== null
-                        ? formatCurrency(invitation.budget_per_person)
-                        : "Bütçe belirtilmedi"}
-                      {" · "}
-                      {invitation.duration || "Süre belirtilmedi"}
-                    </p>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    {invitation.project && (
-                      <Link
-                        href={`/client/projects/${invitation.project.id}`}
-                        className="text-sm font-medium text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)]"
-                      >
-                        Projeyi görüntüle
-                      </Link>
-                    )}
-
-                    {filterStatusKey(invitation.status) === "pending" && (
-                      <button
-                        type="button"
-                        disabled={cancellingId === invitation.id}
-                        onClick={() =>
-                          void cancelInvitation(invitation.id)
-                        }
-                        className="rounded-lg border border-[var(--color-border-subtle)] px-4 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)] disabled:opacity-50"
-                      >
-                        {cancellingId === invitation.id
-                          ? "İşleniyor..."
-                          : "Daveti İptal Et"}
-                      </button>
-                    )}
-
-                    {invitation.status === "accepted" && (
-                      <Link
-                        href={`/client/messages?user=${invitation.freelancer_id}&project=${invitation.project_id}`}
-                        className={buttonClasses({variant:"primary"})}
-                      >
-                        <MessageCircle size={15} />
-                        Freelancer&apos;a mesaj gönder
-                      </Link>
-                    )}
-                  </div>
-                </article>
+                    </>
+                  }
+                  metadata={<>
+                    {invitation.freelancer?.title && <span>{invitation.freelancer.title}</span>}
+                    <span>{invitation.role}</span>
+                  </>}
+                  message={{ label: "Davet mesajı", text: invitation.message || "Davet mesajı eklenmemiş." }}
+                />
               );
             })}
           </div>
