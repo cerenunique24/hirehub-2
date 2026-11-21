@@ -95,3 +95,31 @@
 .workspaceHeading > .avatarGroup { margin:var(--space-3) 0; }
 .memberIdentity { min-width:0; }
 @media(max-width:639px) { .memberRow,.selfRow,.stageRow { flex-wrap:wrap; } .memberRow > .actions,.selfRow > .actions { width:100%; padding-left:calc(32px + var(--space-3)); } .detailHeader > .actions { flex-wrap:wrap; } }
+
+/* List-card refinement only; detail and workspace surfaces keep their layout. */
+.card { min-width:0; container-type:inline-size; container-name:coalition-card; }
+.cardHeading>div:first-child { min-width:0; overflow-wrap:anywhere; }
+.card .metadata { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; margin:24px 0; row-gap:20px; }
+.card .metadata>div { min-width:0; padding-inline:20px; border-left:1px solid var(--panel-border); }
+.card .metadata>div:nth-child(4n+1) { padding-left:0; border-left:0; }
+.card .metadata>div:nth-child(4n) { padding-right:0; }
+.card .metadata dt { font-size:13px; font-weight:500; }
+.card .metadata dd { font-size:14px; font-weight:500; color:var(--panel-text); overflow-wrap:anywhere; }
+.card .avatarGroup { gap:0; row-gap:8px; }
+.card .avatarGroup>span:not(:first-child):not(:last-child) { margin-left:-8px; }
+.card .avatarGroup>span:last-child { margin-left:12px; }
+.card .statusLine { font-size:13px; gap:8px; }
+.projectStatus { display:inline-flex; align-items:center; gap:8px; min-height:28px; padding:4px 10px; border-radius:var(--radius-pill); font-size:13px; font-weight:500; background:var(--panel-subtle); color:var(--panel-secondary); }
+.projectStatus[data-status="in_progress"] { background:var(--color-primary-50); color:var(--color-primary-600); }
+.projectStatus[data-status="completed"],.projectStatus[data-status="ready_to_start"] { background:var(--color-success-50); color:var(--color-success-600); }
+.liveDot { position:relative; width:6px; height:6px; border-radius:50%; flex-shrink:0; background:var(--color-primary-600); }
+.liveDot::after { content:""; position:absolute; inset:0; border-radius:inherit; background:inherit; animation:coalition-live-pulse 2.4s ease-out infinite; }
+@keyframes coalition-live-pulse { from { transform:scale(1); opacity:.25; } to { transform:scale(1.8); opacity:0; } }
+.card .cardFooter { justify-content:flex-end; padding-top:20px; margin-top:20px; }
+.card .cardFooter>div:first-child:not(.actions) { margin-right:auto; min-width:0; }
+.card .actions { justify-content:flex-end; gap:12px; min-width:0; flex-shrink:1; }
+.card .actions>a:not(.projectLink) { min-height:40px; }
+.card .actions .projectLink { margin:0; font-size:14px; font-weight:500; }
+@container coalition-card (max-width:800px) { .card .metadata { grid-template-columns:repeat(2,minmax(0,1fr)); } .card .metadata>div:nth-child(n) { padding-inline:20px; border-left:1px solid var(--panel-border); } .card .metadata>div:nth-child(2n+1) { padding-left:0; border-left:0; } .card .metadata>div:nth-child(2n) { padding-right:0; } }
+@container coalition-card (max-width:420px) { .card .metadata { grid-template-columns:minmax(0,1fr); gap:16px; } .card .metadata>div:nth-child(n) { padding:0; border:0; } .card .actions { justify-content:flex-start; } .card .actions>a { max-width:100%; white-space:normal; } }
+@media(prefers-reduced-motion:reduce) { .liveDot::after { animation:none; display:none; } }

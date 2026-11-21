@@ -25,10 +25,10 @@ function ReviewComment({comment}:{comment:string}) {
 function ReviewSkeleton() {
  return <div className={styles.reviewLoading} role="status"><span className="sr-only">Değerlendirmeler yükleniyor…</span><div aria-hidden="true" className={styles.reviewSkeletonSummary}/>{[0,1,2].map(index=><div key={index} className={styles.reviewSkeletonCard} aria-hidden="true"><div className={styles.reviewSkeletonIdentity}><span/><div><i/><i/></div></div><i/><i/></div>)}</div>;
 }
-export function ProfileReviews({reviews,rating,failed,loading,hasMore,onLoadMore}:{reviews:ProfileReview[];rating:ProfileRating|null;failed:boolean;loading:boolean;hasMore:boolean;onLoadMore:()=>void}) {
- return <section id="reviews" className={styles.section} aria-busy={loading} aria-labelledby="reviews-heading">
-  <h2 id="reviews-heading">Değerlendirmeler</h2>
-  {rating && <div className={styles.reviewSummary}><strong className={styles.reviewAverage}>{rating.average.toFixed(1)}</strong><div><ReviewStars rating={rating.average}/><p>{rating.count} değerlendirme</p></div></div>}
+export function ProfileReviews({showcase = false,reviews,rating,failed,loading,hasMore,onLoadMore}:{showcase?:boolean;reviews:ProfileReview[];rating:ProfileRating|null;failed:boolean;loading:boolean;hasMore:boolean;onLoadMore:()=>void}) {
+ return <section id="reviews" className={[styles.section,showcase ? styles.reviewShowcase : ""].join(" ")} aria-busy={loading} aria-labelledby="reviews-heading">
+  <h2 id="reviews-heading">{showcase ? "Yorumlar & Değerlendirmeler" : "Değerlendirmeler"}</h2>
+  {rating && !failed && <div className={styles.reviewSummary}><strong className={styles.reviewAverage}>{rating.average.toFixed(1)}</strong><div><ReviewStars rating={rating.average}/><p>{rating.count} değerlendirme</p></div></div>}
   {failed ? <p role="alert" className={styles.muted}>Değerlendirmeler yüklenemedi.</p>
   : loading && reviews.length===0 ? <ReviewSkeleton/>
   : reviews.length===0 ? <div className={styles.reviewEmpty}><p>Henüz değerlendirme yok</p><p className={styles.muted}>Tamamlanan projelerden sonra alınan değerlendirmeler burada görünür.</p></div>

@@ -10,3 +10,8 @@
 .artColumn{display:none}.mascot{position:absolute;bottom:0;right:0;width:calc(var(--space-16) * 2);height:calc(var(--space-16) * 2);object-fit:contain;pointer-events:none}
 @media(min-width:1200px){.withMascot{grid-template-columns:minmax(0,1fr) calc(var(--space-16) * 2)}.artColumn{display:block;position:relative;min-width:0;pointer-events:none}}
 @media(max-width:639px){.page::before{inset:calc(-1 * var(--space-5)) calc(-1 * var(--page-padding-x-mobile))}.cardHeading{flex-direction:column;gap:var(--space-2)}.cardFooter{flex-direction:column;align-items:stretch}.cardFooter>a{width:100%}.metadata{gap:var(--space-3) var(--space-6)}}
+
+/* Client decoration sits at the viewport corner, never in the project grid. */
+.cornerList { position:relative; z-index:1; }
+.cornerArt { display:none; pointer-events:none; }
+@media(min-width:1200px) { .cornerArt { display:block; position:fixed; right:var(--space-6); bottom:var(--space-6); width:var(--space-20); height:var(--space-20); z-index:0; } .cornerArt .mascot { position:static; width:100%; height:100%; object-fit:contain; } }

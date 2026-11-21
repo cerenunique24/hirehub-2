@@ -22,7 +22,6 @@ type Freelancer = {
     city: string | null;
     work_types: string[] | null;
     languages: string[] | null;
-    profile_completion: number | null;
     availability_note: string | null;
     available_from: string | null;
 };
@@ -45,6 +44,7 @@ function FreelancerProfileContent() {
     const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
     const [experiences, setExperiences] = useState<ProfileExperience[]>([]);
     const [experienceError, setExperienceError] = useState(false);
+    const [viewerRole, setViewerRole] = useState<"client" | "freelancer">("freelancer");
     const [canInvite, setCanInvite] = useState(false);
     const [messageHref, setMessageHref] = useState<string | null>(null);
     const [portfolioError, setPortfolioError] = useState(false);
@@ -58,6 +58,7 @@ function FreelancerProfileContent() {
                 setLoading(false);
                 return;
             }
+            setViewerRole("freelancer");
             setCanInvite(false);
             setMessageHref(null);
             setExperiences([]);
@@ -71,7 +72,7 @@ function FreelancerProfileContent() {
             // seçilir (email/telefon gibi özel bilgiler asla döndürülmez).
             const { data, error: loadError } = await supabase
                 .from("profiles")
-                .select("id, first_name, avatar_url, title, bio, expertise, skills, role, availability_status, experience, hourly_rate, city, work_types, languages, profile_completion, availability_note, available_from")
+                .select("id, first_name, avatar_url, title, bio, expertise, skills, role, availability_status, experience, hourly_rate, city, work_types, languages, availability_note, available_from")
                 .eq("id", id)
                 .maybeSingle();
             if (cancelled)
@@ -102,6 +103,7 @@ function FreelancerProfileContent() {
             const { data: viewer } = await supabase.from("profiles").select("role").eq("id", auth.user.id).maybeSingle();
             if (cancelled || viewer?.role !== "client")
                 return;
+            setViewerRole("client");
             const [projectsResult, messagesResult] = await Promise.all([
                 supabase.from("projects").select("id").eq("client_id", auth.user.id).in("status", ["open", "ready_to_start"]).limit(1),
                 supabase.from("messages").select("id").or("and(sender_id.eq." + auth.user.id + ",receiver_id.eq." + id + "),and(sender_id.eq." + id + ",receiver_id.eq." + auth.user.id + ")").is("coalition_id", null).is("proposal_id", null).is("project_id", null).limit(1),
@@ -142,6 +144,6 @@ function FreelancerProfileContent() {
         </div>
       </div>);
     }
-    return <FreelancerProfileView reviewState={reviewsState} key={freelancer.id} profile={freelancer} portfolio={portfolio} experiences={experiences} portfolioError={portfolioError} experienceError={experienceError} returnTo={returnTo} inviteAction={canInvite ? <InviteFreelancerPanel freelancerId={freelancer.id}/> : undefined} messageHref={messageHref}/>;
+    return <FreelancerProfileView viewerRole={viewerRole} reviewState={reviewsState} key={freelancer.id} profile={freelancer} portfolio={portfolio} experiences={experiences} portfolioError={portfolioError} experienceError={experienceError} returnTo={returnTo} inviteAction={canInvite ? <InviteFreelancerPanel freelancerId={freelancer.id}/> : undefined} messageHref={messageHref}/>;
 }
 export default function FreelancerProfilePage() { return <Suspense fallback={<div>Profil yükleniyor…</div>}><FreelancerProfileContent /></Suspense>; }

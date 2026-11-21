@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {ProjectDraftReturn} from "@/components/projects/creation/ProjectDraftReturn";
 import { ArrowLeft, Check, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -165,6 +166,7 @@ export default function PremiumPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 py-12 sm:px-10 sm:py-16">
+        <ProjectDraftReturn/>
         <div className="text-center">
           <h1 className="text-3xl font-semibold text-gray-900 sm:text-4xl">Paketler</h1>
           <p className="mx-auto mt-3 max-w-xl text-gray-500">

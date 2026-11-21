@@ -1359,12 +1359,12 @@ function ClientMessagesContent() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center bg-[var(--color-surface-2)] text-sm text-[var(--color-text-muted)]">
+              <div className="flex flex-1 items-center justify-center bg-[var(--color-surface-soft)] text-sm text-[var(--color-text-muted)]">
                 Bir ekip konuşması seç.
               </div>
             )
           ) : !selectedProfile ? (
-            <div className="flex flex-1 flex-col items-center justify-center bg-[var(--color-surface-2)]">
+            <div className="flex flex-1 flex-col items-center justify-center bg-[var(--color-surface-soft)]">
               <MessageCircle
                 size={30}
                 className="mb-3 text-gray-300"
@@ -1451,7 +1451,7 @@ function ClientMessagesContent() {
               </div>
 
               {/* MESSAGES */}
-              <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--color-surface-2)] p-5">
+              <div className="flex-1 space-y-4 overflow-y-auto bg-[var(--color-surface-soft)] p-5">
                 {selectedMessages.length ===
                 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-[var(--color-text-muted)]">
@@ -1519,7 +1519,7 @@ function ClientMessagesContent() {
                   <p className="mb-3 text-sm text-[var(--color-error-600)]">{attachmentError}</p>
                 )}
                 {attachmentFile && (
-                  <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
+                  <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-card)] bg-[var(--color-surface-soft)] px-3 py-2 text-sm text-[var(--color-text-secondary)]">
                     <FileText size={15} />
                     <span className="flex-1 truncate">{attachmentFile.name}</span>
                     <button

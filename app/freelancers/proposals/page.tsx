@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { DashboardMascot } from "@/components/dashboard/DashboardMascot";
-import { panelRootClass, PanelBadge } from "@/components/dashboard/PanelPrimitives";
+import { panelRootClass } from "@/components/dashboard/PanelPrimitives";
 import { buttonClasses } from "@/components/ui/Button";
+import { ProposalCard } from "@/components/proposals/ProposalCard";
 import styles from "@/components/proposals/Proposals.module.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -147,6 +148,12 @@ export default function OffersPage() {
   const [invitationFilter, setInvitationFilter] =
     useState<FilterType>("all");
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [expandedOfferId, setExpandedOfferId] = useState<string | null>(null);
+  const detailsPrefix = useId();
+
+  function toggleOfferDetails(id: string) {
+    setExpandedOfferId(current => current === id ? null : id);
+  }
 
   useEffect(() => {
     void loadProposals();
@@ -508,7 +515,7 @@ export default function OffersPage() {
           }`}
         >
           <ArrowDownToLine className="h-4 w-4" />
-          Gelen Teklifler
+          Gelen Davetler
           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
             {invitationCounts.all}
           </span>
@@ -588,74 +595,35 @@ export default function OffersPage() {
               <div className={styles.list}>
                 {filteredProposals.map((proposal) => {
                   const project = proposal.project;
-
+                  const detailsId = `${detailsPrefix}-proposal-${proposal.id}`;
                   return (
-                    <div
+                    <ProposalCard
                       key={proposal.id}
-                      className={styles.proposalCard}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-3 flex flex-wrap items-center gap-3">
-                          <h2 className="text-lg font-semibold text-gray-900">
-                            {project?.title ?? "Proje bulunamadı"}
-                          </h2>
-
-                          <PanelBadge>{getStatusLabel(proposal.status)}</PanelBadge>
-                        </div>
-
-                        <p className="mb-5 text-sm text-gray-500">
-                          {proposal.role || project?.project_type || "Rol belirtilmedi"}
-                        </p>
-
-                        {proposal.cover_letter && <p className={styles.summary}>{proposal.cover_letter}</p>}
-                        <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
-                          <div>
-                            <span className="mb-1 block text-gray-400">
-                              Teklif Tutarı
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {formatPrice(proposal.bid_amount)}
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="mb-1 block text-gray-400">
-                              Teslim Süresi
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {proposal.delivery_days} gün
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="mb-1 block text-gray-400">
-                              Gönderim Tarihi
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {formatDate(proposal.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={styles.actions}>
-                        {project?.client_id && (
+                      title={project?.title ?? "Proje bulunamadı"}
+                      subtitle={proposal.role || project?.project_type || "Rol belirtilmedi"}
+                      projectHref={project ? `/freelancers/discover/${project.id}` : undefined}
+                      status={getStatusKey(proposal.status) === "accepted" ? "accepted" : proposal.status}
+                      statusLabel={getStatusLabel(proposal.status)}
+                      metrics={[
+                        { label: "Teklif Tutarı", value: formatPrice(proposal.bid_amount) },
+                        { label: "Teslim Süresi", value: `${proposal.delivery_days} gün` },
+                      ]}
+                      detailsId={detailsId}
+                      expanded={expandedOfferId === detailsId}
+                      onToggle={() => toggleOfferDetails(detailsId)}
+                      actions={
+                        project?.client_id && (
                           <Link
                             href={`/freelancers/messages?user=${project.client_id}&proposal=${proposal.id}`}
-                            className={buttonClasses({variant:"primary",size:"sm",className:""})}
+                            className={buttonClasses({ variant: "primary", size: "sm" })}
                           >
                             Mesajlar
                           </Link>
-                        )}
-
-                        <Link
-                          href={`/freelancers/proposals/${proposal.id}`}
-                          className={buttonClasses({variant:"secondary",size:"sm"})}
-                        >
-                          Teklifimi Göster
-                        </Link>
-                      </div>
-                    </div>
+                        )
+                      }
+                      metadata={<span>Gönderim Tarihi · {formatDate(proposal.created_at)}</span>}
+                      message={proposal.cover_letter ? { label: "Teklif mesajı", text: proposal.cover_letter } : undefined}
+                    />
                   );
                 })}
               </div>
@@ -663,7 +631,7 @@ export default function OffersPage() {
         </>
       )}
 
-      {/* GELEN TEKLİFLER (ekip davetleri) */}
+      {/* GELEN DAVETLER (ekip davetleri) */}
       {activeTab === "received" && (
         <>
           {invitationsLoading && (
@@ -710,112 +678,60 @@ export default function OffersPage() {
           {!invitationsLoading &&
             !invitationsError &&
             filteredInvitations.length > 0 && (
-              <div className="space-y-5">
-                {filteredInvitations.map((invitation) => (
-                  <div
-                    key={invitation.id}
-                    className={styles.invitationCard}
-                  >
-                    <div className={styles.invitationRow}>
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-3 flex flex-wrap items-center gap-3">
-                          <h2 className="text-lg font-semibold text-gray-900">
-                            {invitation.project?.title ?? "Proje bulunamadı"}
-                          </h2>
-
-                          <PanelBadge>{getStatusLabel(invitation.status)}</PanelBadge>
-                        </div>
-
-                        <p className="mb-5 text-sm text-gray-500">
-                          {invitation.role}
-                        </p>
-
-                        <div className="flex flex-wrap gap-x-10 gap-y-4 text-sm">
-                          {invitation.budget_per_person !== null && (
-                            <div>
-                              <span className="mb-1 block text-gray-400">
-                                Kişi Başı Bütçe
-                              </span>
-                              <span className="font-medium text-gray-900">
-                                {formatPrice(invitation.budget_per_person)}
-                              </span>
-                            </div>
+              <div className={styles.list}>
+                {filteredInvitations.map((invitation) => {
+                  const detailsId = `${detailsPrefix}-invitation-${invitation.id}`;
+                  return (
+                    <ProposalCard
+                      key={invitation.id}
+                      title={invitation.project?.title ?? "Proje bulunamadı"}
+                      subtitle={invitation.role}
+                      projectHref={invitation.project ? `/freelancers/discover/${invitation.project.id}` : undefined}
+                      status={getStatusKey(invitation.status) === "accepted" ? "accepted" : invitation.status}
+                      statusLabel={getStatusLabel(invitation.status)}
+                      metrics={[
+                        { label: "Kişi Başı Bütçe", value: invitation.budget_per_person === null ? "Belirtilmedi" : formatPrice(invitation.budget_per_person) },
+                        { label: "Süre", value: invitation.duration || "Belirtilmedi" },
+                      ]}
+                      detailsId={detailsId}
+                      expanded={expandedOfferId === detailsId}
+                      onToggle={() => toggleOfferDetails(detailsId)}
+                      actions={
+                        <>
+                          <Link
+                            href={`/freelancers/messages?user=${invitation.client_id}&project=${invitation.project_id}`}
+                            className={buttonClasses({ variant: "secondary", size: "sm" })}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Mesaj
+                          </Link>
+                          {getStatusKey(invitation.status) === "pending" && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={respondingId === invitation.id}
+                                onClick={() => void respondToInvitation(invitation, "accepted")}
+                                className={buttonClasses({ variant: "primary", size: "sm" })}
+                              >
+                                {respondingId === invitation.id ? "İşleniyor..." : "Kabul Et"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={respondingId === invitation.id}
+                                onClick={() => void respondToInvitation(invitation, "rejected")}
+                                className={buttonClasses({ variant: "secondary", size: "sm" })}
+                              >
+                                Reddet
+                              </button>
+                            </>
                           )}
-
-                          {invitation.duration && (
-                            <div>
-                              <span className="mb-1 block text-gray-400">
-                                Süre
-                              </span>
-                              <span className="font-medium text-gray-900">
-                                {invitation.duration}
-                              </span>
-                            </div>
-                          )}
-
-                          <div>
-                            <span className="mb-1 block text-gray-400">
-                              Davet Tarihi
-                            </span>
-                            <span className="font-medium text-gray-900">
-                              {formatDate(invitation.created_at)}
-                            </span>
-                          </div>
-                        </div>
-
-                        {invitation.message && (
-                          <p className={styles.summary}>
-                            {invitation.message}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className={styles.actions}>
-                        <Link
-                          href={`/freelancers/messages?user=${invitation.client_id}&project=${invitation.project_id}`}
-                          className={buttonClasses({variant:"secondary",size:"sm"})}
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          Mesaj
-                        </Link>
-
-                        {getStatusKey(invitation.status) === "pending" && (
-                          <>
-                            <button
-                              type="button"
-                              disabled={respondingId === invitation.id}
-                              onClick={() =>
-                                void respondToInvitation(
-                                  invitation,
-                                  "accepted"
-                                )
-                              }
-                              className={buttonClasses({variant:"primary",size:"sm",className:""})}
-                            >
-                              {respondingId === invitation.id
-                                ? "İşleniyor..."
-                                : "Kabul Et"}
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={respondingId === invitation.id}
-                              onClick={() =>
-                                void respondToInvitation(
-                                  invitation,
-                                  "rejected"
-                                )
-                              }
-                              className={buttonClasses({variant:"secondary",size:"sm"})}
-                            >
-                              Reddet
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                        </>
+                      }
+                      metadata={<span>Davet Tarihi · {formatDate(invitation.created_at)}</span>}
+                      message={invitation.message ? { label: "Davet mesajı", text: invitation.message } : undefined}
+                    />
+                  );
+                })}
               </div>
             )}
         </>

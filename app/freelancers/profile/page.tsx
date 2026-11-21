@@ -10,15 +10,14 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AvailabilityCard from "@/components/freelancers/AvailabilityCard";
+import ProfileShowcase from "@/components/freelancers/ProfileShowcase";
+import { useFreelancerReviews } from "@/components/freelancers/useFreelancerReviews";
 import { normalizeStringArray, stringArrayToTextColumn } from "@/lib/utils/normalizeStringArray";
 import { CATEGORIES } from "@/lib/categories";
 import {
   Plus,
-  Trash2,
   X,
   Upload,
-  Image as ImageIcon,
-  Pencil,
   Save,
   Camera,
   ZoomIn,
@@ -191,6 +190,7 @@ export default function ProfilePage() {
   const cropImageRef = useRef<HTMLImageElement | null>(null);
 
   const [profile, setProfile] = useState<Profile | null>(null);
+  const reviewState = useFreelancerReviews(profile?.id ?? null);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [activeProjectCount, setActiveProjectCount] = useState(0);
@@ -896,14 +896,8 @@ export default function ProfilePage() {
           "id",
           profile.id
         )
-        // `phone` bilerek çıkarıldı: private bir kolon, RETURNING üzerinden
-        // de olsa SELECT ayrıcalığı gerektirir (bkz.
-        // supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
-        // Aşağıda mevcut profil state'iyle merge edildiği için bellekteki
-        // phone değeri kaybolmaz.
-        .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, availability_note, available_from, availability_updated_at, experience, expertise, work_types, languages"
-        )
+        // RETURNING also requires SELECT permission; only read the changed public field.
+        .select("avatar_url")
         .single();
 
       if (error) {
@@ -927,14 +921,7 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile((current) => ({
-        ...current,
-        ...(data as Profile),
-        skills: normalizeStringArray((data as Profile).skills),
-        expertise: normalizeStringArray((data as Profile).expertise),
-        work_types: normalizeStringArray((data as Profile).work_types),
-        languages: normalizeStringArray((data as Profile).languages),
-      }));
+      setProfile(current => current ? { ...current, avatar_url: data?.avatar_url ?? publicUrl } : current);
 
       if (
         oldAvatarUrl &&
@@ -1129,10 +1116,7 @@ export default function ProfilePage() {
             )
           : null;
 
-      const {
-        data,
-        error,
-      } = await supabase
+      const { error } = await supabase
         .from("profiles")
         .update({
           first_name:
@@ -1186,14 +1170,8 @@ export default function ProfilePage() {
           "id",
           profile.id
         )
-        // `phone` bilerek çıkarıldı: private bir kolon, RETURNING üzerinden
-        // de olsa SELECT ayrıcalığı gerektirir (bkz.
-        // supabase/migrations/202609200002_restrict_profile_pii_exposure.sql).
-        // Zaten yukarıda `phone`'u kendimiz yazdığımız için değerini
-        // biliyoruz; state'e onu doğrudan set ediyoruz.
-        .select(
-          "id, first_name, last_name, avatar_url, title, bio, skills, city, hourly_rate, availability, availability_status, availability_note, available_from, availability_updated_at, experience, expertise, work_types, languages"
-        )
+        // Confirm the updated row using a public field, then read private data via RPC.
+        .select("id")
         .single();
 
       if (error) {
@@ -1211,15 +1189,22 @@ export default function ProfilePage() {
         return;
       }
 
-      setProfile((current) => ({
+      const { data: ownProfile, error: readError } = await supabase.rpc("get_my_full_profile");
+      const data = (Array.isArray(ownProfile) ? ownProfile[0] : null) as Profile | null;
+      if (readError || !data || data.id !== profile.id) {
+        console.error("PROFILE REFRESH ERROR:", getSupabaseErrorDetails(readError ?? "Profil kaydı alınamadı."));
+        alert("Profil kaydedildi ancak güncel bilgiler alınamadı. Sayfayı yenileyerek kontrol et.");
+        return;
+      }
+
+      setProfile((current) => current ? ({
         ...current,
         ...(data as Profile),
-        phone: profileForm.phone.trim() || null,
         skills: normalizeStringArray((data as Profile).skills),
         expertise: normalizeStringArray((data as Profile).expertise),
         work_types: normalizeStringArray((data as Profile).work_types),
         languages: normalizeStringArray((data as Profile).languages),
-      }));
+      }) : current);
 
       setShowProfileForm(false);
 
@@ -1900,406 +1885,22 @@ export default function ProfilePage() {
     );
   }
 
-  const fullName =
-    `${profile.first_name || ""} ${
-      profile.last_name || ""
-    }`.trim() ||
-    "Freelancer";
-
-  const skills =
-    profile.skills || [];
-
-  const initials =
-    fullName
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map(
-        (name) => name[0]
-      )
-      .join("")
-      .toLocaleUpperCase(
-        "tr-TR"
-      );
+  const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(" ") || "Freelancer";
+  const initials = fullName.split(" ").filter(Boolean).slice(0, 2).map(name=>name[0]).join("").toLocaleUpperCase("tr-TR");
 
   return (
-    <main className="w-full">
-      {/* PROFİL HEADER */}
-
-      <section className="mb-6 flex items-center justify-between rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center gap-5">
-          <div className="relative">
-            {profile.avatar_url ? (
-              <img
-                src={
-                  profile.avatar_url
-                }
-                alt={fullName}
-                className="h-24 w-24 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-[var(--color-primary-600)] text-2xl font-semibold text-white">
-                {initials}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={
-                openAvatarPicker
-              }
-              className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[var(--color-primary-600)] text-white shadow-md transition hover:bg-[var(--color-primary-700)]"
-              title="Profil fotoğrafını değiştir"
-            >
-              <Camera size={16} />
-            </button>
-
-            <input
-              ref={
-                avatarInputRef
-              }
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={
-                handleAvatarChange
-              }
-              className="hidden"
-            />
-          </div>
-
-          <div>
-            <h1 className="cc-page-title">
-              {fullName}
-            </h1>
-
-            <p className="mt-1 text-gray-500">
-              {profile.title ||
-                "Ünvan belirtilmedi"}
-            </p>
-
-            {profile.city && (
-              <p className="mt-3 text-sm text-gray-500">
-                {profile.city}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={
-            openProfileForm
-          }
-          className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:border-[var(--color-primary-600)] hover:text-[var(--color-text-primary)]"
-        >
-          <Pencil size={16} />
-          Profili Düzenle
-        </button>
-      </section>
-
-      {/* MÜSAİTLİK */}
-
-      <section className="mb-6">
-        <AvailabilityCard
-          status={profile.availability_status}
-          activeProjectCount={activeProjectCount}
-          availableFrom={profile.available_from}
-          availabilityNote={profile.availability_note}
-          availabilityUpdatedAt={profile.availability_updated_at}
-          onStatusChange={(next) =>
-            setProfile((current) =>
-              current
-                ? { ...current, availability_status: next }
-                : current
-            )
-          }
-        />
-      </section>
-
-      {/* HAKKIMDA */}
-
-      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-3 font-semibold">
-          Hakkımda
-        </h2>
-
-        <p className="text-sm leading-6 text-gray-600">
-          {profile.bio ||
-            "Henüz açıklama eklenmedi."}
-        </p>
-      </section>
-
-      {/* UZMANLIKLAR */}
-
-      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-4 font-semibold">
-          Uzmanlıklar
-        </h2>
-
-        {skills.length > 0 ? (
-          <div className="flex flex-wrap gap-3">
-            {skills.map(
-              (skill) => (
-                <span
-                  key={skill}
-                  className="rounded-lg bg-gray-100 px-4 py-2 text-sm"
-                >
-                  {skill}
-                </span>
-              )
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">
-            Henüz uzmanlık
-            eklenmedi.
-          </p>
-        )}
-      </section>
-
-      {/* PORTFOLYO */}
-
-      <section className="mb-6 rounded-xl border border-gray-200 bg-white p-5">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold">
-              Portfolyo
-            </h2>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Çalışmalarınızı
-              sergileyin.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowPortfolioForm(
-                true
-              )
-            }
-            className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
-          >
-            <Plus size={16} />
-            Proje Ekle
-          </button>
-        </div>
-
-        {portfolio.length ===
-        0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center">
-            <ImageIcon
-              size={28}
-              className="mx-auto mb-3 text-gray-300"
-            />
-
-            <p className="text-sm text-gray-500">
-              Henüz portfolyo
-              projesi
-              eklenmedi.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {portfolio.map(
-              (project) => (
-                <div
-                  key={
-                    project.id
-                  }
-                  className="overflow-hidden rounded-xl border border-gray-200"
-                >
-                  {project.image_url ? (
-                    <img
-                      src={
-                        project.image_url
-                      }
-                      alt={
-                        project.title
-                      }
-                      className="h-40 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-40 items-center justify-center bg-gray-100 text-sm text-gray-400">
-                      Görsel yok
-                    </div>
-                  )}
-
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-medium">
-                          {
-                            project.title
-                          }
-                        </h3>
-
-                        {project.category && (
-                          <p className="mt-1 text-sm text-gray-500">
-                            {
-                              project.category
-                            }
-                          </p>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deletePortfolio(
-                            project
-                          )
-                        }
-                        className="text-gray-400 transition hover:text-red-500"
-                        title="Projeyi sil"
-                      >
-                        <Trash2
-                          size={16}
-                        />
-                      </button>
-                    </div>
-
-                    {project.description && (
-                      <p className="mt-3 text-sm leading-5 text-gray-600">
-                        {
-                          project.description
-                        }
-                      </p>
-                    )}
-
-                    {project.skills &&
-                      project.skills
-                        .length >
-                        0 && (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          {project.skills.map(
-                            (
-                              skill
-                            ) => (
-                              <span
-                                key={
-                                  skill
-                                }
-                                className="rounded-full bg-gray-100 px-2.5 py-1 text-xs"
-                              >
-                                {
-                                  skill
-                                }
-                              </span>
-                            )
-                          )}
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* DENEYİMLER */}
-
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold">
-              Geçmiş Deneyimler
-            </h2>
-
-            <p className="mt-1 text-sm text-gray-500">
-              İsteğe bağlı olarak
-              deneyimlerinizi
-              ekleyebilirsiniz.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={() =>
-              setShowExperienceForm(
-                true
-              )
-            }
-            className="flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-4 py-2.5 text-sm text-white transition hover:bg-[var(--color-primary-700)]"
-          >
-            <Plus size={16} />
-            Deneyim Ekle
-          </button>
-        </div>
-
-        {experiences.length ===
-        0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 p-6 text-center">
-            <p className="text-sm text-gray-500">
-              Henüz deneyim
-              eklenmedi.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {experiences.map(
-              (experience) => (
-                <div
-                  key={
-                    experience.id
-                  }
-                  className="flex justify-between gap-5 border-b border-gray-100 pb-5 last:border-0 last:pb-0"
-                >
-                  <div>
-                    <h3 className="font-medium">
-                      {
-                        experience.position
-                      }
-                    </h3>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                      {
-                        experience.company_name
-                      }
-                    </p>
-
-                    {(experience.start_date ||
-                      experience.end_date) && (
-                      <p className="mt-2 text-xs text-gray-400">
-                        {experience.start_date ||
-                          "Başlangıç"}
-                        {" - "}
-                        {experience.end_date ||
-                          "Devam ediyor"}
-                      </p>
-                    )}
-
-                    {experience.description && (
-                      <p className="mt-3 text-sm leading-5 text-gray-600">
-                        {
-                          experience.description
-                        }
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      deleteExperience(
-                        experience.id
-                      )
-                    }
-                    className="text-gray-400 transition hover:text-red-500"
-                    title="Deneyimi sil"
-                  >
-                    <Trash2
-                      size={16}
-                    />
-                  </button>
-                </div>
-              )
-            )}
-          </div>
-        )}
-      </section>
+    <div className="w-full min-w-0">
+      <ProfileShowcase
+        profile={profile} portfolio={portfolio} experiences={experiences}
+        activeProjectCount={activeProjectCount} reviews={reviewState}
+        onAvatar={openAvatarPicker} onEdit={openProfileForm}
+        onAddPortfolio={()=>setShowPortfolioForm(true)} onDeletePortfolio={item=>void deletePortfolio(item)}
+        onAddExperience={()=>setShowExperienceForm(true)} onDeleteExperience={id=>void deleteExperience(id)}
+        avatarInput={<input ref={avatarInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleAvatarChange} className="hidden" />}
+        availability={<AvailabilityCard compact status={profile.availability_status} activeProjectCount={activeProjectCount}
+          availableFrom={profile.available_from} availabilityNote={profile.availability_note} availabilityUpdatedAt={profile.availability_updated_at}
+          onStatusChange={next=>setProfile(current=>current?{...current,availability_status:next}:current)} />}
+      />
 
       {/* PROFİL DÜZENLE */}
 
@@ -3742,6 +3343,6 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

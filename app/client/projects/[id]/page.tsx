@@ -15,6 +15,7 @@ import ProjectWorkroom from "@/components/projects/ProjectWorkroom";
 import ProjectAnalyticsPanel from "@/components/premium/client/ProjectAnalyticsPanel";
 import AiShortlistPanel from "@/components/premium/client/AiShortlistPanel";
 import { notifyProjectStarted } from "@/lib/notifications";
+import { fetchBudgetBreakdown, getTeamCompletion, type RoleCompletion } from "@/lib/projects/teamReadiness";
 import RequirementsConfirmation from "@/components/projects/RequirementsConfirmation";
 
 type Project = {
@@ -61,6 +62,7 @@ function ClientProjectDetailContent() {
   const [coalitionId, setCoalitionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openRoles, setOpenRoles] = useState<RoleCompletion[]>([]);
   const [proposalCount, setProposalCount] = useState(0);
   const [starting, setStarting] = useState(false);
   const [requirementsReady, setRequirementsReady] = useState(false);
@@ -188,6 +190,9 @@ function ClientProjectDetailContent() {
       setTeamMembers([]);
     }
 
+    const breakdown = await fetchBudgetBreakdown(supabase, id);
+    setOpenRoles(membersError ? [] : getTeamCompletion(breakdown, members ?? []).roles.filter(role => !role.isFull));
+
     if (projectData.team_required) {
       const { data: coalitionData } = await supabase
         .from("coalitions")
@@ -282,7 +287,7 @@ function ClientProjectDetailContent() {
   const canStart = project.status === "ready_to_start";
   const messageHref = cameFromMessages && backToMessagesUser
     ? `/client/messages?user=${encodeURIComponent(backToMessagesUser)}${backToMessagesProposal?"&proposal="+encodeURIComponent(backToMessagesProposal):""}` : undefined;
-  return <ProjectDetailSurface role="client" project={project} backHref="/client/projects" messageHref={messageHref} memberCount={teamMembers.length} coalitionId={coalitionId}
+  return <ProjectDetailSurface proposalCount={proposalCount} role="client" project={project} backHref="/client/projects" messageHref={messageHref} memberCount={teamMembers.length} coalitionId={coalitionId}
     actions={!isStarted?<>
             {canStart && (
               <button
@@ -306,8 +311,8 @@ function ClientProjectDetailContent() {
                 </Link>
 
                 <Link
-                  href="/client/proposals"
-                  className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-5 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
+                  href={`/client/projects/${project.id}?tab=proposals`}
+                  className={buttonClasses({variant:"secondary"})}
                 >
                   Teklifleri görüntüle ({proposalCount})
                 </Link>
@@ -317,9 +322,13 @@ function ClientProjectDetailContent() {
     </>:null}>
     {canStart&&<RequirementsConfirmation ready={requirementsReady} note={requirementsNote} onReadyChange={setRequirementsReady} onNoteChange={setRequirementsNote}/>}
     <ProjectWorkroom
+      openRoles={openRoles}
+      proposalCount={proposalCount}
+      clientExtras={!isStarted ? <><ProjectAnalyticsPanel/><AiShortlistPanel projectId={project.id}/></> : null}
       identityShownAbove
-      key={searchParams.get("tab")==="milestones"?"milestones":"overview"}
-      initialTab={searchParams.get("tab")==="milestones"?"milestones":"overview"}
+      startActionShownAbove={canStart}
+      key={searchParams.get("tab") === "proposals" ? "proposals" : searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
+      initialTab={searchParams.get("tab") === "proposals" ? "proposals" : searchParams.get("tab") === "milestones" ? "milestones" : "overview"}
       project={project}
       onProjectChanged={()=>void loadProject()}
       teamMembers={teamMembers}
@@ -329,7 +338,7 @@ function ClientProjectDetailContent() {
       coalitionId={coalitionId}
       onProjectCompleted={()=>setProject(current=>current?{...current,status:"completed"}:current)}
     />
-    {!isStarted&&<><ProjectAnalyticsPanel/><AiShortlistPanel projectId={project.id}/></>}
+
   </ProjectDetailSurface>;
 }
 

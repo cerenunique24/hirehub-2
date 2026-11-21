@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {ProjectDraftReturn} from "@/components/projects/creation/ProjectDraftReturn";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, CreditCard, Check, ShieldCheck, Clock3, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -145,6 +146,7 @@ function CheckoutContent() {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 py-12 sm:px-10">
+        <ProjectDraftReturn/>
         <h1 className="text-2xl font-bold text-gray-900">Satın Alma Özeti</h1>
 
         {/* MEVCUT ABONELİK BAĞLAMI — plan değiştirme akışında */}

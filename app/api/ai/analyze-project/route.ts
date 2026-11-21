@@ -1,3 +1,4 @@
+import { CORE_TEAM_POLICY, assertCoreTeamLimit } from "@/lib/ai/coreTeamPolicy";
 import type {
   ProjectBrief,
   ProjectAnalysis,
@@ -162,8 +163,12 @@ function validateProjectAnalysis(
     );
   }
 
+  assertCoreTeamLimit({ requiredRoles, roleDetails });
+
   return {
     ...parsed,
+    summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
+    recommendations: normalizeStringArray(parsed.recommendations),
     requiredRoles,
     requiredSkills,
     roleDetails,
@@ -183,6 +188,8 @@ AI proje analiz asistanısın.
 Görevin, client tarafından girilen proje bilgisini analiz ederek
 proje için gerekli freelancer rollerini ve her rolün ihtiyaçlarını
 belirlemektir.
+
+${CORE_TEAM_POLICY}
 
 AMAÇ:
 
@@ -341,6 +348,8 @@ Açıklama ekleme.
 JSON ŞEMASI:
 
 {
+  "summary": "Çekirdek ekibin neden yeterli olduğunu açıklayan en fazla iki cümle",
+  "recommendations": ["Varsa çekirdek ekipten ayrı isteğe bağlı uzmanlık ve gerekli olduğu koşul; yoksa boş dizi"],
   "requiredRoles": [
     "string"
   ],

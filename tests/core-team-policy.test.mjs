@@ -1,0 +1,15 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+function compile(file,load=()=>({}),extra=''){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8')+extra,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:load,console});return exports;}
+const policy=compile('lib/ai/coreTeamPolicy.ts');
+const route=compile('app/api/ai/analyze-project/route.ts',name=>name.includes('coreTeamPolicy')?policy:{},'\nexport {buildPrompt,validateProjectAnalysis};');
+const role=name=>({role:name,responsibilities:['Teslimatı hazırla'],requiredSkills:['React','API'],preferredSkills:['Testing'],reason:'İlgili sorumlulukları tek uzman karşılar.'});
+const plan=count=>({requiredRoles:Array.from({length:count},(_,i)=>'Role '+i),requiredSkills:['React','API'],roleDetails:Array.from({length:count},(_,i)=>role('Role '+i))});
+test('active prompt prioritizes responsibility grouping, realistic consolidation and scope bands',()=>{const prompt=route.buildPrompt({title:'Ürün',description:'Basit arayüz ve API',skills:['React'],expertise:['UI','Backend']});assert.ok(prompt.includes(policy.CORE_TEAM_POLICY));for(const text of ['UI Designer + UX Designer + Product Designer','Full Stack Developer','1–2 rol','2–3 rol','3–4 rol','en fazla 5','İsteğe bağlı uzmanlık','sorumlulukları grupla','React'])assert.ok(prompt.includes(text),text);});
+test('one through five core roles preserve all skills and responsibilities',()=>{for(let count=1;count<=5;count++){const original=plan(count),result=route.validateProjectAnalysis(original);assert.deepEqual(JSON.parse(JSON.stringify(result.roleDetails)),original.roleDetails);assert.equal(result.requiredRoles.length,count);assert.deepEqual(Array.from(result.requiredSkills),original.requiredSkills);}});
+test('oversized core team is rejected rather than truncated or published as six roles',()=>{assert.throws(()=>route.validateProjectAnalysis(plan(6)),/en fazla 5/);const oversized=plan(5);oversized.roleDetails.push(role('Unlisted sixth specialist'));assert.throws(()=>route.validateProjectAnalysis(oversized),/en fazla 5/);});
+test('optional expertise stays in recommendations and never creates an assignable role',()=>{const original={...plan(1),summary:' Tek uzman yeterli. ',recommendations:['İsteğe bağlı uzmanlık: SEO — organik büyüme hedeflenirse','İsteğe bağlı uzmanlık: SEO — organik büyüme hedeflenirse',null]};const result=route.validateProjectAnalysis(original);assert.equal(result.roleDetails.length,1);assert.equal(result.requiredRoles.length,1);assert.equal(result.recommendations.length,1);assert.equal(result.summary,'Tek uzman yeterli.');assert.equal(result.requiredSkills.includes('SEO'),false);});
+test('existing missing-role-detail validation remains in force',()=>{const invalid=plan(2);invalid.roleDetails.pop();assert.throws(()=>route.validateProjectAnalysis(invalid),/detay oluşturulamadı/);});
