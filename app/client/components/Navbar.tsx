@@ -41,6 +41,7 @@ export default function Navbar() {
   const supabase = useMemo(() => createClient(), []);
   const { setOpen: setMobileSidebarOpen } = useMobileSidebar();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -402,7 +403,7 @@ export default function Navbar() {
   return (
     <PanelNavbarFrame ref={navbarRef}>
       {/* Arama */}
-      <div className="hidden h-9 w-[320px] items-center gap-2.5 rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-white px-3 lg:flex">
+      <div className="hidden h-9 w-[320px] min-w-0 max-w-full items-center gap-2.5 rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-white px-3 lg:flex">
         <Search
           size={16}
           className="text-[var(--color-text-muted)]"
@@ -410,9 +411,15 @@ export default function Navbar() {
 
         <input
           type="search"
+          id="client-global-search"
+          name="global-search-query"
+          autoComplete="off"
+          spellCheck={false}
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="Proje veya freelancer ara..."
           aria-label="Ara"
-          className="w-full bg-transparent text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
+          className="min-w-0 w-full bg-white text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)]"
         />
       </div>
 

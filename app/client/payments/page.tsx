@@ -1,220 +1,102 @@
 "use client";
 
-import { buttonClasses } from "@/components/ui/Button";
-import { pageHeaderClass } from "@/components/ui/PageHeader";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Loader2, Wallet } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { formatCurrency } from "@/lib/utils/formatCurrency";
-import { getClientPaymentsSummary, type ClientPaymentsSummary } from "@/lib/financials";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import {
-  calculateClientPricing,
-  formatRatePercent,
-  getClientCommissionRate,
-  getProjectCommissionRate,
-} from "@/lib/pricing";
+  FinanceIntro, FinanceMetrics, FinanceProjectTable, FinanceStages, FinanceTabs,
+  ProjectFinanceFilters, ProjectStatus, financeAmount,
+} from "@/components/earnings/FinancePanel";
+import styles from "@/components/earnings/Earnings.module.css";
+import { createClient } from "@/lib/supabase/client";
+import { getClientPaymentsSummary, type ClientPaymentsSummary } from "@/lib/financials";
+import { calculateClientPricing, formatRatePercent } from "@/lib/pricing";
+import { earningWorkLabel, earningsPaymentPresentation } from "@/lib/payments/earningsPresentation";
 
-function statusLabel(status: string | null) {
-  if (status === "open") return "Yayında";
-  if (status === "ready_to_start") return "Ekip hazır";
-  if (status === "in_progress") return "Devam ediyor";
-  if (status === "completed") return "Tamamlandı";
-  if (status === "paused") return "Duraklatıldı";
-  if (status === "cancelled") return "İptal edildi";
-  return status ?? "Bilinmiyor";
-}
+const columns = ["Bütçe", "Onaylanan aşamalar", "Bekleyen tutar", "Platform hizmet bedeli", "Toplam maliyet", "Durum"];
 
 export default function ClientPaymentsPage() {
   const supabase = useMemo(() => createClient(), []);
   const [summary, setSummary] = useState<ClientPaymentsSummary | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [commissionRate, setCommissionRate] = useState<number | null>(null);
+  const [reload, setReload] = useState(0);
+  const [movements, setMovements] = useState(false);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
+    let active = true;
     async function load() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        setError("Ödemeler görünümünü görüntülemek için giriş yapmanız gerekiyor.");
-        setLoading(false);
-        return;
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) throw new Error("Bütçeleri görüntülemek için giriş yapmanız gerekiyor.");
+        const data = await getClientPaymentsSummary(supabase, user.id);
+        if (active) setSummary(data);
+      } catch (cause) {
+        if (active) setError(cause instanceof Error ? cause.message : "Bütçeler yüklenemedi.");
       }
-
-      const [data, rate] = await Promise.all([
-        getClientPaymentsSummary(supabase, user.id),
-        getClientCommissionRate(supabase),
-      ]);
-      setSummary(data);
-      setCommissionRate(rate);
-      setLoading(false);
     }
-
     void load();
-  }, [supabase]);
+    return () => { active = false; };
+  }, [supabase, reload]);
 
-  if (loading) {
-    return (
-      <main className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex items-center gap-3 text-sm text-[var(--color-text-secondary)]">
-          <Loader2 size={20} className="animate-spin" />
-          Yükleniyor...
-        </div>
-      </main>
-    );
-  }
+  const projects = summary?.projects ?? [];
+  const statuses = [...new Set(projects.flatMap(project => project.status ? [project.status] : []))];
+  const visible = projects.filter(project => (!status || project.status === status) &&
+    project.title.toLocaleLowerCase("tr-TR").includes(query.trim().toLocaleLowerCase("tr-TR")));
+  const activeProjects = projects.filter(project => project.status === "in_progress");
+  const completedProjects = projects.filter(project => project.status === "completed");
 
-  return (
-    <div className="w-full">
-      <div className="w-full">
-        <div className={pageHeaderClass}>
-          <h1 className="cc-page-title font-semibold text-[var(--color-text-primary)]">Ödemeler</h1>
-          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
-            Projelerinin gerçek bütçe ve hakediş özetini buradan takip et.
-          </p>
-        </div>
-
-        {error && (
-          <div className="mb-6 flex gap-3 rounded-[var(--radius-card)] bg-[var(--color-error-50)] p-4 text-sm text-[var(--color-error-600)]">
-            <AlertCircle size={18} className="mt-0.5 shrink-0" />
-            <p>{error}</p>
+  return <main className={styles.page}>
+    <FinanceIntro title="Bütçe ve Ödemeler" subtitle="Projelerinizin bütçesini, hakedişlerini ve ödeme kayıtlarını takip edin."
+      notice={<><strong>Ödeme altyapımız hazırlanıyor.</strong><p>Buradaki tutarlar proje bütçelerini ve aşama kayıtlarını gösterir. CollaCrew üzerinden ödeme henüz yapılamaz.</p></>} />
+    {error ? <div className={styles.error} role="alert"><p>{error}</p><Button variant="secondary" onClick={() => { setError(""); setReload(value => value + 1); }}>Tekrar dene</Button></div>
+      : !summary ? <p className={styles.quiet} role="status" aria-busy="true">Bütçeler yükleniyor…</p>
+      : <>
+        <FinanceMetrics items={[
+          { label: "Toplam proje bütçesi", value: projects.some(project => project.budgetMissing) ? null : summary.totalBudget, tone: "neutral" },
+          { label: "Aktif proje bütçesi", value: activeProjects.some(project => project.budgetMissing) ? null : summary.activeBudget, tone: "success" },
+          { label: "Tamamlanan işler", value: completedProjects.some(project => project.budgetMissing) ? null : summary.completedBudget, tone: "info" },
+          { label: "Bekleyen hakediş", value: activeProjects.some(project => project.budgetMissing || project.stagesMissing) ? null : summary.pendingObligation, tone: "warning" },
+        ]} />
+        <FinanceTabs movements={movements} onChange={setMovements} label="Ödeme Hareketleri" />
+        {movements ? <section className={styles.projectPanel} aria-labelledby="payment-movements">
+          <div className={styles.panelHeading}><div><h2 id="payment-movements">Ödeme Hareketleri</h2><p>Aşama kayıtları ve varsa kayıtlı ödeme durumu.</p></div></div>
+          {summary.movements.length ? <ul className={styles.stageList}>{summary.movements.map(stage => {
+            const payment = stage.paymentStatus ? earningsPaymentPresentation(stage.paymentStatus) : null;
+            return <li key={stage.id}>
+              <div><strong>{stage.title}</strong><small>{stage.projectTitle} · {earningWorkLabel(stage.status)}</small></div>
+              <div><span className={styles.status} data-tone={payment?.tone}>{payment?.label ?? "Ödeme durumu eksik"}</span>
+                <small>Hizmet bedeli dahil aşama tutarı</small><strong>{financeAmount(stage.total)}</strong></div>
+            </li>;
+          })}</ul> : <p className={styles.panelEmpty}>Görüntülenebilir aşama kaydı yok.</p>}
+        </section> : <section className={styles.projectPanel} aria-labelledby="payment-projects">
+          <div className={styles.panelHeading}>
+            <div><h2 id="payment-projects">Projelerim</h2><p>Bütçeleri, onaylanan işleri ve bekleyen tutarları inceleyin.</p></div>
+            {projects.length > 0 && <ProjectFinanceFilters query={query} status={status} statuses={statuses} onQuery={setQuery} onStatus={setStatus} />}
           </div>
-        )}
-
-        <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-warning-600)]/20 bg-[var(--color-warning-50)] p-4 text-sm text-[var(--color-warning-600)]">
-          <AlertCircle size={18} className="mt-0.5 shrink-0" />
-          <p>
-            Ödeme altyapısı henüz aktif değil. Aşağıdaki tutarlar bir ödeme işlemini değil, mevcut proje ve
-            aşama verilerinden hesaplanan bütçe/hakediş özetini gösterir.
-            {commissionRate !== null && (
-              <>
-                {" "}
-                Yeni oluşturacağın projelerde platform hizmet bedeli planına göre{" "}
-                <strong className="font-semibold">{formatRatePercent(commissionRate)}</strong>. Mevcut projeler,
-                oluşturuldukları andaki oranı korur.
-              </>
-            )}
-          </p>
-        </div>
-
-        {!error && summary && (
-          <>
-            <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5">
-                <p className="text-sm text-[var(--color-text-secondary)]">Toplam Proje Bütçesi</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-text-primary)]">{formatCurrency(summary.totalBudget)}</h2>
-              </div>
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-success-600)]/20 bg-[var(--color-success-50)] p-5">
-                <div className="flex items-center gap-2 text-[var(--color-success-600)]">
-                  <Wallet size={16} />
-                  <p className="text-sm font-medium">Aktif Proje Bütçesi</p>
-                </div>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-success-600)]">
-                  {formatCurrency(summary.activeBudget)}
-                </h2>
-              </div>
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-info-600)]/20 bg-[var(--color-info-50)] p-5">
-                <div className="flex items-center gap-2 text-[var(--color-info-600)]">
-                  <CheckCircle2 size={16} />
-                  <p className="text-sm font-medium">Tamamlanan İşler</p>
-                </div>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-info-600)]">
-                  {formatCurrency(summary.completedBudget)}
-                </h2>
-              </div>
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-warning-600)]/20 bg-[var(--color-warning-50)] p-5">
-                <p className="text-sm font-medium text-[var(--color-warning-600)]">Bekleyen Hakediş</p>
-                <h2 className="mt-2 text-2xl font-semibold text-[var(--color-warning-600)]">
-                  {formatCurrency(summary.pendingObligation)}
-                </h2>
-                <p className="mt-1 text-xs text-[var(--color-warning-600)]">Devam eden, henüz onaylanmamış aşamalar</p>
-              </div>
-            </div>
-
-            {summary.totalDueWithFee > 0 && (
-              <p className="mb-8 -mt-4 text-sm text-[var(--color-text-secondary)]">
-                Aşama bütçelerin ve platform hizmet bedeli dahil toplam ödeme tutarın:{" "}
-                <strong className="font-semibold text-[var(--color-text-primary)]">{formatCurrency(summary.totalDueWithFee)}</strong>.
-                Proje bütçesi, platform ücreti ve toplam ödeme her aşama kartında ayrı ayrı gösterilir.
-              </p>
-            )}
-
-            <h2 className="mb-4 cc-h2 font-semibold text-[var(--color-text-primary)]">Proje bazında bütçe / harcama</h2>
-
-            {summary.projects.length === 0 ? (
-              <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-[var(--space-6)] text-center">
-                <p className="text-sm text-[var(--color-text-secondary)]">Henüz bir projen yok.</p>
-                <Link
-                  href="/client/projects/new"
-                  className={buttonClasses({variant:"primary"})}
-                >
-                  Yeni Proje Oluştur
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {summary.projects.map((project) => (
-                  <Link
-                    key={project.projectId}
-                    href={`/client/projects/${project.projectId}`}
-                    className="flex flex-col gap-4 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-5 transition hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="font-semibold text-[var(--color-text-primary)]">{project.title}</h3>
-                        <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-                          {statusLabel(project.status)}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-6 text-sm">
-                        <div>
-                          <span className="block text-xs text-[var(--color-text-muted)]">Bütçe</span>
-                          <span className="font-medium text-[var(--color-text-primary)]">
-                            {formatCurrency(project.engagementValue)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-[var(--color-text-muted)]">Onaylanan aşamalar</span>
-                          <span className="font-medium text-[var(--color-success-600)]">
-                            {formatCurrency(project.approvedValue)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="block text-xs text-[var(--color-text-muted)]">Bekleyen</span>
-                          <span className="font-medium text-[var(--color-warning-600)]">{formatCurrency(project.pendingValue)}</span>
-                        </div>
-                        {project.engagementValue > 0 && (() => {
-                          const pricing = calculateClientPricing(
-                            project.engagementValue,
-                            getProjectCommissionRate({ commission_rate: project.commissionRate })
-                          );
-                          return (
-                            <>
-                              <div>
-                                <span className="block text-xs text-[var(--color-text-muted)]">
-                                  Hizmet bedeli ({formatRatePercent(pricing.rate)})
-                                </span>
-                                <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(pricing.platformFee)}</span>
-                              </div>
-                              <div>
-                                <span className="block text-xs text-[var(--color-text-muted)]">Toplam maliyet</span>
-                                <span className="font-medium text-[var(--color-text-primary)]">{formatCurrency(pricing.clientTotal)}</span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
+          {visible.length ? <FinanceProjectTable columns={columns} rows={visible.map(project => {
+            const rate = project.commissionRate;
+            const pricing = !project.budgetMissing && rate != null && Number.isFinite(rate) && rate >= 0 && rate < 1
+              ? calculateClientPricing(project.engagementValue, rate) : null;
+            return {
+              id: project.projectId, title: project.title, href: `/client/projects/${project.projectId}`,
+              cells: [
+                financeAmount(project.budgetMissing ? null : project.engagementValue),
+                <span key="approved" className={styles.approved}>{financeAmount(project.budgetMissing || (project.status !== "completed" && project.stagesMissing) ? null : project.approvedValue)}</span>,
+                <span key="pending" className={styles.pending}>{financeAmount(project.status === "in_progress" && (project.budgetMissing || project.stagesMissing) ? null : project.pendingValue)}</span>,
+                <div key="fee">{financeAmount(pricing?.platformFee)}{pricing && <small>{formatRatePercent(pricing.rate)}</small>}</div>,
+                <strong key="total">{financeAmount(pricing?.clientTotal)}</strong>,
+                <ProjectStatus key="status" status={project.status} />,
+              ],
+              stages: <FinanceStages stages={summary.movements.filter(stage => stage.projectId === project.projectId).map(stage => ({
+                id: stage.id, title: stage.title, state: earningWorkLabel(stage.status), value: stage.budget,
+              }))} />,
+            };
+          })} /> : <div className={styles.panelEmpty}>
+            {projects.length > 0 ? "Bu filtreyle eşleşen proje yok." : <><p>Henüz bir projen yok.</p><Link href="/client/create-project" className={buttonClasses({ variant: "primary", size: "sm" })}>Yeni Proje Oluştur</Link></>}
+          </div>}
+        </section>}
+      </>}
+  </main>;
 }

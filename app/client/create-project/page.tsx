@@ -1,6 +1,18 @@
 "use client";
+import { roleBudgetPlan, roleBudgetMoney } from "@/lib/projects/budgetAllocation";
 
 import React, { useEffect, useRef, useState } from "react";
+import { Input, Textarea, inputClasses } from "@/components/ui/Input";
+import SharedSelect from "@/components/ui/Select";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { cardSurfaceClass } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { FormField } from "@/components/ui/FormField";
+import { ProjectCreationHero, ProjectCreationStepper } from "@/components/projects/creation/ProjectCreationHeader";
+import creationStyles from "@/components/projects/creation/ProjectCreation.module.css";
+import needsStyles from "@/components/projects/creation/ProjectNeedsVisual.module.css";
+import matchStyles from "@/components/projects/creation/ProjectMatchesVisual.module.css";
+import { ProjectAnalysisLoading } from "@/components/projects/creation/ProjectAnalysisLoading";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -14,20 +26,20 @@ import {
   Sparkles,
   Trash2,
   Upload,
-  UserRound,
   X,
 } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
-import AnalyzingState from "@/components/ai/AnalyzingState";
 import type { ProjectAnalysis } from "@/types/ai";
 import { usePremium } from "@/lib/hooks/usePremium";
-import PremiumGate from "@/components/premium/PremiumGate";
+import { ProjectAnalysisSummary } from "@/components/projects/creation/ProjectAnalysisSummary";
 import type {
   PlusProjectAnalysis,
   ProProjectAnalysis,
 } from "@/lib/ai/projectAnalysisEnrichment";
 import { CATEGORIES } from "@/lib/categories";
+import {Avatar} from "@/components/ui/Avatar";
+import {saveProjectCreationDraft, readProjectCreationDraft, clearProjectCreationDraft} from "@/lib/projects/creationDraft";
 import { STANDARD_COMMISSION_RATE } from "@/lib/pricing";
 
 const DELIVERY_FORMATS = [
@@ -77,35 +89,23 @@ const DURATION_OPTIONS = [
 
 const CONTAINER = "w-full";
 
-const CARD =
-  "rounded-[var(--radius-card)] border border-gray-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.03)]";
+const CARD = cardSurfaceClass;
 
-const EYEBROW =
-  "text-xs font-semibold uppercase tracking-[0.14em] text-gray-400";
+const EYEBROW = "cc-caption text-[var(--color-text-secondary)]";
 
-const HEADING =
-  "cc-page-title mt-[var(--rhythm-title-gap)] text-[var(--color-text-primary)]";
+const HEADING = "cc-h2 mt-[var(--rhythm-title-gap)] text-[var(--color-text-primary)]";
 
 const SUBTEXT =
   "mt-2 max-w-2xl text-sm leading-6 text-gray-500";
 
-const INPUT =
-  "h-[var(--control-height-md)] w-full rounded-[var(--radius-input)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-3 text-sm text-[var(--color-text-primary)] outline-none transition placeholder:text-[var(--color-text-muted)] hover:border-[var(--color-border-strong)] focus:border-[var(--color-primary-600)] focus:ring-2 focus:ring-[var(--color-primary-50)]";
+const INPUT = inputClasses();
 
-const LABEL =
-  "mb-1.5 block text-xs font-medium text-[var(--color-text-primary)]";
+const LABEL = "cc-label mb-[var(--rhythm-label-gap)] block text-[var(--color-text-primary)]";
 
-const BTN_PRIMARY =
-  "inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-button)] bg-[var(--color-primary-600)] px-4 text-[13px] font-medium text-white transition hover:bg-[var(--color-primary-700)] disabled:cursor-not-allowed disabled:opacity-40";
+const BTN_PRIMARY = buttonClasses({variant:"primary"});
 
-const BTN_SECONDARY =
-  "inline-flex h-[38px] items-center justify-center gap-2 rounded-[var(--radius-button)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-4 text-[13px] font-medium text-[var(--color-text-primary)] transition hover:border-[var(--color-primary-600)] hover:text-[var(--color-primary-600)] disabled:cursor-not-allowed disabled:opacity-40";
 
-const BTN_GHOST =
-  "inline-flex h-[34px] items-center gap-2 rounded-[var(--radius-button)] px-3 text-[13px] font-medium text-gray-500 transition hover:bg-gray-100 hover:text-[#222] disabled:cursor-not-allowed disabled:opacity-40";
 
-const TAG =
-  "inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-medium text-[#222]";
 
 type Step = "project" | "needs" | "analysis" | "budget";
 
@@ -153,6 +153,17 @@ type RoleMatchGroup = {
   freelancers: Talent[];
   /** Candidate pool değil — gerçekten eşiği geçen toplam aday sayısı. */
   totalEligibleCount: number;
+};
+
+type CreationCheckpoint = {
+  budgetModel?: "project-total" | "role-based";
+  step: Step; brief: Brief; files: File[]; analysis: ProjectAnalysis | null;
+  advancedAnalysis: PlusProjectAnalysis | null; proAnalysis: ProProjectAnalysis | null;
+  aiUsage: {count: number; monthlyLimit: number; limitReached: boolean} | null;
+  roles: Role[]; matching: RoleMatchGroup[]; canViewMatchCandidates: boolean;
+  selectionMode: SelectionMode; selectedTeamMatches: Record<string, Talent[]>;
+  selectedFreelancer: Talent | null; generalBudget: string; projectDuration: string;
+  inspectingRoleId: string | null; analysisFailed: boolean; analysisRetryable: boolean;
 };
 
 function uniqueStrings(values: unknown[]): string[] {
@@ -349,6 +360,7 @@ function normalizeMatchingResult(
 export default function CreateProjectPage() {
   const router = useRouter();
   const supabase = createClient();
+  const publishInFlight = useRef(false);
 
   const [step, setStep] =
     useState<Step>("project");
@@ -435,6 +447,46 @@ export default function CreateProjectPage() {
   const [publishing, setPublishing] =
     useState(false);
 
+  const [resumeRoleId, setResumeRoleId] = useState<string | null>(null);
+  const [restoringDraft, setRestoringDraft] = useState(true);
+  const [savingDraft, setSavingDraft] = useState(false);
+  useEffect(() => {
+    let active = true;
+    async function restore() {
+      if (new URLSearchParams(window.location.search).get("resume") !== "1") return;
+      const {data: {user}} = await createClient().auth.getUser();
+      if (!user) throw new Error("Taslağa dönmek için giriş yapmalısın.");
+      const draft = await readProjectCreationDraft<CreationCheckpoint>(user.id);
+      if (!active) return;
+      if (!draft || !["project", "needs", "analysis", "budget"].includes(draft.step) || !Array.isArray(draft.roles)) throw new Error("Kaydedilmiş proje taslağı bulunamadı.");
+      setBrief(draft.brief); setFiles(draft.files); setAnalysis(draft.analysis);
+      setAdvancedAnalysis(draft.advancedAnalysis); setProAnalysis(draft.proAnalysis); setAiUsage(draft.aiUsage);
+      setRoles(draft.roles); setMatching(draft.matching); setCanViewMatchCandidates(draft.canViewMatchCandidates);
+      setSelectionMode(draft.selectionMode); setSelectedTeamMatches(draft.selectedTeamMatches);
+      setSelectedFreelancer(draft.selectedFreelancer); setGeneralBudget(draft.generalBudget || (!draft.budgetModel && draft.selectionMode === "team" ? String(draft.roles.reduce((sum,role)=>sum+calculateRoleTotal(role.memberCount,role.budgetPerPerson),0)||"") : "")); setProjectDuration(draft.projectDuration || (!draft.budgetModel && draft.selectionMode === "team" ? getLongestDuration(draft.roles) : ""));
+      setAnalysisFailed(draft.analysisFailed); setAnalysisRetryable(draft.analysisRetryable);
+      setResumeRoleId(draft.inspectingRoleId); setStep(draft.step);
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+    void restore().catch(error => { if (active) setError(error instanceof Error ? error.message : "Taslak yüklenemedi."); }).finally(() => { if (active) setRestoringDraft(false); });
+    return () => { active = false; };
+  }, []);
+
+  async function preserveUpgrade(event: React.MouseEvent<HTMLElement>) {
+    const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>('a[href="/premium"]');
+    if (!anchor) return;
+    event.preventDefault();
+    if (savingDraft) return;
+    setSavingDraft(true);
+    try {
+      const {data: {user}} = await supabase.auth.getUser();
+      if (!user) throw new Error("Taslağı korumak için giriş yapmalısın.");
+      const inspectingRoleId = document.querySelector<HTMLElement>("[data-inspecting-role]")?.dataset.inspectingRole || null;
+      await saveProjectCreationDraft<CreationCheckpoint>(user.id, {budgetModel:"role-based",step, brief, files, analysis, advancedAnalysis, proAnalysis, aiUsage, roles, matching, canViewMatchCandidates, selectionMode, selectedTeamMatches, selectedFreelancer, generalBudget, projectDuration, inspectingRoleId, analysisFailed, analysisRetryable});
+      window.location.assign("/premium");
+    } catch (error) { setError(error instanceof Error ? error.message : "Taslak kaydedilemedi; proje açık tutuldu."); setSavingDraft(false); }
+  }
+
   function updateBrief<K extends keyof Brief>(
     key: K,
     value: Brief[K]
@@ -485,12 +537,13 @@ export default function CreateProjectPage() {
     );
   }
 
-  function addRole() {
-    setRoles((current) => [
+  function addRole(preset?: {name:string;reason?:string}) {
+    setRoles((current) => preset && current.some(role=>role.name.trim().toLocaleLowerCase("tr-TR")===preset.name.trim().toLocaleLowerCase("tr-TR")) ? current : [
       ...current,
       {
         id: `role-${Date.now()}-${current.length}`,
-        name: "",
+        name: preset?.name ?? "",
+        reason: preset?.reason,
         memberCount: 1,
         budgetPerPerson: 0,
         budget: 0,
@@ -503,9 +556,10 @@ export default function CreateProjectPage() {
   }
 
   function removeRole(id: string) {
-    setRoles((current) =>
-      current.filter((role) => role.id !== id)
-    );
+    const removed = roles.find(role => role.id === id);
+    setRoles(current => current.filter(role => role.id !== id));
+    setSelectedTeamMatches(current => { const next = {...current}; delete next[id]; return next; });
+    if (removed && selectedFreelancer?.role === removed.name) { setSelectedFreelancer(null); setSelectionMode("none"); }
   }
 
   function addRoleListItem(
@@ -555,35 +609,9 @@ export default function CreateProjectPage() {
     );
   }
 
-  const teamTotalBudget = roles.reduce(
-    (sum, role) =>
-      sum +
-      calculateRoleTotal(
-        role.memberCount,
-        role.budgetPerPerson
-      ),
-    0
-  );
-
-  const totalBudget =
-    selectionMode === "team"
-      ? teamTotalBudget
-      : parseTL(generalBudget);
-
-  const teamBudgetReady =
-    roles.length > 0 &&
-    roles.every(
-      (role) =>
-        role.memberCount > 0 &&
-        role.budgetPerPerson > 0 &&
-        role.duration.trim().length > 0
-    );
-
-  const budgetIsReady =
-    selectionMode === "team"
-      ? teamBudgetReady
-      : totalBudget > 0 &&
-        projectDuration.trim().length > 0;
+  const budgetPlan = roleBudgetPlan(roles, selectionMode === "team");
+  const totalBudget = budgetPlan.total;
+  const budgetIsReady = budgetPlan.ready;
 
   function continueToNeeds() {
     setError("");
@@ -854,6 +882,7 @@ export default function CreateProjectPage() {
     if (
       step === "needs" &&
       !analysis &&
+      !analysisFailed &&
       !analyzing
     ) {
       void runAiAnalysis();
@@ -985,22 +1014,24 @@ export default function CreateProjectPage() {
       return;
     }
 
+    setResumeRoleId(null);
     setStep("budget");
   }
 
   async function publishProject() {
+    if (publishInFlight.current) return;
     setError("");
 
     if (!budgetIsReady) {
       setError(
-        selectionMode === "team"
-          ? "Her rol için kişi sayısı, bütçe ve süreyi tamamlayın."
-          : "Geçerli bir bütçe ve proje süresi girin."
+        "Her rol için geçerli bir bütçe ve çalışma süresi belirleyin."
       );
       return;
     }
 
+    publishInFlight.current = true;
     setPublishing(true);
+    let projectCreated = false;
 
     try {
       const {
@@ -1013,65 +1044,15 @@ export default function CreateProjectPage() {
         );
       }
 
-      /*
-       * ÖNEMLİ (bkz. matching audit — "Bir Şehrin Hikâyesi" + Leyla Afet
-       * vakası): selectionMode "team" değilse (tek freelancer / henüz
-       * seçim yapılmadı) bile AI'nın ürettiği / client'ın düzenlediği
-       * rol bilgisi (isim, gerekli/tercih edilen beceriler, sorumluluklar)
-       * budget_breakdown'a yazılmalı. Aksi halde bu bilgi hiçbir yerde
-       * saklanmıyor ve matchFreelancerToProjectRoles() jenerik "Tek
-       * Freelancer" fallback'ine düşüyor — role-text skorlaması hiç
-       * çalışamıyor, sonuç olarak profili gerçekten uygun freelancerlar
-       * bile eleniyor.
-       *
-       * Tek freelancer modunda kişi başı bütçe/süre kavramı yok — proje
-       * genelindeki totalBudget/projectDuration her role girişine
-       * (memberCount=1 ile) uygulanır. Team akışı (roller kendi
-       * memberCount/budgetPerPerson'ıyla) DEĞİŞMEDİ.
-       */
-      const budgetBreakdown =
-        selectionMode === "team"
-          ? roles.map((role) => ({
-              roleId: role.id,
-              role: role.name.trim(),
-              memberCount:
-                role.memberCount,
-              budgetPerPerson:
-                role.budgetPerPerson,
-              budget: role.budget,
-              duration: role.duration,
-              responsibilities:
-                role.responsibilities,
-              requiredSkills:
-                role.skills,
-              preferredSkills:
-                role.preferredSkills,
-            }))
-          : roles
-              .filter((role) =>
-                role.name.trim()
-              )
-              .map((role) => ({
-                roleId: role.id,
-                role: role.name.trim(),
-                memberCount: 1,
-                budgetPerPerson:
-                  totalBudget,
-                budget: totalBudget,
-                duration:
-                  projectDuration,
-                responsibilities:
-                  role.responsibilities,
-                requiredSkills:
-                  role.skills,
-                preferredSkills:
-                  role.preferredSkills,
-              }));
-
-      const estimatedDuration =
-        selectionMode === "team"
-          ? getLongestDuration(roles)
-          : projectDuration;
+      // Existing JSONB role identities and skills survive even when allocation is unknown.
+      const moneyByRole = new Map(roleBudgetMoney(roles,totalBudget,selectionMode === "team").map(row=>[row.roleId,row]));
+      const budgetBreakdown = roles.filter(role=>role.name.trim()).map(role=>({
+        ...moneyByRole.get(role.id),
+        roleId:role.id, role:role.name.trim(),
+        duration:role.duration,
+        responsibilities:role.responsibilities, requiredSkills:role.skills, preferredSkills:role.preferredSkills,
+      }));
+      const estimatedDuration = getLongestDuration(roles);
 
       const requirementLines = [
         brief.expertiseAreas.length > 0
@@ -1165,14 +1146,23 @@ export default function CreateProjectPage() {
         .select("id")
         .single();
 
-      if (projectError || !project) {
+      if (projectError || !project?.id) {
         if (projectError) {
-          console.error("Proje oluşturulamadı:", projectError);
+          console.error("PROJECT CREATE ERROR", {
+            stage: "projects.insert_returning",
+            message: projectError.message,
+            details: projectError.details,
+            hint: projectError.hint,
+            code: projectError.code,
+            error: projectError,
+          });
         }
 
         throw new Error("Proje oluşturulamadı. Lütfen tekrar deneyin.");
       }
 
+      projectCreated = true;
+      void clearProjectCreationDraft(user.id).catch(() => { /* Publication succeeded; local cleanup must not block navigation. */ });
       router.push("/client/projects");
     } catch (err) {
       console.error(
@@ -1186,7 +1176,10 @@ export default function CreateProjectPage() {
           : "Proje yayınlanamadı."
       );
     } finally {
-      setPublishing(false);
+      // Keep the successful publication locked until navigation unmounts the page.
+      // A failed request remains retryable with the existing form state.
+      if (!projectCreated) publishInFlight.current = false;
+      setPublishing(projectCreated);
     }
   }
 
@@ -1204,6 +1197,7 @@ export default function CreateProjectPage() {
     }
 
     if (step === "analysis") {
+      setResumeRoleId(null);
       setStep("needs");
       return;
     }
@@ -1214,27 +1208,27 @@ export default function CreateProjectPage() {
   }
 
   return (
-    <main className="w-full">
-      <PageHeader
-        title="Yeni Proje"
-        onBack={goBack}
-      />
+    <main className={creationStyles.page} onClickCapture={preserveUpgrade}>
+      {savingDraft && <p role="status" className="mb-4 text-sm text-[var(--color-text-secondary)]">Proje taslağın korunuyor…</p>}
+      <ProjectCreationHero onBack={goBack} disabled={publishing}/>
 
-      <StepIndicator step={step} />
+      <ProjectCreationStepper step={step}/>
 
       <div
         className={`${CONTAINER} pb-20`}
       >
         {error && (
-          <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-600)]">
+          <div role="alert" className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] px-4 py-3 text-sm text-[var(--color-error-600)]">
             <X className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        {step === "project" && (
+        {restoringDraft ? <p role="status" className="py-6 text-sm text-[var(--color-text-secondary)]">Proje çalışma alanı hazırlanıyor…</p> : step === "project" && (
           <ProjectStep
             brief={brief}
+            error={error}
+            onBack={goBack}
             files={files}
             setFiles={setFiles}
             updateBrief={updateBrief}
@@ -1244,7 +1238,7 @@ export default function CreateProjectPage() {
           />
         )}
 
-        {step === "needs" && (
+        {!restoringDraft && step === "needs" && (
           <NeedsStep
             brief={brief}
             updateBrief={updateBrief}
@@ -1271,13 +1265,17 @@ export default function CreateProjectPage() {
           />
         )}
 
-        {step === "analysis" && (
+        {!restoringDraft && step === "analysis" && (
           <AnalysisStep
+            initialInspectingRoleId={resumeRoleId}
+            onRefreshMatches={() => void runMatching()}
+            canRefreshMatches={canUseAiFeature("view_match_candidates")}
+            projectTitle={brief.title}
             matchingInProgress={matchingInProgress}
             roles={roles}
             matching={matching}
             canViewMatchCandidates={
-              canViewMatchCandidates
+              canViewMatchCandidates && canUseAiFeature("view_match_candidates")
             }
             teamAverageScore={
               teamAverageScore
@@ -1310,7 +1308,7 @@ export default function CreateProjectPage() {
           />
         )}
 
-        {step === "budget" && (
+        {!restoringDraft && step === "budget" && (
           <BudgetPublishStep
             brief={brief}
             selectionMode={
@@ -1318,21 +1316,6 @@ export default function CreateProjectPage() {
             }
             roles={roles}
             updateRole={updateRole}
-            selectedFreelancer={
-              selectedFreelancer
-            }
-            generalBudget={
-              generalBudget
-            }
-            setGeneralBudget={
-              setGeneralBudget
-            }
-            projectDuration={
-              projectDuration
-            }
-            setProjectDuration={
-              setProjectDuration
-            }
             totalBudget={totalBudget}
             budgetIsReady={
               budgetIsReady
@@ -1351,12 +1334,16 @@ export default function CreateProjectPage() {
 
 function ProjectStep({
   brief,
+  error,
+  onBack,
   files,
   setFiles,
   updateBrief,
   onContinue,
 }: {
   brief: Brief;
+  error: string;
+  onBack: () => void;
   files: File[];
   setFiles: React.Dispatch<
     React.SetStateAction<File[]>
@@ -1395,15 +1382,15 @@ function ProjectStep({
   }
 
   return (
-    <section className="pt-10">
-      <div className="mb-10">
+    <section className="pt-[var(--space-2)]">
+      <div className="mb-[var(--space-5)]">
         <p className={EYEBROW}>
           01 / Proje
         </p>
 
-        <h1 className={HEADING}>
+        <h2 className={HEADING}>
           Projenizi anlatın
-        </h1>
+        </h2>
 
         <p className={SUBTEXT}>
           Projenizi ne kadar net
@@ -1414,10 +1401,11 @@ function ProjectStep({
       </div>
 
       <div
-        className={`${CARD} space-y-6 p-6 sm:p-8`}
+        className="space-y-[var(--space-5)]"
       >
-        <Field label="Proje başlığı">
-          <input
+        <div className={creationStyles.shortFields}>
+        <Field label="Proje başlığı" error={error==="Proje başlığını girin."?error:undefined}>
+          <Input
             value={brief.title}
             onChange={(event) =>
               updateBrief(
@@ -1426,11 +1414,10 @@ function ProjectStep({
               )
             }
             placeholder="Örn. Yeni e-ticaret sitesi tasarımı"
-            className={INPUT}
           />
         </Field>
 
-        <Field label="Kategori">
+        <Field label="Kategori" error={error==="Bir kategori seçin."?error:undefined}>
           <Select
             value={brief.category}
             onChange={(value) =>
@@ -1444,8 +1431,11 @@ function ProjectStep({
           />
         </Field>
 
+        </div>
+        <div className={creationStyles.formGroup}>
         <TextArea
           label="Proje açıklaması"
+          error={error==="Proje açıklamasını girin."?error:undefined}
           value={brief.description}
           onChange={(value) =>
             updateBrief(
@@ -1454,19 +1444,20 @@ function ProjectStep({
             )
           }
           placeholder="Ne yapmak istediğinizi, mevcut durumu ve beklentilerinizi anlatın..."
-          rows={8}
+          rows={6}
         />
+        </div>
 
-        <div>
+        <div className={creationStyles.formGroup}>
           <label className={LABEL}>
             Proje dökümanları
           </label>
 
-          <label className="flex cursor-pointer items-center justify-center rounded-[var(--radius-card)] border border-dashed border-gray-300 bg-[var(--color-surface-2)]/50 px-6 py-10 transition hover:border-gray-400 hover:bg-[var(--color-surface-2)]">
+          <label className="flex cursor-pointer items-center justify-center rounded-[var(--radius-card)] border border-dashed border-gray-300 bg-[var(--color-surface-2)]/50 px-[var(--space-5)] py-[var(--space-6)] transition hover:border-gray-400 hover:bg-[var(--color-surface-2)]">
             <div className="text-center">
               <Upload className="mx-auto h-5 w-5 text-[var(--color-text-muted)]" />
 
-              <p className="mt-3 text-sm font-medium text-[#222]">
+              <p className="mt-3 text-sm font-medium text-[var(--color-text-primary)]">
                 Dosya seç
               </p>
 
@@ -1477,7 +1468,7 @@ function ProjectStep({
               </p>
             </div>
 
-            <input
+            <Input
               type="file"
               multiple
               className="hidden"
@@ -1502,15 +1493,16 @@ function ProjectStep({
           )}
         </div>
 
-        <div className="flex justify-end border-t border-[var(--color-border-subtle)] pt-6">
-          <button
+        <div className={creationStyles.navigation}>
+          <Button type="button" variant="secondary" onClick={onBack}><ArrowLeft size={16}/>Geri</Button>
+          <Button
             type="button"
             onClick={onContinue}
-            className={BTN_PRIMARY}
+            variant="primary"
           >
             Devam et
             <ArrowRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </div>
     </section>
@@ -1557,7 +1549,7 @@ function NeedsStep({
   analysisError: string;
   onRetryAnalysis: () => void;
   roles: Role[];
-  onAddRole: () => void;
+  onAddRole: (preset?: {name:string;reason?:string}) => void;
   onRemoveRole: (id: string) => void;
   onUpdateRole: (id: string, updates: Partial<Role>) => void;
   onAddRoleListItem: (
@@ -1573,36 +1565,65 @@ function NeedsStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const roleConfiguration = useRef<HTMLHeadingElement>(null);
+  const [expandedRoleId, setExpandedRoleId] = useState<string | null>(null);
+  const roleRecommendations = <section className={needsStyles.roleRecommendations} aria-label={roles.length === 1 ? "Önerilen rol" : "Önerilen ekip"}>
+          <h3 ref={roleConfiguration} tabIndex={-1} className="cc-h2 mb-[var(--space-2)]">{roles.length === 1 ? "Önerilen rol" : "Önerilen ekip"}</h3>
+          {roles.length === 0 && <p className="text-sm text-[var(--color-text-secondary)]">Devam etmek için en az bir rol ekle.</p>}
+          <div className={needsStyles.roleGrid}>
+            {roles.map((role) => (
+              <RoleNeedsCard
+                key={role.id}
+                role={role}
+                expanded={expandedRoleId === role.id}
+                onToggleExpanded={() => setExpandedRoleId(current => current === role.id ? null : role.id)}
+                validationError={analysisError==="Her rolün bir adı olmalı."&&!role.name.trim()?analysisError:undefined}
+                onUpdate={(updates) =>
+                  onUpdateRole(role.id, updates)
+                }
+                onRemove={() => onRemoveRole(role.id)}
+                onAddListItem={(field, value) =>
+                  onAddRoleListItem(role.id, field, value)
+                }
+                onRemoveListItem={(field, index) =>
+                  onRemoveRoleListItem(role.id, field, index)
+                }
+              />
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={()=>onAddRole()}
+            className={needsStyles.addRoleAction}
+          >
+            <Plus className="h-4 w-4" />
+            Rol ekle
+          </button>
+
+  </section>;
   return (
-    <section className="pt-10">
-      <div className="mb-10">
+    <section className="relative pt-[var(--space-2)]">
+      <div hidden={analyzing} className="mb-[var(--space-5)]">
         <p className={EYEBROW}>
           02 / İhtiyaçlar
         </p>
 
-        <h1 className={HEADING}>
+        <h2 className={HEADING}>
           {analyzing
-            ? "Projenizi inceliyoruz..."
+            ? "Colla AI projenin yapısını çıkarıyor"
             : "Ekip ihtiyaçlarınız"}
-        </h1>
+        </h2>
 
         <p className={SUBTEXT}>
           {analyzing
             ? "AI, proje açıklamanızı okuyarak hangi uzmanlıklara ihtiyacınız olduğunu çıkarıyor."
-            : analysis?.summary ||
-              "AI'nın önerdiği rolleri ve ihtiyaçları inceleyip dilediğiniz gibi düzenleyebilirsiniz."}
+            : "AI önerilerini incele; rol ihtiyaçlarını projen için düzenle."}
         </p>
       </div>
 
-      {analyzing ? (
-        <div className={`${CARD} p-10 text-center`}>
-          <AnalyzingState />
-
-          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-            Proje ihtiyaçlarınız çıkarılıyor...
-          </p>
-        </div>
-      ) : analysisFailed ? (
+      <ProjectAnalysisLoading active={analyzing} />
+      {analyzing ? null : analysisFailed ? (
         <div className={`${CARD} p-10 text-center`}>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-[var(--radius-card)] bg-[var(--color-warning-50)] text-amber-600">
             <AlertTriangle size={22} />
@@ -1628,60 +1649,26 @@ function NeedsStep({
           </button>
         </div>
       ) : (
-        <>
+        <div className={needsStyles.analysisResultEnter}>
           {analysis && (
-            <div className="mb-6 flex items-start gap-3 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-5 py-4">
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-primary-600)]" />
-              <p className="text-sm leading-6 text-[var(--color-text-secondary)]">
-                Projenizi inceledik. Bu proje için{" "}
-                <span className="font-semibold text-[var(--color-text-primary)]">
-                  {roles.length} farklı uzmanlık alanına
-                </span>{" "}
-                ihtiyaç olduğunu düşünüyoruz. Aşağıdaki rolleri ve
-                ihtiyaçları dilediğiniz gibi düzenleyebilirsiniz.
-              </p>
-            </div>
-          )}
-
-          {analysis && (
-            <AdvancedAnalysisSection
+            <ProjectAnalysisSummary
+              analysis={analysis}
+              roles={roles}
               advancedAnalysis={advancedAnalysis}
               proAnalysis={proAnalysis}
               aiUsage={aiUsage}
               canUseDeepAnalysis={canUseDeepAnalysis}
+              onReviewRoles={() => roleConfiguration.current?.focus()}
+              onAssignSkill={(skill,roleId)=>onAddRoleListItem(roleId,"skills",skill)}
+              onAddOptionalRole={suggestion=>onAddRole(suggestion)}
+              recommendations={roleRecommendations}
             />
           )}
 
-          <div className="space-y-5">
-            {roles.map((role) => (
-              <RoleNeedsCard
-                key={role.id}
-                role={role}
-                onUpdate={(updates) =>
-                  onUpdateRole(role.id, updates)
-                }
-                onRemove={() => onRemoveRole(role.id)}
-                onAddListItem={(field, value) =>
-                  onAddRoleListItem(role.id, field, value)
-                }
-                onRemoveListItem={(field, index) =>
-                  onRemoveRoleListItem(role.id, field, index)
-                }
-              />
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={onAddRole}
-            className="mt-4 inline-flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition hover:border-gray-400 hover:text-[var(--color-text-primary)]"
-          >
-            <Plus className="h-4 w-4" />
-            Rol ekle
-          </button>
+          {!analysis && roleRecommendations}
 
           <div
-            className={`${CARD} mt-6 space-y-6 p-6 sm:p-8`}
+            className="mt-6 border-t border-[var(--color-border-subtle)] pt-[var(--space-5)]"
           >
             <MultiSelect
               label="Proje teslim formatı"
@@ -1703,25 +1690,25 @@ function NeedsStep({
           </div>
 
           <div className="mt-6 flex items-center justify-between">
-            <button
+            <Button
               type="button"
               onClick={onBack}
-              className={BTN_GHOST}
+              variant="ghost"
             >
               <ChevronLeft className="h-4 w-4" />
               Geri
-            </button>
+            </Button>
 
-            <button
+            <Button
               type="button"
               onClick={onContinue}
-              className={BTN_PRIMARY}
+              variant="primary"
             >
               Devam et
               <ArrowRight className="h-4 w-4" />
-            </button>
+            </Button>
           </div>
-        </>
+        </div>
       )}
     </section>
   );
@@ -1729,12 +1716,18 @@ function NeedsStep({
 
 function RoleNeedsCard({
   role,
+  validationError,
+  expanded,
+  onToggleExpanded,
   onUpdate,
   onRemove,
   onAddListItem,
   onRemoveListItem,
 }: {
   role: Role;
+  validationError?: string;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
   onUpdate: (updates: Partial<Role>) => void;
   onRemove: () => void;
   onAddListItem: (
@@ -1746,6 +1739,9 @@ function RoleNeedsCard({
     index: number
   ) => void;
 }) {
+  const roleNameId=React.useId();
+  const [editing, setEditing] = useState(() => !role.name.trim() || Boolean(validationError));
+  const showEditor = editing || Boolean(validationError) || !role.name.trim();
   const [skillDraft, setSkillDraft] = useState("");
   const [preferredDraft, setPreferredDraft] = useState("");
   const [responsibilityDraft, setResponsibilityDraft] = useState("");
@@ -1777,17 +1773,53 @@ function RoleNeedsCard({
     ? role.responsibilities
     : role.responsibilities.slice(0, MAX_RESPONSIBILITIES);
 
+  const [locallyExpanded, setLocallyExpanded] = useState(false);
+  const isExpanded = expanded ?? locallyExpanded;
+  const toggleExpanded = onToggleExpanded ?? (() => setLocallyExpanded(current => !current));
+  const detailsId = roleNameId + "-details";
+
   return (
-    <div className={`${CARD} p-6 sm:p-8`}>
-      <div className="flex items-start justify-between gap-4">
-        <input
+    <div className={needsStyles.roleEditor} data-expanded={isExpanded || showEditor}>
+      {!showEditor ? <>
+        <div className={needsStyles.recommendationHeader}>
+          <h4 className={needsStyles.recommendationTitle}>{role.name}</h4>
+          <span className={needsStyles.roleSkillCount}>{role.skills.length} beceri</span>
+        </div>
+        {role.responsibilities[0] && <p className={needsStyles.roleDescription}>{truncateToSentence(role.responsibilities[0])}</p>}
+        {!isExpanded && <div className={needsStyles.skillPreview}>{role.skills.slice(0,3).map(skill => <Badge key={skill} tone="primary" className={needsStyles.skillChip}>{skill}</Badge>)}{role.skills.length > 3 && <Badge className={needsStyles.skillChip}>+{role.skills.length-3}</Badge>}</div>}
+        <div id={detailsId} hidden={!isExpanded} className={needsStyles.roleDetails}>
+          {isExpanded && <>
+            <div className={needsStyles.recommendationSkills}>
+              <div><h5 className={needsStyles.skillLabel}>Gerekli beceriler</h5><div className={needsStyles.skillList}>{role.skills.length ? role.skills.map(skill => <Badge key={skill} tone="primary" className={needsStyles.skillChip}>{skill}</Badge>) : <p className={needsStyles.roleDescription}>Henüz temel beceri eklenmedi.</p>}</div></div>
+              {role.preferredSkills.length > 0 && <div><h5 className={needsStyles.skillLabel}>Tercih edilen</h5><div className={needsStyles.skillList}>{role.preferredSkills.map(skill => <Badge key={skill} className={needsStyles.skillChip}>{skill}</Badge>)}</div></div>}
+            </div>
+            {role.reason && <RoleReasonPreview reason={role.reason}/>}
+            {role.responsibilities.length > 0 && <details className={needsStyles.recommendationResponsibilities}><summary><span>Sorumluluklar <span className={needsStyles.responsibilityCount}>· {role.responsibilities.length}</span></span><ChevronDown size={16} aria-hidden="true"/></summary><ul>{role.responsibilities.map(item => <li key={item}>{item}</li>)}</ul></details>}
+          </>}
+        </div>
+        <div className={needsStyles.compactRoleFooter}>
+          <button type="button" aria-expanded={isExpanded} aria-controls={detailsId} onClick={toggleExpanded} className={needsStyles.roleExpand}>{isExpanded ? "Detayları gizle" : "Detayları gör"}<ChevronDown size={16} aria-hidden="true"/></button>
+          <div><Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>Rolü düzenle</Button><button type="button" onClick={onRemove} aria-label={role.name + " rolünü sil"} className="rounded-[var(--radius-button)] p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-error-50)] hover:text-[var(--color-error-600)]"><Trash2 size={16}/></button></div>
+        </div>
+      </> : <>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className={needsStyles.roleIdentity}>
+        <label htmlFor={roleNameId} className={needsStyles.roleEditLabel}>Rolü düzenle</label>
+        <Input
+          id={roleNameId}
+          aria-label="Rol adı"
+          aria-invalid={Boolean(validationError)}
+          aria-describedby={validationError?roleNameId+"-error":undefined}
+          hasError={Boolean(validationError)}
           value={role.name}
           onChange={(event) =>
             onUpdate({ name: event.target.value })
           }
           placeholder="Rol adı (ör. UI/UX Designer)"
-          className="w-full max-w-sm border-0 border-b border-transparent bg-transparent p-0 text-lg font-semibold text-[var(--color-text-primary)] outline-none focus:border-gray-300"
+          className={`${needsStyles.roleTitle} max-w-sm`}
         />
+        </div>
+        {role.reason && <span className={needsStyles.roleSource}>AI önerisi</span>}
 
         <button
           type="button"
@@ -1798,22 +1830,22 @@ function RoleNeedsCard({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+      {validationError&&<p id={roleNameId+"-error"} className="cc-body-sm mt-[var(--space-2)] text-[var(--color-error-600)]">{validationError}</p>}
 
       {role.reason && (
-        <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-          {truncateToSentence(role.reason)}
-        </p>
+        <details className={needsStyles.roleReason}><summary>Neden bu rol?<span className={needsStyles.roleReasonPreview}>{truncateToSentence(role.reason)}</span></summary><p>{role.reason}</p></details>
       )}
 
-      <div className="mt-5 grid gap-6 sm:grid-cols-2">
+      <div className={needsStyles.roleSkills}>
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Gerekli beceriler
           </p>
+          <p className={needsStyles.skillHelp}>Bu rolün temel gereksinimi olarak önerilen beceriler.</p>
 
           <div className="flex flex-wrap items-center gap-2">
             {visibleSkills.map((skill, index) => (
-              <span key={skill} className={TAG}>
+              <Badge key={skill} tone="primary" className={needsStyles.skillChip}>
                 {skill}
                 <button
                   type="button"
@@ -1825,7 +1857,7 @@ function RoleNeedsCard({
                 >
                   <X className="h-3 w-3" />
                 </button>
-              </span>
+              </Badge>
             ))}
 
             {!showAllSkills &&
@@ -1841,7 +1873,7 @@ function RoleNeedsCard({
           </div>
 
           <div className="mt-2 flex gap-2">
-            <input
+            <Input
               value={skillDraft}
               onChange={(event) =>
                 setSkillDraft(event.target.value)
@@ -1875,10 +1907,11 @@ function RoleNeedsCard({
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
             Tercih edilen
           </p>
+          <p className={needsStyles.skillHelp}>Rolü destekleyen, avantaj sağlayabilecek tamamlayıcı beceriler.</p>
 
           <div className="flex flex-wrap items-center gap-2">
             {visiblePreferred.map((skill, index) => (
-              <span key={skill} className={TAG}>
+              <Badge key={skill} >
                 {skill}
                 <button
                   type="button"
@@ -1890,7 +1923,7 @@ function RoleNeedsCard({
                 >
                   <X className="h-3 w-3" />
                 </button>
-              </span>
+              </Badge>
             ))}
 
             {!showAllPreferred &&
@@ -1908,7 +1941,7 @@ function RoleNeedsCard({
           </div>
 
           <div className="mt-2 flex gap-2">
-            <input
+            <Input
               value={preferredDraft}
               onChange={(event) =>
                 setPreferredDraft(event.target.value)
@@ -1939,16 +1972,22 @@ function RoleNeedsCard({
         </div>
       </div>
 
+      <aside className={needsStyles.market} aria-label="Piyasa görünümü">
+        <p className="cc-label">Piyasa görünümü <span>· CollaCrew verileri</span></p>
+        <p>Bu rol için henüz güvenilir bir piyasa karşılaştırması sunulamıyor.</p>
+      </aside>
+
       <div className="mt-6">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-          Beklentiler
+          Sorumluluklar
         </p>
+        <p className={needsStyles.skillHelp}>Bu rol için önerilen temel sorumluluklar.</p>
 
         <ul className="space-y-2">
           {visibleResponsibilities.map((item, index) => (
             <li
               key={item}
-              className="flex items-start justify-between gap-3 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-3.5 py-2.5 text-sm text-[var(--color-text-secondary)]"
+              className={needsStyles.responsibility}
             >
               <span>{item}</span>
               <button
@@ -1983,7 +2022,7 @@ function RoleNeedsCard({
           )}
 
         <div className="mt-2 flex gap-2">
-          <input
+          <Input
             value={responsibilityDraft}
             onChange={(event) =>
               setResponsibilityDraft(event.target.value)
@@ -2018,26 +2057,55 @@ function RoleNeedsCard({
           </button>
         </div>
       </div>
+      <div className={needsStyles.roleActions}><Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)}>Düzenlemeyi bitir</Button></div>
+      </>}
     </div>
   );
 }
 
+function RoleReasonPreview({ reason }: { reason: string }) {
+  const contentId = React.useId();
+  const content = React.useRef<HTMLParagraphElement>(null);
+  const [expanded, setExpanded] = React.useState(false);
+  const [truncated, setTruncated] = React.useState(false);
+  React.useEffect(() => {
+    const element = content.current;
+    if (!element || expanded) return;
+    const observer = new ResizeObserver(() => {
+      setTruncated(element.scrollHeight > element.clientHeight + 1);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [reason, expanded]);
+  return <div className={needsStyles.recommendationReason}>
+    <h5>Neden bu rol?</h5>
+    <p ref={content} id={contentId} className={expanded ? needsStyles.reasonExpanded : needsStyles.reasonPreview}>{reason}</p>
+    {(truncated || expanded) && <Button type="button" variant="link" size="sm" aria-expanded={expanded} aria-controls={contentId} onClick={() => setExpanded(value => !value)}>{expanded ? "Daha az göster" : "Devamını gör"}</Button>}
+  </div>;
+}
+
 function AnalysisStep({
+  initialInspectingRoleId,
+  onRefreshMatches,
+  canRefreshMatches,
+  projectTitle,
   matchingInProgress,
   roles,
   matching,
   canViewMatchCandidates,
-  teamAverageScore,
   bestOverallFreelancer,
   selectionMode,
   selectedTeamMatches,
   onChooseTeam,
-  onChooseFreelancer,
   onChooseNone,
   onToggleRoleCandidate,
   onBack,
   onContinue,
 }: {
+  initialInspectingRoleId?: string | null;
+  onRefreshMatches?: () => void;
+  canRefreshMatches?: boolean;
+  projectTitle?: string;
   matchingInProgress: boolean;
   roles: Role[];
   matching: RoleMatchGroup[];
@@ -2063,498 +2131,65 @@ function AnalysisStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  return (
-    <section className="pt-10">
-      <div className="mb-10">
-        <p className={EYEBROW}>
-          03 / Eşleşmeler
-        </p>
-
-        <h1 className={HEADING}>
-          {matchingInProgress
-            ? "Uygun freelancerları buluyoruz..."
-            : "Eşleşmeler hazır"}
-        </h1>
-
-        <p className={SUBTEXT}>
-          {matchingInProgress
-            ? "İhtiyaçlarınıza uygun freelancerları buluyoruz."
-            : "İhtiyaçlarınıza uygun freelancerları bulduk."}
-        </p>
+  const [inspectingRoleId, setInspectingRoleId] = useState<string | null>(initialInspectingRoleId ?? null);
+  const viewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { viewHeading.current?.focus(); }, [inspectingRoleId, matchingInProgress]);
+  const roleMatches = roles.map(role => {
+    const group = matching.find(item => item.role === role.name);
+    const eligible = (group?.freelancers ?? []).filter(candidate => candidate.isEligibleForRole);
+    const strongest = eligible.reduce<Talent | null>((best, candidate) => !best || candidate.score > best.score ? candidate : best, null);
+    return { role, group, eligible, strongest, count: typeof group?.totalEligibleCount === "number" && Number.isFinite(group.totalEligibleCount) ? group.totalEligibleCount : null };
+  });
+  const hasMatches = roleMatches.some(item => (item.count ?? 0) > 0);
+  const allMatched = roles.length > 0 && roleMatches.every(item => (item.count ?? 0) > 0);
+  const total = roleMatches.every(item => item.count !== null) ? roleMatches.reduce((sum, item) => sum + (item.count ?? 0), 0) : null;
+  const strongest = roleMatches.reduce<Talent | null>((best, item) => item.strongest && (!best || item.strongest.score > best.score) ? item.strongest : best, null);
+  const inspecting = roleMatches.find(item => item.role.id === inspectingRoleId);
+  const selectedFor = (role: Role) => selectionMode === "team" ? (selectedTeamMatches[role.id] ?? []).length : selectionMode === "freelancer" && bestOverallFreelancer?.role === role.name ? 1 : 0;
+  return <section className={matchStyles.root}>
+    <ProjectAnalysisLoading active={matchingInProgress} kind="matching"/>
+    {!matchingInProgress && (inspecting ? <div className={matchStyles.discovery} data-inspecting-role={inspecting.role.id}>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setInspectingRoleId(null)}><ChevronLeft size={16} aria-hidden="true"/> Proje oluşturmaya dön</Button>
+      <header className={matchStyles.discoveryHeader}><p className={matchStyles.context}>{projectTitle?.trim() || "Proje taslağı"}</p><h2 ref={viewHeading} tabIndex={-1}>{inspecting.role.name} için eşleşmeler</h2><p>Seçim isteğe bağlıdır. Hiçbir rolü doldurmak zorunda değilsin; taslağın bu çalışma alanında korunur.</p></header>
+      {!canViewMatchCandidates ? canRefreshMatches && onRefreshMatches ? <div className={matchStyles.optional}><p>Mevcut planınla eşleşen profilleri inceleyebilirsin.</p><Button type="button" variant="secondary" onClick={onRefreshMatches}>Eşleşmeleri güncel planımla yenile</Button></div> : <MatchPaywallCard matching={inspecting.group ? [inspecting.group] : []}/> : <>
+        <p className={matchStyles.discoveryNote}>Buradaki seçimler davet veya ekip üyeliği oluşturmaz. Teklif ve kabul süreci proje yayınlandıktan sonra devam eder.</p>
+        <RoleCandidatePicker key={inspecting.role.id} role={inspecting.role} freelancers={inspecting.eligible} selected={selectionMode === "team" ? selectedTeamMatches[inspecting.role.id] ?? [] : []} onToggle={candidate => { if (selectionMode !== "team") onChooseTeam(); onToggleRoleCandidate(inspecting.role, candidate); }}/>
+        {selectionMode !== "none" && <Button type="button" variant="link" size="sm" onClick={onChooseNone}>Tüm seçimleri temizle</Button>}
+      </>}
+    </div> : <>
+      <aside className={matchStyles.optional}><p>Ekibini şimdi oluşturmak zorunda değilsin.</p><p>Projeyi yayınladıktan sonra freelancerları davet edebilir veya gelen teklifleri değerlendirebilirsin.</p></aside>
+      <header className={matchStyles.header}>
+        <p className={matchStyles.eyebrow}><Sparkles size={16} aria-hidden="true"/> Colla AI eşleştirmesi</p>
+        <h2 ref={viewHeading} tabIndex={-1}>{hasMatches ? "Projen için uygun yetenekler bulundu." : "Rol ihtiyaçların için eşleşmeleri değerlendirdik."}</h2>
+        <p>{hasMatches ? "Önerilen roller için proje ihtiyaçlarına uygun freelancer eşleşmelerini belirledik." : "Şu anda güçlü eşleşme görünmeyen rollerle de projenin yayın sürecine devam edebilirsin."}</p>
+      </header>
+      <ul className={matchStyles.metrics} aria-label="Eşleşme özeti">
+        <li><strong>{roles.length}</strong><span>Önerilen rol</span></li>
+        <li><strong>{total ?? "—"}</strong><span>{roles.length === 1 ? "Uygun freelancer" : "Rol bazında eşleşme"}</span></li>
+        <li><strong>{strongest ? "%" + Math.round(strongest.score) : "—"}</strong><span>En güçlü eşleşme</span></li>
+      </ul>
+      {allMatched && <p className={matchStyles.success}><Check size={16} aria-hidden="true"/> Tüm roller için uygun eşleşmeler bulundu</p>}
+      <div className={matchStyles.roles}>
+        {roleMatches.map(({ role, count, strongest: top }) => <section key={role.id} className={matchStyles.role} aria-label={role.name + " eşleşmeleri"}>
+          <div className={matchStyles.roleHeading}><h3>{role.name}</h3>{selectedFor(role) > 0 && <span className={matchStyles.selection}><Check size={14} aria-hidden="true"/> {selectedFor(role)} freelancer seçildi</span>}</div>
+          {role.skills.length > 0 && <div className={matchStyles.skills}><h4>Gerekli beceriler</h4><div>{role.skills.map(skill => <Badge key={skill} tone="primary" className={matchStyles.chip}>{skill}</Badge>)}</div></div>}
+          <div className={matchStyles.matchInfo}>
+            <p className={matchStyles.found}>{count !== null && count > 0 && <span className={matchStyles.statusDot} aria-hidden="true"/>}{count === null ? "Bu rol için eşleşme sayısı mevcut değil" : count + " uygun freelancer bulundu"}</p>
+            {top && <div className={matchStyles.score}><div><span>En güçlü eşleşme</span><strong>%{Math.round(top.score)}</strong></div><meter min={0} max={100} value={top.score} aria-label={role.name + " için en güçlü freelancer eşleşmesi"}/></div>}
+          {count !== null && count > 0 && <Button type="button" variant="link" size="sm" onClick={() => setInspectingRoleId(role.id)}>Eşleşmeleri incele <ArrowRight size={16} aria-hidden="true"/></Button>}
+          </div>
+          {(roles.length === 1 || count === 0 || count === null) && <p className={matchStyles.roleNote}>{count === 0 ? "Bu rol için şu anda güçlü bir eşleşme bulunamadı. Eşleşme kriterlerini daha sonra tekrar değerlendirebilirsin." : count === null ? "Eşleşme bilgisini daha sonra tekrar değerlendirebilirsin." : "Proje ihtiyaçları ve rol becerilerine göre uygun eşleşmeler bulundu."}</p>}
+        </section>)}
+        {roles.length === 0 && <p className={matchStyles.roleNote}>Henüz rol tanımlanmadı. İhtiyaçlar adımından rol ekleyebilir veya yayın sürecine devam edebilirsin.</p>}
       </div>
-
-      {matchingInProgress ? (
-        <div
-          className={`${CARD} p-10 text-center`}
-        >
-          <AnalyzingState />
-
-          <p className="mt-4 text-sm text-[var(--color-text-secondary)]">
-            İhtiyaçlarınıza uygun freelancerları buluyoruz...
-          </p>
-        </div>
-      ) : !canViewMatchCandidates ? (
-        <MatchPaywallCard matching={matching} />
-      ) : (
-        <>
-          <div className="grid gap-5 lg:grid-cols-2">
-            <MatchOptionCard
-              eyebrow="AI önerisi"
-              title="Önerilen ekip"
-              selected={
-                selectionMode === "team"
-              }
-              onSelect={
-                onChooseTeam
-              }
-              disabled={
-                roles.length === 0
-              }
-            >
-              <div className="mt-4 flex items-center justify-between">
-                <MatchBadge
-                  score={
-                    teamAverageScore
-                  }
-                />
-
-                <span className="text-xs text-[var(--color-text-secondary)]">
-                  {roles.length} rol
-                </span>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {roles.map((role) => {
-                  const group =
-                    matching.find(
-                      (item) =>
-                        item.role ===
-                        role.name
-                    );
-
-                  const top =
-                    group
-                      ?.freelancers[0];
-
-                  return (
-                    <div
-                      key={role.id}
-                      className="flex items-center justify-between gap-4 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3"
-                    >
-                      <div>
-                        <p className="text-sm font-medium text-[#222]">
-                          {role.name}
-                        </p>
-
-                        <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                          {role.memberCount}{" "}
-                          kişi
-                        </p>
-                      </div>
-
-                      <span className="text-xs font-semibold text-[#222]">
-                        {top
-                          ? `%${Math.round(
-                              top.score
-                            )}`
-                          : "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {selectionMode ===
-                "team" && (
-                <div className="mt-6 space-y-5 border-t border-[var(--color-border-subtle)] pt-6">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                      Ekip üyelerini seç
-                    </p>
-
-                    <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
-                      Seçtiğiniz kişiler
-                      henüz proje ekibine
-                      eklenmez. Proje
-                      yayınlandıktan sonra
-                      teklif ve kabul süreci
-                      devam eder.
-                    </p>
-                  </div>
-
-                  {roles.map((role) => (
-                    <RoleCandidatePicker
-                      key={role.id}
-                      role={role}
-                      freelancers={
-                        matching.find(
-                          (group) =>
-                            group.role === role.name
-                        )?.freelancers ?? []
-                      }
-                      selected={
-                        selectedTeamMatches[
-                          role.id
-                        ] ?? []
-                      }
-                      onToggle={(candidate) =>
-                        onToggleRoleCandidate(
-                          role,
-                          candidate
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-            </MatchOptionCard>
-
-            <MatchOptionCard
-              eyebrow="AI önerisi"
-              title="Önerilen freelancer"
-              selected={
-                selectionMode ===
-                "freelancer"
-              }
-              onSelect={
-                onChooseFreelancer
-              }
-              disabled={
-                !bestOverallFreelancer
-              }
-            >
-              {bestOverallFreelancer ? (
-                <div className="mt-4">
-                  <div className="flex items-center justify-between">
-                    <MatchBadge
-                      score={
-                        bestOverallFreelancer.score
-                      }
-                    />
-                  </div>
-
-                  <div className="mt-5 flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
-                      <UserRound className="h-5 w-5 text-[var(--color-text-secondary)]" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <FreelancerHoverCard
-                        talent={
-                          bestOverallFreelancer
-                        }
-                        nameClassName="block truncate text-sm font-semibold text-[#222]"
-                      />
-
-                      {bestOverallFreelancer.title && (
-                        <p className="truncate text-xs text-[var(--color-text-secondary)]">
-                          {
-                            bestOverallFreelancer.title
-                          }
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {bestOverallFreelancer.reason && (
-                    <p className="mt-4 text-sm leading-6 text-[var(--color-text-secondary)]">
-                      {
-                        bestOverallFreelancer.reason
-                      }
-                    </p>
-                  )}
-
-                  {bestOverallFreelancer
-                    .skills
-                    .length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-1.5">
-                      {bestOverallFreelancer.skills
-                        .slice(0, 6)
-                        .map(
-                          (skill) => (
-                            <span
-                              key={skill}
-                              className={TAG}
-                            >
-                              {skill}
-                            </span>
-                          )
-                        )}
-                    </div>
-                  )}
-
-                  <div className="mt-6 rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3 text-xs leading-5 text-[var(--color-text-secondary)]">
-                    Bu seçim freelancerı
-                    doğrudan proje ekibine
-                    eklemez. Proje
-                    yayınlandıktan sonra
-                    teklif ve kabul süreci
-                    devam eder.
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-4 text-sm leading-6 text-[var(--color-text-secondary)]">
-                  Şu anda uygun bir
-                  freelancer bulunamadı.
-                  Yine de seçim yapmadan
-                  devam edebilirsiniz.
-                </p>
-              )}
-            </MatchOptionCard>
-          </div>
-
-          <div className="mt-6 flex justify-center">
-            <button
-              type="button"
-              onClick={onChooseNone}
-              className={`rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
-                selectionMode === "none"
-                  ? "border-blue-600 bg-[var(--color-info-50)] text-blue-600"
-                  : "border-[var(--color-border-subtle)] bg-white text-[var(--color-text-secondary)] hover:border-gray-300 hover:text-[#222]"
-              }`}
-            >
-              {selectionMode ===
-              "none"
-                ? "Seçim yapılmadı"
-                : "Şimdilik ekip veya freelancer seçmeden devam et"}
-            </button>
-          </div>
-        </>
-      )}
-
-      <div className="mt-10 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
-        <button
-          type="button"
-          onClick={onBack}
-          className={BTN_GHOST}
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Geri
-        </button>
-
-        <button
-          type="button"
-          disabled={matchingInProgress}
-          onClick={onContinue}
-          className={BTN_PRIMARY}
-        >
-          Bütçe ve yayına geç
-          <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function AdvancedAnalysisSection({
-  advancedAnalysis,
-  proAnalysis,
-  aiUsage,
-  canUseDeepAnalysis,
-}: {
-  advancedAnalysis: PlusProjectAnalysis | null;
-  proAnalysis: ProProjectAnalysis | null;
-  aiUsage: { count: number; monthlyLimit: number; limitReached: boolean } | null;
-  canUseDeepAnalysis: boolean;
-}) {
-  return (
-    <div className="mb-5">
-      <PremiumGate
-        feature="advanced_project_analysis"
-        title="Daha kapsamlı proje analizi"
-        description="Rol/skill boşluklarını, bütçe-süre değerlendirmesini ve daha detaylı rol analizini gör."
-        dismissible
-      >
-        {advancedAnalysis ? (
-          <div className={`${CARD} p-6`}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-[var(--color-text-primary)]">Kapsamlı Analiz</h3>
-              <span className="rounded-full bg-[var(--color-primary-600)] px-2.5 py-0.5 text-xs font-medium text-white">
-                {canUseDeepAnalysis ? "Pro" : "Plus"}
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              {advancedAnalysis.detailedRoleAnalysis.map((item) => (
-                <p key={item.role} className="text-sm text-[var(--color-text-secondary)]">
-                  <span className="font-medium text-[var(--color-text-primary)]">{item.role}:</span> {item.insight}
-                </p>
-              ))}
-            </div>
-
-            {advancedAnalysis.skillGapInsights.length > 0 && (
-              <div className="mt-4 border-t border-[var(--color-border-subtle)] pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Beceri İçgörüleri</p>
-                <ul className="mt-2 space-y-1">
-                  {advancedAnalysis.skillGapInsights.map((insight, index) => (
-                    <li key={index} className="text-sm text-[var(--color-text-secondary)]">
-                      • {insight}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="mt-4 border-t border-[var(--color-border-subtle)] pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Bütçe ve Süre Değerlendirmesi</p>
-              <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{advancedAnalysis.budgetDurationAssessment.insight}</p>
-              {advancedAnalysis.budgetDurationAssessment.flags.map((flag, index) => (
-                <p key={index} className="mt-1 text-sm text-[var(--color-warning-600)]">
-                  ⚠ {flag}
-                </p>
-              ))}
-            </div>
-
-            {proAnalysis && (
-              <div className="mt-5 border-t border-[var(--color-border-subtle)] pt-5">
-                <div className="flex items-center gap-2">
-                  <h4 className="font-semibold text-[var(--color-text-primary)]">Gelişmiş Pro Analizi</h4>
-                  <span className="rounded-full bg-[var(--color-primary-600)] px-2 py-0.5 text-[10px] font-medium text-white">Pro</span>
-                </div>
-
-                <p className="mt-3 text-sm text-[var(--color-text-secondary)]">{proAnalysis.teamCompositionInsight}</p>
-
-                <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Risk Analizi</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
-                    Risk seviyesi:{" "}
-                    <span
-                      className={`font-medium ${
-                        proAnalysis.riskAnalysis.level === "high"
-                          ? "text-[var(--color-error-600)]"
-                          : proAnalysis.riskAnalysis.level === "medium"
-                            ? "text-amber-600"
-                            : "text-[var(--color-success-600)]"
-                      }`}
-                    >
-                      {proAnalysis.riskAnalysis.level === "high"
-                        ? "Yüksek"
-                        : proAnalysis.riskAnalysis.level === "medium"
-                          ? "Orta"
-                          : "Düşük"}
-                    </span>
-                  </p>
-                  <ul className="mt-1 space-y-1">
-                    {proAnalysis.riskAnalysis.risks.map((risk, index) => (
-                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
-                        • {risk}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Alternatif Rol Önerileri</p>
-                  <ul className="mt-1 space-y-1">
-                    {proAnalysis.alternativeRoleSuggestions.map((suggestion, index) => (
-                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
-                        • {suggestion}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Gelişmiş Bütçe İçgörüsü</p>
-                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{proAnalysis.advancedBudgetInsight}</p>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Gelişmiş Öneriler</p>
-                  <ul className="mt-1 space-y-1">
-                    {proAnalysis.advancedRecommendations.map((rec, index) => (
-                      <li key={index} className="text-sm text-[var(--color-text-secondary)]">
-                        • {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            {aiUsage && (
-              <p className="mt-4 border-t border-[var(--color-border-subtle)] pt-3 text-xs text-[var(--color-text-muted)]">
-                Bu ay {aiUsage.count}/{aiUsage.monthlyLimit} ek analiz kullanıldı.
-              </p>
-            )}
-          </div>
-        ) : aiUsage?.limitReached ? (
-          <div className={`${CARD} p-6 text-sm text-[var(--color-text-secondary)]`}>
-            Bu ay için ek analiz hakkın doldu ({aiUsage.count}/{aiUsage.monthlyLimit}). Gelecek ay otomatik olarak
-            yenilenecek{canUseDeepAnalysis ? "" : " — daha yüksek limit için Pro'ya geçebilirsin"}.
-          </div>
-        ) : null}
-      </PremiumGate>
+    </>)}
+    <div className={matchStyles.footer}>
+      <Button type="button" onClick={inspecting && !matchingInProgress ? () => setInspectingRoleId(null) : onBack} variant="ghost"><ChevronLeft size={16} aria-hidden="true"/> Geri</Button>
+      {inspecting ? <Button type="button" variant="primary" onClick={() => setInspectingRoleId(null)}>{selectedFor(inspecting.role) > 0 ? "Seçimi tamamla" : "Seçmeden devam et"}<ArrowRight size={16} aria-hidden="true"/></Button> : <Button type="button" disabled={matchingInProgress} onClick={onContinue} variant="primary">Bütçe ve yayına geç <ArrowRight size={16} aria-hidden="true"/></Button>}
     </div>
-  );
+  </section>;
 }
 
-function MatchOptionCard({
-  eyebrow,
-  title,
-  selected,
-  onSelect,
-  disabled,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  selected: boolean;
-  onSelect: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      aria-disabled={disabled}
-      onClick={() => {
-        if (!disabled) {
-          onSelect();
-        }
-      }}
-      onKeyDown={(event) => {
-        if (
-          !disabled &&
-          (event.key === "Enter" ||
-            event.key === " ")
-        ) {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-      className={`rounded-[var(--radius-card)] border bg-white p-6 text-left shadow-[0_1px_3px_rgba(0,0,0,0.03)] transition ${
-        disabled
-          ? "cursor-not-allowed opacity-50"
-          : "cursor-pointer hover:border-gray-300"
-      } ${
-        selected
-          ? "border-[#222] ring-1 ring-[#222]"
-          : "border-[var(--color-border-subtle)]"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-            {eyebrow}
-          </p>
-
-          <h2 className="mt-1 cc-h2 font-semibold text-[#222]">
-            {title}
-          </h2>
-        </div>
-
-        <RadioDot
-          checked={selected}
-          large
-        />
-      </div>
-
-      {children}
-    </div>
-  );
-}
 
 function RadioDot({
   checked,
@@ -2582,23 +2217,7 @@ function RadioDot({
   );
 }
 
-function MatchBadge({
-  score,
-}: {
-  score: number;
-}) {
-  return (
-    <span className="inline-flex items-baseline gap-1 rounded-full bg-[var(--color-surface-2)] px-3 py-1.5">
-      <span className="text-sm font-semibold text-[#222]">
-        %{Math.round(score)}
-      </span>
 
-      <span className="text-xs text-[var(--color-text-secondary)]">
-        uyum
-      </span>
-    </span>
-  );
-}
 
 /**
  * Free plan client için: eşleşme çalıştı ve gerçek aday sayısı gerçek
@@ -2627,7 +2246,7 @@ function MatchPaywallCard({
 
   return (
     <div className={`${CARD} p-8`}>
-      <p className="text-sm font-semibold text-[#222]">
+      <p className="text-sm font-semibold text-[var(--color-text-primary)]">
         Eşleşmeler hazır
       </p>
 
@@ -2637,7 +2256,7 @@ function MatchPaywallCard({
             key={group.role}
             className="text-sm text-[var(--color-text-secondary)]"
           >
-            <span className="font-medium text-[#222]">
+            <span className="font-medium text-[var(--color-text-primary)]">
               {group.role}
             </span>{" "}
             için {group.totalEligibleCount} uygun
@@ -2694,7 +2313,7 @@ function RoleCandidatePicker({
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-[#222]">
+        <p className="text-sm font-medium text-[var(--color-text-primary)]">
           {role.name}
         </p>
 
@@ -2713,46 +2332,12 @@ function RoleCandidatePicker({
             !picked && selected.length >= role.memberCount;
 
           return (
-            <button
-              key={candidate.id}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-
-                if (disabled) {
-                  return;
-                }
-
-                onToggle(candidate);
-              }}
-              className={`flex w-full items-center justify-between gap-3 rounded-[var(--radius-card)] border px-3 py-3 text-left transition ${
-                picked
-                  ? "border-[#222] bg-[var(--color-surface-2)]"
-                  : "border-[var(--color-border-subtle)] bg-white hover:border-gray-300"
-              } ${
-                disabled
-                  ? "cursor-not-allowed opacity-40"
-                  : ""
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                <RadioDot checked={picked} />
-
-                <span className="min-w-0">
-                  <FreelancerHoverCard talent={candidate} />
-
-                  {candidate.title && (
-                    <span className="block truncate text-xs text-[var(--color-text-secondary)]">
-                      {candidate.title}
-                    </span>
-                  )}
-                </span>
-              </span>
-
-              <span className="shrink-0 text-xs font-semibold text-[#222]">
-                %{Math.round(candidate.score)}
-              </span>
-            </button>
+            <div key={candidate.id} className={matchStyles.candidate}>
+              <FreelancerHoverCard talent={candidate}/>
+              <button type="button" aria-label={candidate.name + (picked ? " seçimini kaldır" : " seç")} aria-pressed={picked} disabled={disabled} onClick={() => onToggle(candidate)} className={matchStyles.pick}>
+                <RadioDot checked={picked}/><span>{picked ? "Seçildi" : "Seç"}</span>
+              </button>
+            </div>
           );
         })}
       </div>
@@ -2773,76 +2358,18 @@ function RoleCandidatePicker({
   );
 }
 
-/**
- * İsme hover/tap ile açılan küçük bilgi kartı. SADECE Supabase'te
- * gerçekten var olan alanlar gösterilir (title/experience/bio) —
- * tamamlanan proje sayısı, puan, deneyim yılı gibi alanlar şemada
- * yok, bu yüzden burada da UYDURULMAZ.
- */
-function FreelancerHoverCard({
-  talent,
-  nameClassName,
-}: {
-  talent: Talent;
-  nameClassName?: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const hasInfo = Boolean(
-    talent.title || talent.experience || talent.bio
-  );
-
-  return (
-    <span
-      className="relative inline-block max-w-full"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <span
-        role={hasInfo ? "button" : undefined}
-        tabIndex={hasInfo ? 0 : undefined}
-        onClick={(event) => {
-          event.stopPropagation();
-          if (hasInfo) setOpen((prev) => !prev);
-        }}
-        className={
-          nameClassName ??
-          "block truncate text-sm font-medium text-[#222]"
-        }
-      >
-        {talent.name}
-      </span>
-
-      {open && hasInfo && (
-        <div
-          onClick={(event) => event.stopPropagation()}
-          className="absolute left-0 top-full z-50 mt-1 w-64 rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-3 text-left shadow-lg"
-        >
-          <p className="text-sm font-semibold text-[#222]">
-            {talent.name}
-          </p>
-
-          {talent.title && (
-            <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-              {talent.title}
-            </p>
-          )}
-
-          {talent.experience && (
-            <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
-              Deneyim: {talent.experience}
-            </p>
-          )}
-
-          {talent.bio && (
-            <p className="mt-1 line-clamp-3 text-xs leading-5 text-[var(--color-text-secondary)]">
-              {talent.bio}
-            </p>
-          )}
-        </div>
-      )}
-    </span>
-  );
+/** Click disclosure uses only the fields returned by the entitled matching endpoint. */
+function FreelancerHoverCard({talent}: {talent: Talent}) {
+  return <details className={matchStyles.profilePreview}>
+    <summary><Avatar src={talent.avatar} name={talent.name} size="md"/><span className={matchStyles.previewIdentity}><strong>{talent.name}</strong>{talent.title && <span>{talent.title}</span>}</span><span className={matchStyles.previewScore}>%{Math.round(talent.score)} uyum</span><ChevronDown size={16}/></summary>
+    <div className={matchStyles.previewBody}>
+      <dl>{talent.experience && <div><dt>Deneyim</dt><dd>{talent.experience}</dd></div>}{talent.availability && <div><dt>Müsaitlik</dt><dd>{talent.availability}</dd></div>}</dl>
+      {talent.bio && <p>{talent.bio}</p>}
+      {talent.skills.length > 0 && <div className={matchStyles.previewSkills}>{talent.skills.slice(0, 5).map(skill => <Badge key={skill}>{skill}</Badge>)}</div>}
+      {talent.reason && <p><strong>Proje uyumu:</strong> {talent.reason}</p>}
+      <a href={`/client/freelancers/${encodeURIComponent(talent.id)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary-600)]">Profili görüntüle <ArrowRight size={14}/><span className="sr-only">(yeni sekmede)</span></a>
+    </div>
+  </details>;
 }
 
 function BudgetPublishStep({
@@ -2850,11 +2377,6 @@ function BudgetPublishStep({
   selectionMode,
   roles,
   updateRole,
-  selectedFreelancer,
-  generalBudget,
-  setGeneralBudget,
-  projectDuration,
-  setProjectDuration,
   totalBudget,
   budgetIsReady,
   publishing,
@@ -2868,28 +2390,12 @@ function BudgetPublishStep({
     id: string,
     updates: Partial<Role>
   ) => void;
-  selectedFreelancer:
-    | Talent
-    | null;
-  generalBudget: string;
-  setGeneralBudget: (
-    value: string
-  ) => void;
-  projectDuration: string;
-  setProjectDuration: (
-    value: string
-  ) => void;
   totalBudget: number;
   budgetIsReady: boolean;
   publishing: boolean;
   onBack: () => void;
   onPublish: () => void;
 }) {
-  const longestDuration =
-    selectionMode === "team"
-      ? getLongestDuration(roles)
-      : projectDuration;
-
   /**
    * Platform hizmet bedeli oranı hard-code edilmez — mevcut, merkezi
    * plan-bazlı komisyon sisteminden (bkz. supabase/migrations/
@@ -2936,208 +2442,27 @@ function BudgetPublishStep({
   );
 
   return (
-    <section className="pt-10">
-      <div className="mb-10">
+    <section className="pt-[var(--space-2)]">
+      <div className="mb-[var(--space-5)]">
         <p className={EYEBROW}>
           04 / Bütçe & yayınla
         </p>
 
-        <h1 className={HEADING}>
-          {selectionMode === "team"
-            ? "Ekibiniz için bütçeyi belirleyin"
-            : "Proje bütçenizi belirleyin"}
-        </h1>
+        <h2 className={HEADING}>
+          Projeyi bütçelendir
+        </h2>
 
         <p className={SUBTEXT}>
-          {selectionMode === "team"
-            ? "Her rol için kişi sayısını, kişi başı bütçeyi ve çalışma süresini belirleyin. Toplam bütçe otomatik hesaplanır."
-            : "Projeniz için uygun bir bütçe ve teslim süresi belirleyin. Freelancerlar yayınlanan projeye teklif gönderebilir."}
+          Her rol için çalışma bütçesini ve beklenen süreyi belirleyin. Toplam bütçe otomatik hesaplanır.
         </p>
       </div>
 
-      {selectionMode === "team" ? (
-        <div className="space-y-4">
-          {roles.map((role) => (
-            <RoleBudgetCard
-              key={role.id}
-              role={role}
-              onUpdate={(updates) =>
-                updateRole(
-                  role.id,
-                  updates
-                )
-              }
-            />
-          ))}
-
-          <div className="grid gap-4 pt-2 sm:grid-cols-2">
-            <div
-              className={`${CARD} p-6`}
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                Toplam bütçe
-              </p>
-
-              <p className="mt-2 cc-page-title font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
-                ₺{formatTL(totalBudget)}
-              </p>
-
-              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                Tüm rollerin toplamı
-              </p>
-            </div>
-
-            <div
-              className={`${CARD} p-6`}
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                Proje süresi
-              </p>
-
-              <p className="mt-2 text-lg font-semibold text-[#222]">
-                {longestDuration ||
-                  "Rol süreleri girilmedi"}
-              </p>
-
-              <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
-                En uzun rol süresine göre
-                belirlenir
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className={`${CARD} p-6 sm:p-8`}>
-          {selectionMode ===
-            "freelancer" &&
-            selectedFreelancer && (
-              <div className="mb-8 flex items-center gap-3 border-b border-[var(--color-border-subtle)] pb-6">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-2)]">
-                  <UserRound className="h-5 w-5 text-[var(--color-text-secondary)]" />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#222]">
-                    {
-                      selectedFreelancer.name
-                    }
-                  </p>
-
-                  {selectedFreelancer.title && (
-                    <p className="truncate text-xs text-[var(--color-text-secondary)]">
-                      {
-                        selectedFreelancer.title
-                      }
-                    </p>
-                  )}
-                </div>
-
-                <div className="ml-auto">
-                  <MatchBadge
-                    score={
-                      selectedFreelancer.score
-                    }
-                  />
-                </div>
-              </div>
-            )}
-
-          <div className="grid gap-8 md:grid-cols-2">
-            <BudgetSelector
-              label="Proje bütçesi"
-              value={generalBudget}
-              onChange={setGeneralBudget}
-            />
-
-            <DurationSelector
-              label="Proje süresi"
-              value={projectDuration}
-              onChange={
-                setProjectDuration
-              }
-            />
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`${CARD} mt-8 overflow-hidden`}
-      >
-        <div className="border-b border-[var(--color-border-subtle)] px-6 py-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-            Proje özeti
-          </p>
-
-          <h2 className="mt-2 cc-h2 font-semibold text-[#222]">
-            {brief.title ||
-              "Başlıksız proje"}
-          </h2>
-        </div>
-
-        <div className="grid gap-px bg-[var(--color-surface-2)] sm:grid-cols-2">
-          <SummaryRow
-            label="Kategori"
-            value={
-              brief.category || "—"
-            }
-          />
-
-          <SummaryRow
-            label="Teslim formatı"
-            value={
-              brief.deliveryFormats
-                .length > 0
-                ? brief.deliveryFormats.join(
-                    ", "
-                  )
-                : "—"
-            }
-          />
-
-          <SummaryRow
-            label="Roller"
-            value={
-              roles.length > 0
-                ? roles
-                    .map((role) => role.name)
-                    .filter(Boolean)
-                    .join(", ")
-                : "—"
-            }
-          />
-
-          <SummaryRow
-            label="Beceriler"
-            value={
-              roleSkillSummary.length > 0
-                ? roleSkillSummary.join(
-                    ", "
-                  )
-                : "—"
-            }
-          />
-
-          <SummaryRow
-            label="Bütçe"
-            value={
-              totalBudget > 0
-                ? `₺${formatTL(
-                    totalBudget
-                  )}`
-                : "—"
-            }
-            strong
-          />
-
-          <SummaryRow
-            label="Süre"
-            value={
-              longestDuration || "—"
-            }
-            strong
-          />
-        </div>
-      </div>
+      <BudgetProjectSummary brief={brief} roles={roles} skills={roleSkillSummary}/>
+      <section className={needsStyles.roleBudgetSection} aria-label="Rol bütçesi ve süreleri">
+        <h3>Rol bütçesi ve süreleri</h3>
+        <p>Her rol için çalışma bütçesini ve beklenen süreyi belirleyin.</p>
+        <div className={needsStyles.roleBudgetList}>{roles.map(role=><RoleBudgetCard key={role.id} role={{...role,memberCount:selectionMode === "team" ? role.memberCount : 1}} disabled={publishing} onUpdate={updates=>updateRole(role.id,updates)}/>)}</div>
+      </section>
 
       {totalBudget > 0 && (
         <div
@@ -3152,9 +2477,9 @@ function BudgetPublishStep({
           <div className="space-y-3 px-6 py-5">
             <div className="flex items-center justify-between text-sm">
               <span className="text-[var(--color-text-secondary)]">
-                Proje bütçesi
+                Rol bütçeleri toplamı
               </span>
-              <span className="font-medium text-[#222]">
+              <span className="font-medium text-[var(--color-text-primary)]">
                 ₺{formatTL(totalBudget)}
               </span>
             </div>
@@ -3167,13 +2492,13 @@ function BudgetPublishStep({
                 )}
                 )
               </span>
-              <span className="font-medium text-[#222]">
+              <span className="font-medium text-[var(--color-text-primary)]">
                 +₺{formatTL(platformFee)}
               </span>
             </div>
 
             <div className="flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-3">
-              <span className="text-sm font-semibold text-[#222]">
+              <span className="text-sm font-semibold text-[var(--color-text-primary)]">
                 Tahmini toplam ödeme
               </span>
               <span className="text-xl font-semibold text-[var(--color-primary-600)]">
@@ -3191,24 +2516,24 @@ function BudgetPublishStep({
       )}
 
       <div className="mt-8 flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-6">
-        <button
+        <Button
           type="button"
           onClick={onBack}
           disabled={publishing}
-          className={BTN_GHOST}
+          variant="ghost"
         >
           <ChevronLeft className="h-4 w-4" />
           Geri
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
           disabled={
             publishing ||
             !budgetIsReady
           }
           onClick={onPublish}
-          className={BTN_PRIMARY}
+          variant="primary"
         >
           {publishing
             ? "Yayınlanıyor..."
@@ -3217,117 +2542,36 @@ function BudgetPublishStep({
           {!publishing && (
             <Check className="h-4 w-4" />
           )}
-        </button>
+        </Button>
       </div>
     </section>
   );
 }
 
-function RoleBudgetCard({
-  role,
-  onUpdate,
-}: {
-  role: Role;
-  onUpdate: (
-    updates: Partial<Role>
-  ) => void;
-}) {
-  function handleBudgetChange(
-    value: string
-  ) {
-    onUpdate({
-      budgetPerPerson:
-        parseTL(value),
-    });
-  }
-
-  return (
-    <div
-      className={`${CARD} p-5 sm:p-6`}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-base font-semibold text-[#222]">
-            {role.name}
-          </p>
-
-          {role.reason && (
-            <p className="mt-1 max-w-xl text-xs leading-5 text-[var(--color-text-secondary)]">
-              {role.reason}
-            </p>
-          )}
-        </div>
-
-        <div className="shrink-0">
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Rol toplamı
-          </p>
-
-          <p className="mt-0.5 text-lg font-semibold text-[#222]">
-            ₺{formatTL(role.budget)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-5 md:grid-cols-3">
-        <Field label="Kişi sayısı">
-          <Select
-            value={String(
-              role.memberCount
-            )}
-            onChange={(value) =>
-              onUpdate({
-                memberCount:
-                  Number(value),
-              })
-            }
-            options={["1", "2", "3", "4", "5", "6", "7", "8"]}
-            placeholder="Kişi sayısı"
-          />
-        </Field>
-
-        <BudgetSelector
-          label="Kişi başı bütçe"
-          value={
-            role.budgetPerPerson
-              ? String(
-                  role.budgetPerPerson
-                )
-              : ""
-          }
-          compact
-          onChange={handleBudgetChange}
-        />
-
-        <DurationSelector
-          label="Rol süresi"
-          value={role.duration}
-          onChange={(value) =>
-            onUpdate({
-              duration: value,
-            })
-          }
-          compact
-        />
-      </div>
-
-      {role.memberCount > 0 &&
-        role.budgetPerPerson > 0 && (
-          <div className="mt-5 flex items-center justify-between rounded-[var(--radius-card)] bg-[var(--color-surface-2)] px-4 py-3">
-            <span className="text-xs text-[var(--color-text-secondary)]">
-              {role.memberCount} kişi × ₺
-              {formatTL(
-                role.budgetPerPerson
-              )}
-            </span>
-
-            <span className="text-sm font-semibold text-[#222]">
-              ₺{formatTL(role.budget)}
-            </span>
-          </div>
-        )}
+function BudgetProjectSummary({brief,roles,skills}:{brief:Brief;roles:Role[];skills:string[]}) {
+  const [expanded,setExpanded]=useState(false);
+  const detailsId=React.useId();
+  return <section className={needsStyles.budgetSummary} aria-label="Proje özeti">
+    <header><h3>Proje özeti</h3><button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={()=>setExpanded(value=>!value)}>{expanded?"Detayları gizle":"Detayları görüntüle"}<ChevronDown size={16}/></button></header>
+    <div className={needsStyles.budgetSummaryColumns}>
+      <div><p className={needsStyles.budgetLabel}>Proje açıklaması</p><h4>{brief.title || "Başlıksız proje"}</h4>{brief.description&&<p className={expanded?needsStyles.budgetDescription:needsStyles.budgetDescriptionClamped}>{brief.description}</p>}</div>
+      <div><p className={needsStyles.budgetLabel}>Proje kapsamı</p><p className={needsStyles.budgetLabel}>Roller</p><ul>{roles.map(role=><li key={role.id}>{role.name}</li>)}</ul>{skills.length>0&&<><p className={needsStyles.budgetLabel}>Beceriler</p><div className={needsStyles.budgetSkillPreview}>{skills.slice(0,5).map(skill=><Badge key={skill} className={needsStyles.skillChip}>{skill}</Badge>)}{skills.length>5&&<button type="button" aria-expanded={expanded} aria-controls={detailsId} aria-label="Tüm becerileri görüntüle" onClick={()=>setExpanded(value=>!value)}>+{skills.length-5}</button>}</div></>}</div>
     </div>
-  );
+    <div id={detailsId} hidden={!expanded} className={needsStyles.budgetDetails}>{expanded&&<>{skills.length>5&&<div><p className={needsStyles.budgetLabel}>Tüm beceriler</p><div className={needsStyles.budgetSkillPreview}>{skills.map(skill=><Badge key={skill} className={needsStyles.skillChip}>{skill}</Badge>)}</div></div>}{brief.deliveryFormats.length>0&&<div><p className={needsStyles.budgetLabel}>Teslim formatı</p><p>{brief.deliveryFormats.join(", ")}</p></div>}</>}</div>
+  </section>;
+}
+
+/** Reuses the existing per-person role amount and duration fields. */
+function RoleBudgetCard({role,onUpdate,disabled}:{role:Role;onUpdate:(updates:Partial<Role>)=>void;disabled:boolean}) {
+  return <fieldset disabled={disabled} className={needsStyles.roleBudgetCard}>
+    <legend className="sr-only">{role.name} bütçesi ve süresi</legend>
+    <div><h4>{role.name}</h4>{role.responsibilities[0]&&<p>{truncateToSentence(role.responsibilities[0])}</p>}</div>
+    <div className={needsStyles.roleBudgetInputs}>
+      <BudgetSelector label={role.memberCount>1?"Rol bütçesi (kişi başı)":"Rol bütçesi"} value={role.budgetPerPerson>0?String(role.budgetPerPerson):""} onChange={value=>onUpdate({budgetPerPerson:parseTL(value)})}/>
+      <DurationSelector label="Çalışma süresi" value={role.duration} onChange={value=>onUpdate({duration:value})}/>
+    </div>
+    {role.memberCount>1&&<p>{role.memberCount} kişi × ₺{formatTL(role.budgetPerPerson)} · Rol toplamı ₺{formatTL(calculateRoleTotal(role.memberCount,role.budgetPerPerson))}</p>}
+  </fieldset>;
 }
 
 /**
@@ -3343,7 +2587,6 @@ function BudgetSelector({
   label,
   value,
   onChange,
-  compact = false,
 }: {
   label: string;
   value: string;
@@ -3352,14 +2595,16 @@ function BudgetSelector({
   ) => void;
   compact?: boolean;
 }) {
+  const fieldId=React.useId();
   return (
     <div>
-      <label className={LABEL}>
+      <label htmlFor={fieldId} className={LABEL}>
         {label}
       </label>
 
       <div className="relative">
-        <input
+        <Input
+          id={fieldId}
           type="text"
           inputMode="numeric"
           value={
@@ -3375,11 +2620,7 @@ function BudgetSelector({
             )
           }
           placeholder="Örn. 37.500"
-          className={`${INPUT} pr-12 ${
-            compact
-              ? "h-11"
-              : ""
-          }`}
+          className="pr-12"
         />
 
         <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-medium text-[var(--color-text-muted)]">
@@ -3390,345 +2631,20 @@ function BudgetSelector({
   );
 }
 
-function DurationSelector({
-  label,
-  value,
-  onChange,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  onChange: (
-    value: string
-  ) => void;
-  compact?: boolean;
-}) {
-  return (
-    <Field label={label}>
-      <div className="relative">
-        <select
-          value={value}
-          onChange={(event) =>
-            onChange(
-              event.target.value
-            )
-          }
-          className={`${INPUT} appearance-none pr-10 ${
-            compact
-              ? "h-11"
-              : ""
-          }`}
-        >
-          <option value="">
-            Süre seçin
-          </option>
-
-          {DURATION_OPTIONS.map(
-            (option) => (
-              <option
-                key={option.label}
-                value={option.label}
-              >
-                {option.label}
-              </option>
-            )
-          )}
-        </select>
-
-        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-      </div>
-    </Field>
-  );
+function DurationSelector({label,value,onChange}:{label:string;value:string;onChange:(value:string)=>void;compact?:boolean}) {
+  return <Field label={label}><SharedSelect value={value} onChange={event=>onChange(event.target.value)} options={[{value:"",label:"Süre seçin"},...DURATION_OPTIONS.map(option=>({value:option.label,label:option.label}))]}/></Field>;
 }
 
-function SummaryRow({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-}) {
-  return (
-    <div className="bg-[var(--color-surface-2)] p-4">
-      <p className="text-xs font-medium text-[var(--color-text-secondary)]">
-        {label}
-      </p>
 
-      <p
-        className={`mt-1 ${
-          strong
-            ? "text-base font-semibold"
-            : "text-sm font-medium"
-        } text-[#222]`}
-      >
-        {value}
-      </p>
-    </div>
-  );
+
+function Field({label,error,children}:{label:string;error?:string;children:React.ReactElement}) {
+  return <FormField label={label} error={error}>{props=>React.cloneElement(children as React.ReactElement<Record<string,unknown>>,{...props,...(children.type===Input||children.type===Textarea?{hasError:Boolean(error)}:{})})}</FormField>;
 }
-
-function PageHeader({
-  title,
-  onBack,
-}: {
-  title: string;
-  onBack: () => void;
-}) {
-  return (
-    <header className="border-b border-[var(--color-border-subtle)] bg-white">
-      <div
-        className={`${CONTAINER} flex items-center gap-4 py-5`}
-      >
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-button)] text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-2)] hover:text-[#222]"
-          aria-label="Geri"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
-
-        <h1 className="text-sm font-semibold text-[var(--color-text-primary)]">
-          {title}
-        </h1>
-      </div>
-    </header>
-  );
+function TextArea({label,error,value,onChange,placeholder,rows=6}:{label:string;error?:string;value:string;onChange:(value:string)=>void;placeholder?:string;rows?:number}) {
+  return <Field label={label} error={error}><Textarea value={value} onChange={event=>onChange(event.target.value)} placeholder={placeholder} rows={rows}/></Field>;
 }
-
-function StepIndicator({
-  step,
-}: {
-  step: Step;
-}) {
-  const steps: {
-    id: Step;
-    label: string;
-  }[] = [
-    {
-      id: "project",
-      label: "Proje",
-    },
-    {
-      id: "needs",
-      label: "İhtiyaçlar",
-    },
-    {
-      id: "analysis",
-      label: "Eşleşmeler",
-    },
-    {
-      id: "budget",
-      label: "Bütçe & Yayınla",
-    },
-  ];
-
-  const currentIndex =
-    steps.findIndex(
-      (item) => item.id === step
-    );
-
-  return (
-    <div
-      className={`${CONTAINER} pt-6`}
-    >
-      <div className="hidden items-center rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-6 py-4 sm:flex">
-        {steps.map(
-          (item, index) => {
-            const done =
-              index < currentIndex;
-
-            const current =
-              index ===
-              currentIndex;
-
-            return (
-              <React.Fragment
-                key={item.id}
-              >
-                <div className="flex shrink-0 items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                      done || current
-                        ? "bg-[var(--color-primary-600)] text-white"
-                        : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
-                    }`}
-                  >
-                    {done ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      String(
-                        index + 1
-                      ).padStart(
-                        2,
-                        "0"
-                      )
-                    )}
-                  </div>
-
-                  <p
-                    className={`text-[13px] font-medium ${
-                      done || current
-                        ? "text-[#222]"
-                        : "text-[var(--color-text-muted)]"
-                    }`}
-                  >
-                    {item.label}
-                  </p>
-                </div>
-
-                {index <
-                  steps.length -
-                    1 && (
-                  <div
-                    className={`mx-4 h-px min-w-8 flex-1 ${
-                      index <
-                      currentIndex
-                        ? "bg-[var(--color-primary-600)]"
-                        : "bg-gray-200"
-                    }`}
-                  />
-                )}
-              </React.Fragment>
-            );
-          }
-        )}
-      </div>
-
-      <div className="flex items-center justify-between rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white px-4 py-3 sm:hidden">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-            Adım{" "}
-            {currentIndex + 1} /{" "}
-            {steps.length}
-          </p>
-
-          <p className="mt-0.5 text-[13px] font-medium text-[#222]">
-            {
-              steps[currentIndex]
-                ?.label
-            }
-          </p>
-        </div>
-
-        <div className="flex gap-1">
-          {steps.map(
-            (item, index) => (
-              <span
-                key={item.id}
-                className={`h-1.5 rounded-full transition-all ${
-                  index ===
-                  currentIndex
-                    ? "w-6 bg-[var(--color-primary-600)]"
-                    : index <
-                        currentIndex
-                      ? "w-3 bg-gray-400"
-                      : "w-3 bg-gray-200"
-                }`}
-              />
-            )
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <label className={LABEL}>
-        {label}
-      </label>
-
-      {children}
-    </div>
-  );
-}
-
-function TextArea({
-  label,
-  value,
-  onChange,
-  placeholder,
-  rows = 6,
-}: {
-  label: string;
-  value: string;
-  onChange: (
-    value: string
-  ) => void;
-  placeholder?: string;
-  rows?: number;
-}) {
-  return (
-    <Field label={label}>
-      <textarea
-        value={value}
-        onChange={(event) =>
-          onChange(
-            event.target.value
-          )
-        }
-        placeholder={placeholder}
-        rows={rows}
-        className={`${INPUT} h-auto resize-none leading-6`}
-      />
-    </Field>
-  );
-}
-
-function Select({
-  value,
-  onChange,
-  options,
-  placeholder,
-}: {
-  value: string;
-  onChange: (
-    value: string
-  ) => void;
-  options: string[];
-  placeholder: string;
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(event) =>
-          onChange(
-            event.target.value
-          )
-        }
-        className={`${INPUT} appearance-none pr-10`}
-      >
-        <option value="">
-          {placeholder}
-        </option>
-
-        {options.map(
-          (option) => (
-            <option
-              key={option}
-              value={option}
-            >
-              {option}
-            </option>
-          )
-        )}
-      </select>
-
-      <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-text-muted)]" />
-    </div>
-  );
+function Select({value,onChange,options,placeholder,...fieldProps}:{value:string;onChange:(value:string)=>void;options:string[];placeholder:string;id?:string;"aria-invalid"?:boolean;"aria-describedby"?:string}) {
+  return <SharedSelect {...fieldProps} value={value} onChange={event=>onChange(event.target.value)} options={[{value:"",label:placeholder},...options.map(option=>({value:option,label:option}))]}/>;
 }
 
 function MultiSelect({
@@ -3867,7 +2783,7 @@ function MultiSelect({
           <span
             className={
               values.length > 0
-                ? "text-[#222]"
+                ? "text-[var(--color-text-primary)]"
                 : "text-[var(--color-text-muted)]"
             }
           >
@@ -3886,7 +2802,7 @@ function MultiSelect({
         {open && (
           <div className="absolute z-30 mt-2 w-full overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.08)]">
             <div className="border-b border-[var(--color-border-subtle)] p-2">
-              <input
+              <Input
                 autoFocus
                 type="text"
                 value={search}
@@ -3901,7 +2817,7 @@ function MultiSelect({
                 placeholder={
                   searchPlaceholder
                 }
-                className="h-10 w-full rounded-lg bg-[var(--color-surface-2)] px-3 text-sm text-[#222] outline-none placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface-2)]"
+                className="h-10 w-full rounded-lg bg-[var(--color-surface-2)] px-3 text-sm text-[var(--color-text-primary)] outline-none placeholder:text-[var(--color-text-muted)] focus:bg-[var(--color-surface-2)]"
               />
             </div>
 
@@ -3923,7 +2839,7 @@ function MultiSelect({
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm text-[var(--color-text-secondary)] transition hover:bg-[var(--color-surface-2)]"
                   >
                     <span className="text-[var(--color-text-muted)]">Ekle:</span>
-                    <span className="font-medium text-[#222]">
+                    <span className="font-medium text-[var(--color-text-primary)]">
                       {search.trim()}
                     </span>
                   </button>
@@ -3959,9 +2875,9 @@ function MultiSelect({
         <div className="mt-3 flex flex-wrap gap-1.5">
           {values.map(
             (value) => (
-              <span
+              <Badge
                 key={value}
-                className={TAG}
+
               >
                 {value}
 
@@ -3977,7 +2893,7 @@ function MultiSelect({
                 >
                   <X className="h-3 w-3" />
                 </button>
-              </span>
+              </Badge>
             )
           )}
         </div>

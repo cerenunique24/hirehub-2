@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Modal } from "@/components/ui/Modal";
 import { Loader2, Send } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/client";
@@ -50,7 +51,7 @@ function rolesOf(project: InvitableProject | undefined) {
  * kapasiteyi ve rolü sunucuda doğrular). Davet şartları (rol, bütçe, süre)
  * kabul anında ekip kaydına dondurulur.
  */
-export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: string }) {
+export default function InviteFreelancerPanel({ freelancerId, compact = false }: { freelancerId: string; compact?: boolean }) {
   const supabase = useMemo(() => createClient(), []);
   const [projects, setProjects] = useState<InvitableProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -205,37 +206,10 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
   }
 
   if (loading) return null;
-
-  return (
-    <div className="mb-6">
-      {projects.length === 0 ? (
-        <p className="text-sm text-neutral-500">
-          Davet gönderebilmek için yayında veya ekibi hazırlanan bir projen olmalı.
-        </p>
-      ) : (
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((v) => !v);
-            setFeedback(null);
-            if (!projectId && projects[0]) chooseProject(projects[0].id);
-          }}
-          className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
-        >
-          <Send size={15} />
-          Projeye Davet Et
-        </button>
-      )}
-
-      {feedback && (
-        <p className={`mt-3 text-sm ${feedback.tone === "success" ? "text-green-700" : "text-red-700"}`}>
-          {feedback.text}
-        </p>
-      )}
-
-      {open && (
-        <div className="mt-4 max-w-xl space-y-3 rounded-xl border border-neutral-200 bg-white p-5">
+  if (compact && !projects.length) return null;
+  const invitationForm = (<div className={compact ? "space-y-3" : "mt-4 max-w-xl space-y-3 rounded-xl border border-neutral-200 bg-white p-5"}>
           <select
+            aria-label="Davet edilecek proje"
             value={projectId}
             onChange={(e) => chooseProject(e.target.value)}
             className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm"
@@ -248,6 +222,7 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
           </select>
 
           <select
+            aria-label="Projedeki rol"
             value={role}
             onChange={(e) => chooseRole(e.target.value)}
             className="w-full rounded-xl border border-neutral-200 px-4 py-2.5 text-sm"
@@ -262,6 +237,7 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
 
           <div className="grid gap-3 sm:grid-cols-2">
             <input
+              aria-label="Davet bütçesi"
               type="number"
               min={1}
               value={budget}
@@ -270,6 +246,7 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
               className="rounded-xl border border-neutral-200 px-4 py-2.5 text-sm"
             />
             <input
+              aria-label="Davet süresi"
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               placeholder="Süre (ör. 14 gün)"
@@ -278,6 +255,7 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
           </div>
 
           <textarea
+            aria-label="Davet notu"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             rows={3}
@@ -304,8 +282,39 @@ export default function InviteFreelancerPanel({ freelancerId }: { freelancerId: 
               Vazgeç
             </button>
           </div>
-        </div>
+        </div>);
+
+
+  return (
+    <div className={compact ? undefined : "mb-6"}>
+      {projects.length === 0 ? (
+        <p className="text-sm text-neutral-500">
+          Davet gönderebilmek için yayında veya ekibi hazırlanan bir projen olmalı.
+        </p>
+      ) : (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-haspopup={compact ? "dialog" : undefined}
+          onClick={() => {
+            setOpen((v) => !v);
+            setFeedback(null);
+            if (!projectId && projects[0]) chooseProject(projects[0].id);
+          }}
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--color-primary-600)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-700)]"
+        >
+          <Send size={15} />
+          Projeye Davet Et
+        </button>
       )}
+
+      {feedback && (
+        <p className={`mt-3 text-sm ${feedback.tone === "success" ? "text-green-700" : "text-red-700"}`}>
+          {feedback.text}
+        </p>
+      )}
+
+      {compact ? <Modal open={open} onClose={()=>setOpen(false)} title="Projeye Davet Et">{invitationForm}</Modal> : open && invitationForm}
     </div>
   );
 }

@@ -29,6 +29,9 @@ export type ProjectFinancialLine = {
   pendingValue: number;
   /** Client commission rate frozen on the project (projects.commission_rate). */
   commissionRate?: number | null;
+  role?: string | null;
+  budgetMissing?: boolean;
+  stagesMissing?: boolean;
 };
 
 export type FreelancerEarningMovement = {
@@ -62,6 +65,18 @@ export type ClientPaymentsSummary = {
   approvedMilestoneTotal: number;
   pendingObligation: number;
   projects: ProjectFinancialLine[];
+  movements: ClientPaymentStage[];
+};
+
+export type ClientPaymentStage = {
+  id: string;
+  projectId: string;
+  projectTitle: string;
+  title: string;
+  budget: number | null;
+  total: number | null;
+  status: string | null;
+  paymentStatus: string | null;
 };
 
 function toNumber(value: unknown): number {
@@ -75,7 +90,7 @@ export async function getFreelancerEarningsSummary(
 ): Promise<FreelancerEarningsSummary> {
   const { data: memberships, error: membershipError } = await supabase
     .from("project_team_members")
-    .select("project_id, proposal_id, agreed_amount")
+    .select("project_id, proposal_id, agreed_amount, role")
     .eq("freelancer_id", freelancerId)
     .eq("status", "active");
 
@@ -126,7 +141,7 @@ export async function getFreelancerEarningsSummary(
     else if (bucket === "pending") paymentPending += amount;
   }
 
-  const bidByProposalId = new Map((proposals ?? []).map((p) => [p.id, toNumber(p.bid_amount)]));
+  const bidByProposalId = new Map((proposals ?? []).map((p) => [p.id, financialAmount(p.bid_amount)]));
   const membershipByProjectId = new Map(rows.map((r) => [r.project_id, r]));
 
   const lines: ProjectFinancialLine[] = (projects ?? []).map((project) => {
@@ -135,7 +150,8 @@ export async function getFreelancerEarningsSummary(
     const bidAmount = proposalId ? bidByProposalId.get(proposalId) : undefined;
     // Eski üyeliklerde anlaşma tutarı yoksa teklif tutarını kullan.
     // Projenin toplam bütçesi tek bir freelancer'ın hakedişi değildir.
-    const engagementValue = toNumber(membership?.agreed_amount ?? bidAmount ?? 0);
+    const agreement = financialAmount(membership?.agreed_amount) ?? bidAmount ?? null;
+    const engagementValue = agreement ?? 0;
 
     const projectMilestones = ownMilestones.filter((m) => m.project_id === project.id);
     const approvedFromMilestones = projectMilestones
@@ -154,6 +170,12 @@ export async function getFreelancerEarningsSummary(
       engagementValue,
       approvedValue,
       pendingValue,
+      role: membership?.role ?? null,
+      budgetMissing: agreement === null,
+      stagesMissing: projectMilestones.some(m =>
+        financialAmount(m.budget) === null ||
+        (m.freelancer_payout_amount != null && financialAmount(m.freelancer_payout_amount) === null)
+      ),
     };
   });
 
@@ -179,11 +201,12 @@ export async function getClientPaymentsSummary(
   supabase: SupabaseClient,
   clientId: string
 ): Promise<ClientPaymentsSummary> {
-  const { data: projects } = await supabase
+  const { data: projects, error: projectError } = await supabase
     .from("projects")
     .select("id, title, status, budget, budget_max, commission_rate")
     .eq("client_id", clientId);
 
+  if (projectError) throw new Error("Proje bütçeleri yüklenemedi.");
   const projectRows = projects ?? [];
   if (projectRows.length === 0) {
     return {
@@ -194,14 +217,16 @@ export async function getClientPaymentsSummary(
       approvedMilestoneTotal: 0,
       pendingObligation: 0,
       projects: [],
+      movements: [],
     };
   }
 
   const projectIds = projectRows.map((p) => p.id);
-  const { data: milestones } = await supabase
+  const { data: milestones, error: milestoneError } = await supabase
     .from("project_milestones")
-    .select("project_id, budget, status, client_total_amount")
+    .select("id, project_id, title, budget, status, payment_status, client_total_amount")
     .in("project_id", projectIds);
+  if (milestoneError) throw new Error("Proje aşamaları yüklenemedi.");
 
   const totalDueWithFee = (milestones ?? []).reduce(
     (sum, m) => sum + toNumber(m.client_total_amount ?? m.budget),
@@ -226,6 +251,8 @@ export async function getClientPaymentsSummary(
       engagementValue,
       approvedValue,
       pendingValue,
+      budgetMissing: financialAmount(project.budget_max ?? project.budget) === null,
+      stagesMissing: projectMilestones.some(m => m.status === "approved" && financialAmount(m.budget) === null),
       commissionRate: project.commission_rate === null || project.commission_rate === undefined
         ? null
         : Number(project.commission_rate),
@@ -240,5 +267,15 @@ export async function getClientPaymentsSummary(
     approvedMilestoneTotal: lines.reduce((sum, l) => sum + l.approvedValue, 0),
     pendingObligation: lines.reduce((sum, l) => sum + l.pendingValue, 0),
     projects: lines,
+    movements: (milestones ?? []).map(stage => ({
+      id: stage.id,
+      projectId: stage.project_id,
+      projectTitle: projectRows.find(project => project.id === stage.project_id)?.title ?? "Proje bilgisi eksik",
+      title: stage.title,
+      budget: financialAmount(stage.budget),
+      total: financialAmount(stage.client_total_amount),
+      status: stage.status,
+      paymentStatus: stage.payment_status,
+    })),
   };
 }

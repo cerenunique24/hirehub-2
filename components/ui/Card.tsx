@@ -1,3 +1,5 @@
+export const cardSurfaceClass = "rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)]";
+
 /**
  * CollaCrew Design System — Card.
  *
@@ -21,7 +23,7 @@ export function Card({
   return (
     <div
       className={[
-        "rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)]",
+        cardSurfaceClass,
         density === "compact" ? "p-4" : "p-5",
         hoverable ? "transition hover:border-[var(--color-border-strong)] hover:shadow-sm" : "",
         className,

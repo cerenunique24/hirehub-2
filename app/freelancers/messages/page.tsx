@@ -1743,7 +1743,7 @@ function FreelancerMessagesContent() {
                     <p className="mb-3 text-sm text-red-600">{attachmentError}</p>
                   )}
                   {attachmentFile && (
-                    <div className="mb-3 flex items-center gap-2 rounded-xl bg-gray-100 px-3 py-2 text-sm text-gray-700">
+                    <div className="mb-3 flex items-center gap-2 rounded-xl bg-[var(--color-surface-soft)] px-3 py-2 text-sm text-gray-700">
                       <FileText size={15} />
                       <span className="flex-1 truncate">{attachmentFile.name}</span>
                       <button

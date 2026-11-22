@@ -188,7 +188,7 @@ export function PasswordInput({
 /** Şifre kuralları listesi. */
 export function PasswordChecklist({ rules }: { rules: { label: string; valid: boolean }[] }) {
   return (
-    <div className="mt-2 grid gap-1.5 rounded-[var(--radius-input)] bg-[var(--color-surface-2)]/60 px-3 py-2.5 sm:grid-cols-2">
+    <div className="mt-2 grid gap-1.5 rounded-[var(--radius-input)] bg-[var(--color-surface-soft)] px-3 py-2.5 sm:grid-cols-2">
       {rules.map((rule) => (
         <div
           key={rule.label}

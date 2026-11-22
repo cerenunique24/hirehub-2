@@ -5,11 +5,15 @@ import { pageHeaderClass } from "@/components/ui/PageHeader";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowRight, Bell, BriefcaseBusiness, Check, CircleAlert, Clock3,
-  FolderKanban, Plus, Sparkles, UsersRound,
+  ArrowRight, CalendarDays, ChevronDown, Clock3, Coins, Info,
+  FolderKanban, Plus, UsersRound, FileText,
 } from "lucide-react";
 
+import styles from "./Dashboard.module.css";
+
 import { Avatar } from "@/components/ui/Avatar";
+import { Tabs } from "@/components/ui/Tabs";
+import { PanelBadge } from "@/components/dashboard/PanelPrimitives";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/utils/formatCurrency";
 import { formatDeadlineDate, formatRemainingTime, getDeadlineStatus } from "@/lib/utils/deadline";
@@ -43,6 +47,7 @@ type ProjectCard = ClientProject & {
   proposalCount: number;
   cost: number | null;
   missingCost: boolean;
+  openRoles?: Array<{ role: string; remaining: number }>;
 };
 
 type Activity = {
@@ -54,14 +59,21 @@ type Activity = {
 };
 
 type Profile = { first_name: string | null };
+type SentInvitation = { id: string; project_id: string; role: string | null; status: string | null; created_at: string; projectTitle?: string };
+type CostSummary = { approved: number | null; pending: number | null; monthly: number | null; incomplete: boolean };
 
 type DashboardData = {
   profile: Profile | null;
   projectCount: number;
+  drafts: ClientProject[];
   activeProjects: ProjectCard[];
   readyProjects: ProjectCard[];
   openProjects: ProjectCard[];
   activities: Activity[];
+  invitations?: SentInvitation[];
+  invitationCount?: number | null;
+  invitationError?: boolean;
+  costs?: CostSummary;
 };
 
 const IMPORTANT_EVENTS = [
@@ -75,13 +87,6 @@ const IMPORTANT_EVENTS = [
   "milestone_revision",
   "milestone_overdue",
 ];
-
-const statusTone: Record<string, string> = {
-  "Ekip hazır · Başlamadı": "bg-[var(--color-success-50)] text-[var(--color-success-600)] ring-[var(--color-success-600)]/20",
-  "Teslim müşteri incelemesinde": "bg-[var(--color-warning-50)] text-[var(--color-warning-600)] ring-[var(--color-warning-600)]/20",
-  "Tüm aşamalar onaylandı": "bg-[var(--color-success-50)] text-[var(--color-success-600)] ring-[var(--color-success-600)]/20",
-  "Duraklatıldı": "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] ring-[var(--color-border-subtle)]",
-};
 
 function actionType(project: ProjectCard) {
   if (project.status === "ready_to_start") return "Ekip hazır";
@@ -105,13 +110,6 @@ function actionReason(project: ProjectCard) {
     return `“${project.work.overdueMilestones[0].title}” aşamasının süresi geçti.`;
   }
   return project.work.workflow.nextStep;
-}
-
-function projectStage(project: ProjectCard) {
-  if (project.status === "ready_to_start") return 1;
-  if (project.status === "in_progress" || project.status === "paused") return 2;
-  if (project.work.workflow.state === "Tüm aşamalar onaylandı") return 3;
-  return 0;
 }
 
 export default function ClientDashboardPage() {
@@ -156,7 +154,7 @@ export default function ClientDashboardPage() {
       const projectIds = visibleProjects.map((project) => project.id);
       const openIds = visibleProjects.filter((project) => project.status === "open").map((project) => project.id);
 
-      const [teamResult, milestoneResult, proposalResult, activityResult] = await Promise.all([
+      const [teamResult, milestoneResult, proposalResult, activityResult, invitationResult] = await Promise.all([
         projectIds.length
           ? supabase
               .from("project_team_members")
@@ -164,11 +162,11 @@ export default function ClientDashboardPage() {
               .in("project_id", projectIds)
               .eq("status", "active")
           : Promise.resolve({ data: [] as TeamMember[], error: null }),
-        projectIds.length
+        projects.length
           ? supabase
               .from("project_milestones")
-              .select("id, project_id, title, due_date, status, sort_order, freelancer_id")
-              .in("project_id", projectIds)
+              .select("id, project_id, title, due_date, status, sort_order, freelancer_id, client_total_amount, approved_at")
+              .in("project_id", projects.map(project=>project.id))
               .order("sort_order", { ascending: true })
           : Promise.resolve({ data: [] as DashboardMilestone[], error: null }),
         openIds.length
@@ -185,6 +183,9 @@ export default function ClientDashboardPage() {
           .in("type", IMPORTANT_EVENTS)
           .order("created_at", { ascending: false })
           .limit(5),
+        supabase.from("project_team_invitations")
+          .select("id, project_id, role, status, created_at", {count:"exact"})
+          .eq("client_id", user.id).order("created_at", {ascending:false}).limit(3),
       ]);
 
       if (teamResult.error || milestoneResult.error || proposalResult.error || activityResult.error) {
@@ -250,17 +251,41 @@ export default function ClientDashboardPage() {
           proposalCount: proposals.filter((proposal) => proposal.project_id === project.id).length,
           cost,
           missingCost: cost === null,
+          openRoles: team.roles.filter(role=>!role.isFull).map(role=>({role:role.role,remaining:Math.max(0,role.capacity-role.filled)})),
         };
       });
 
+      // Only persisted client amounts represent the client-side value; absent amounts stay unknown.
+      const financialRows = (milestoneResult.data ?? []) as Array<DashboardMilestone & {client_total_amount:number|string|null;approved_at:string|null}>;
+      const relevantRows = financialRows.filter(row=>projects.some(project=>project.id===row.project_id && project.status!=="cancelled"));
+      const monthKey = (date:Date)=>new Intl.DateTimeFormat("en-CA",{year:"numeric",month:"2-digit",timeZone:"Europe/Istanbul"}).format(date);
+      const currentMonth = monthKey(new Date());
+      const sumKnown = (rows:typeof relevantRows) => rows.length && rows.every(row=>knownAmount(row.client_total_amount)===null) ? null : rows.reduce((sum,row)=>sum+(knownAmount(row.client_total_amount)??0),0);
+      const pendingValues = cards.filter(project=>["in_progress","paused"].includes(project.status??"")).map(project=>{
+        const approvedRows = relevantRows.filter(row=>row.project_id===project.id && row.status==="approved");
+        const approved = approvedRows.some(row=>knownAmount(row.client_total_amount)===null) ? null : sumKnown(approvedRows);
+        return project.cost===null || approved===null ? null : Math.max(project.cost-approved,0);
+      });
+      const missingApprovalDate = relevantRows.some(row=>row.status==="approved" && (!row.approved_at || !Number.isFinite(Date.parse(row.approved_at))));
+      const costs:CostSummary = {
+        approved:sumKnown(relevantRows.filter(row=>row.status==="approved")),
+        pending:pendingValues.length && pendingValues.every(value=>value===null) ? null : pendingValues.reduce<number>((sum,value)=>sum+(value??0),0),
+        monthly:missingApprovalDate ? null : sumKnown(relevantRows.filter(row=>row.status==="approved" && row.approved_at && Number.isFinite(Date.parse(row.approved_at)) && monthKey(new Date(row.approved_at))===currentMonth)),
+        incomplete:missingApprovalDate || pendingValues.some(value=>value===null) || relevantRows.some(row=>knownAmount(row.client_total_amount)===null),
+      };
       if (active) {
         setData({
           profile: Array.isArray(profileResult.data) ? (profileResult.data[0] as Profile | undefined) ?? null : null,
           projectCount: projects.length,
+          drafts: projects.filter((project) => project.status === "draft"),
           activeProjects: cards.filter((project) => project.status === "in_progress" || project.status === "paused"),
           readyProjects: cards.filter((project) => project.status === "ready_to_start"),
           openProjects: cards.filter((project) => project.status === "open"),
           activities: (activityResult.data ?? []) as Activity[],
+          invitations:invitationResult.error?[]:(invitationResult.data??[]).map(invitation=>({...invitation,projectTitle:projects.find(project=>project.id===invitation.project_id)?.title})),
+          invitationCount:invitationResult.error?null:invitationResult.count??null,
+          invitationError:Boolean(invitationResult.error),
+          costs,
         });
       }
     }
@@ -279,182 +304,87 @@ export default function ClientDashboardPage() {
   }, [reloadKey, supabase]);
 
   if (loading) return <DashboardLoading />;
-  if (error) return <DashboardError message={error} retry={() => setReloadKey((key) => key + 1)} />;
+  if (error) return <DashboardError message={error} retry={() => setReloadKey(key => key + 1)} />;
   if (!data) return null;
-
   const allProjects = [...data.readyProjects, ...data.activeProjects, ...data.openProjects];
-  const actions = allProjects.filter(
-    (project) => project.work.workflow.currentUserMustAct || project.proposalCount > 0 || project.work.overdueMilestones.length > 0
-  );
+  const actions = allProjects.filter(project => project.work.workflow.currentUserMustAct || project.proposalCount > 0 || project.work.overdueMilestones.length > 0 || Boolean(project.openRoles?.length));
   const activeCost = data.activeProjects.reduce((total, project) => total + (project.cost ?? 0), 0);
-  const activeCostMissing = data.activeProjects.some((project) => project.missingCost);
-  const deadlineItems = data.activeProjects
-    .flatMap((project) => {
-      const milestone = project.work.currentMilestone;
-      const deadline = milestone?.due_date ?? project.deadline;
-      return deadline ? [{ project, milestone, deadline }] : [];
-    })
-    .sort((a, b) => (formatRemainingTime(a.deadline).days ?? Number.MAX_SAFE_INTEGER) - (formatRemainingTime(b.deadline).days ?? Number.MAX_SAFE_INTEGER))
-    .slice(0, 5);
-  const filledTeams = data.readyProjects.length;
-  const projectsWithGaps = data.openProjects.filter((project) => project.team_required && !project.teamReady).length;
+  const activeCostMissing = data.activeProjects.some(project => project.missingCost);
   const pendingOffers = data.openProjects.reduce((total, project) => total + project.proposalCount, 0);
-
-  return (
-    <div className="w-full text-[var(--color-text-primary)]">
-      <header className={pageHeaderClass}>
-        <div>
-          <p className="text-sm text-[var(--color-text-secondary)]">Çalışma merkezi</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight">Merhaba{data.profile?.first_name ? `, ${data.profile.first_name}` : ""}</h1>
-          <p className="mt-1 text-sm text-[var(--color-text-secondary)]">Projelerindeki ilerlemeyi ve bekleyen kararları buradan yönet.</p>
-        </div>
-        <Link href="/client/projects/new" className={buttonClasses({variant:"primary"})}>
-          <Plus size={16} />
-          Yeni Proje Oluştur
-        </Link>
-      </header>
-
-      <section aria-label="Proje özeti" className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard icon={<FolderKanban />} label="Aktif Projeler" value={data.activeProjects.length} detail={data.activeProjects.length ? "Çalışma devam ediyor" : "Şu an aktif çalışma yok"} tone="blue" />
-        <KpiCard icon={<CircleAlert />} label="Senden Aksiyon Bekleyen" value={actions.length} detail={actions.length ? "Karar veya inceleme bekliyor" : "Bekleyen işlemin yok"} tone={actions.length ? "amber" : "green"} />
-        <KpiCard icon={<Sparkles />} label="Teklif / Eşleşme" value={pendingOffers} detail={pendingOffers ? "Değerlendirilmeyi bekliyor" : "Yeni teklif bekleniyor"} tone="purple" />
-        <KpiCard icon={<BriefcaseBusiness />} label="Aktif Proje Maliyeti" value={activeCostMissing ? "—" : formatCurrency(activeCost)} detail={activeCostMissing ? "Maliyet bilgisi eksik" : "Hizmet bedeli dahil"} tone="green" />
-      </section>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <main className="space-y-6 lg:col-span-8">
-          <DashboardSection title="Senden Beklenenler" description="Bugün karar vermen veya takip etmen gereken işler">
-            {actions.length ? (
-              <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white">
-                {actions.slice(0, 3).map((project) => <ActionItem key={project.id} project={project} />)}
-              </div>
-            ) : (
-              <SmallEmpty icon={<Check size={17} />} title="Senden beklenen bir işlem yok" description="Projelerindeki yeni gelişmeler burada görünecek." />
-            )}
-          </DashboardSection>
-
-          <DashboardSection title="Aktif Projeler" description="Ekip, iş akışı ve maliyet görünümü" href="/client/projects">
-            {data.activeProjects.length ? (
-              <div className="space-y-3">
-                {data.activeProjects.map((project) => <ActiveProjectCard key={project.id} project={project} />)}
-              </div>
-            ) : (
-              <SmallEmpty icon={<FolderKanban size={17} />} title={data.projectCount ? "Aktif projen yok" : "Henüz bir projen yok"} description={data.projectCount ? "Başlatılmayı veya eşleşme sürecindeki projelerini aşağıdan takip edebilirsin." : "İlk projen için doğru freelancerları ve ekibi bulmaya başlayabilirsin."} actionHref={data.projectCount ? "/client/projects" : "/client/projects/new"} action={data.projectCount ? "Projeleri gör" : "Proje oluştur"} />
-            )}
-          </DashboardSection>
-
-          {(data.readyProjects.length > 0 || data.openProjects.length > 0) && (
-            <DashboardSection title="Bekleyen Projeler" description="Başlatmaya hazır ve teklif/eşleşme sürecindeki projeler">
-              <div className="grid gap-4 md:grid-cols-2">
-                <WaitingGroup title="Başlangıç Bekleyen" projects={data.readyProjects} empty="Başlatılmayı bekleyen proje yok." type="ready" />
-                <WaitingGroup title="Teklif & Eşleşme" projects={data.openProjects} empty="Yayında veya teklif bekleyen proje yok." type="open" />
-              </div>
-            </DashboardSection>
-          )}
-        </main>
-
-        <aside className="space-y-5 lg:sticky lg:top-5 lg:col-span-4 lg:self-start">
-          <AsideCard title="Yaklaşan Deadline’lar" icon={<Clock3 size={16} />}>
-            {deadlineItems.length ? (
-              <div className="divide-y divide-neutral-100">
-                {deadlineItems.map(({ project, milestone, deadline }) => <DeadlineItem key={`${project.id}-${milestone?.id ?? "project"}`} project={project} milestone={milestone} deadline={deadline} />)}
-              </div>
-            ) : <p className="text-sm leading-6 text-[var(--color-text-secondary)]">Aktif projelerde yaklaşan bir deadline yok.</p>}
-          </AsideCard>
-
-          <AsideCard title="Ekip Durumu" icon={<UsersRound size={16} />}>
-            <div className="space-y-3 text-sm">
-              <TeamStat value={filledTeams} label="ekip başlamaya hazır" tone="text-emerald-700" />
-              <TeamStat value={projectsWithGaps} label="projede rol açığı var" tone="text-amber-700" />
-              <TeamStat value={pendingOffers} label="teklif değerlendiriliyor" tone="text-violet-700" />
-            </div>
-            <div className="mt-4 flex items-center justify-between rounded-lg bg-[var(--color-surface-2)] px-3 py-2.5">
-              <AvatarStack members={allProjects.flatMap((project) => project.members).slice(0, 4)} />
-              <Link href="/client/projects" className="text-xs font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)]">Ekipleri gör</Link>
-            </div>
-          </AsideCard>
-
-          <AsideCard title="Son Önemli Hareketler" icon={<Bell size={16} />} href="/client/notifications">
-            {data.activities.length ? (
-              <div className="space-y-4">
-                {data.activities.slice(0, 5).map((activity) => <ActivityItem key={activity.id} activity={activity} />)}
-              </div>
-            ) : <p className="text-sm leading-6 text-[var(--color-text-secondary)]">Henüz gösterilecek önemli bir hareket yok.</p>}
-          </AsideCard>
-        </aside>
+  const projectRows = Array.from(new Map([...data.activeProjects, ...data.readyProjects].map(project => [project.id, project])).values());
+  const openings = data.openProjects.flatMap(project => (project.openRoles ?? []).map(role => ({...role,project})));
+  const deadlineItems = data.activeProjects.flatMap(project => {const milestone=project.work.currentMilestone;const deadline=milestone?.due_date??project.deadline;return deadline && Number.isFinite(Date.parse(deadline)) ? [{project,milestone,deadline}] : [];}).sort((a,b)=>Date.parse(a.deadline)-Date.parse(b.deadline)).slice(0,4);
+  return <div className={styles.dashboard}>
+    <header className={pageHeaderClass + " " + styles.welcome}><div><h1 className={styles.pageTitle}>Merhaba{data.profile?.first_name ? `, ${data.profile.first_name}` : ""}</h1><p>Projelerindeki ilerlemeyi ve bekleyen kararları buradan yönet.</p></div><Link href="/client/projects/new" className={buttonClasses({variant:"primary"})}><Plus size={16} aria-hidden />Yeni Proje Oluştur</Link></header>
+    <section aria-label="Proje özeti" className={styles.kpiGrid}>
+      <KpiCard icon={<FileText />} label="Aktif Projeler" value={data.activeProjects.length} detail="Devam eden proje" />
+      <KpiCard icon={<Clock3 />} label="Karar Bekleyen" value={actions.length} detail="Karar veya inceleme bekleyen proje" />
+      <KpiCard icon={<FileText />} label="Yeni Teklifler" value={pendingOffers} detail="Değerlendirilmeyi bekleyen teklif" />
+      <KpiCard icon={<Coins />} label="Aktif Proje Maliyeti" value={activeCostMissing ? "—" : formatCurrency(activeCost)} detail={activeCostMissing ? "Maliyet bilgisi eksik" : "Hizmet bedeli dahil"} />
+    </section>
+    <div className={styles.columns}>
+      <div className={styles.main}>
+      <DashboardSection className={styles.decisions} title="Sıradaki Kararlar" icon={<Clock3 size={18} />} count={actions.length} description="Projelerinde seni bekleyen karar ve inceleme adımları." href="/client/projects">
+        {actions.length ? <div className={styles.decisionList}>{actions.slice(0,4).map(project=><DecisionRow key={project.id} project={project} />)}</div> : <p className={styles.quiet}>Şu anda senden karar bekleyen bir işlem yok.</p>}
+      </DashboardSection>
+      <DashboardSection className={styles.projects} title="Aktif Projeler" icon={<FileText size={18} />} count={projectRows.length} description="Devam eden projelerini ve ekip durumunu takip et." href="/client/projects">
+        <ClientProjectAccordion projects={projectRows} />
+        {!projectRows.length && <SmallEmpty icon={<FolderKanban size={24}/>} title={data.projectCount ? "Aktif projen yok" : "Henüz bir projen yok"} description="Projelerinin ilerlemesini burada takip edebilirsin." actionHref={data.projectCount ? "/client/projects" : "/client/projects/new"} action={data.projectCount ? "Projeleri gör" : "Proje oluştur"}/>}
+        {data.drafts.length > 0 && <details className={styles.drafts}><summary>Taslak projelerin <span>{data.drafts.length}</span></summary>{data.drafts.slice(0,3).map(project=><div className={styles.compactRow} key={project.id}><div><h3>{project.title}</h3><p>Henüz yayınlanmadı</p></div><Link href={`/client/projects/${project.id}`}>Devam et <ArrowRight size={14} aria-hidden /></Link></div>)}</details>}
+      </DashboardSection>
+      <DashboardSection className={styles.offers} title="Teklifler & Davetler" icon={<FileText size={18} />} description="Gelen teklifleri değerlendir veya freelancerlara davet gönder." href="/client/proposals"><ProposalPreview projects={data.openProjects} count={pendingOffers} invitations={data.invitations ?? []} invitationCount={data.invitationCount ?? null} invitationError={Boolean(data.invitationError)} /></DashboardSection>
+      </div><div className={styles.aside}>
+      <AsideCard className={styles.roles} title="Açık Roller" icon={<UsersRound size={18}/>} count={openings.reduce((sum,row)=>sum+row.remaining,0)} href="/client/projects"><p className={styles.railIntro}>Bu projelerde hâlâ doldurulması gereken roller.</p>{openings.length ? <><div className={styles.roleList}>{openings.slice(0,4).map(({project,role,remaining})=><Link href={"/client/freelancers"} key={project.id+role} className={styles.roleRow}><UsersRound size={19} aria-hidden /><div><h3>{role}{remaining>1 && <span> · {remaining} kişi</span>}</h3><p>{project.title}</p></div><ArrowRight size={14} aria-hidden /></Link>)}</div><Link className={styles.railFooter} href="/client/projects">Tüm rolleri gör <ArrowRight size={15} aria-hidden /></Link></> : <p className={styles.quiet}>{data.openProjects.some(project=>project.team_required&&!project.roles.length) ? "Bazı projelerin rol bilgisi henüz belirtilmemiş." : "Şu anda doldurulmayı bekleyen bir rol bulunmuyor."}</p>}</AsideCard>
+      <AsideCard className={styles.deadlines} title="Yaklaşan Son Tarihler" icon={<Clock3 size={18}/>} href="/client/projects">{deadlineItems.length ? deadlineItems.map(({project,milestone,deadline})=><DeadlineItem key={project.id} project={project} milestone={milestone} deadline={deadline}/>) : <p className={styles.quiet}>Aktif projelerde yaklaşan bir son tarih yok.</p>}</AsideCard>
+      <AsideCard className={styles.costs} title="Maliyet Özeti" icon={<Coins size={18}/>} href="/client/payments" linkLabel="Detay"><dl className={styles.costRows}><div><dt>Aktif projelerin maliyeti</dt><dd>{activeCostMissing ? "—" : formatCurrency(activeCost)}</dd></div><div><dt>Onaylanan iş değeri</dt><dd>{money(data.costs?.approved)}</dd></div><div><dt>Bekleyen iş değeri</dt><dd>{money(data.costs?.pending)}</dd></div><div><dt>Bu ay onaylanan iş</dt><dd>{money(data.costs?.monthly)}</dd></div></dl><div className={styles.costNotice}><Info size={18} aria-hidden /><div><strong>Ödeme altyapısı aktif değil</strong><p>İş değeri özeti; ödeme gerçekleştiğini göstermez. Eksik tutarlar hariç.</p>{(activeCostMissing || data.costs?.incomplete) && <p>Bazı kayıtlarda tutar veya onay tarihi eksik.</p>}</div></div></AsideCard>
       </div>
     </div>
-  );
+  </div>;
 }
 
-function KpiCard({ icon, label, value, detail, tone }: { icon: ReactNode; label: string; value: number | string; detail: string; tone: "blue" | "green" | "amber" | "purple" }) {
-  const toneClass = { blue: "bg-[var(--color-info-50)] text-[var(--color-info-600)]", green: "bg-[var(--color-success-50)] text-[var(--color-success-600)]", amber: "bg-[var(--color-warning-50)] text-[var(--color-warning-600)]", purple: "bg-[var(--color-primary-50)] text-[var(--color-primary-600)]" }[tone];
-  return <div className="min-h-[112px] rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4"><div className="flex items-start justify-between gap-2"><p className="text-xs font-medium text-[var(--color-text-secondary)]">{label}</p><span className={`rounded-md p-1.5 ${toneClass}`}>{icon}</span></div><p className="mt-3 text-xl font-semibold tracking-tight text-[var(--color-text-primary)]">{value}</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{detail}</p></div>;
+function money(value:number|null|undefined){return value==null ? "—" : formatCurrency(value);}
+function KpiCard({icon,label,value,detail}:{icon:ReactNode;label:string;value:number|string;detail:string}) {
+  return <div className={styles.kpi}><span className={styles.kpiIcon} aria-hidden>{icon}</span><div><p>{label}</p><strong>{value}</strong><span className={styles.kpiDetail}>{detail}</span></div></div>;
 }
-
-function DashboardSection({ title, description, href, children }: { title: string; description: string; href?: string; children: ReactNode }) {
-  return <section><div className="mb-3 flex items-end justify-between gap-3"><div><h2 className="cc-h2 font-semibold text-[var(--color-text-primary)]">{title}</h2><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{description}</p></div>{href && <Link href={href} className="shrink-0 text-sm font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)]">Tümünü gör</Link>}</div>{children}</section>;
+function DashboardSection({title,description,href,icon,count,children,className=""}:{title:string;description:string;href?:string;icon:ReactNode;count?:number;children:ReactNode;className?:string}) {
+  return <section className={styles.section+" "+className}><div className={styles.sectionHeader}><div><h2>{icon}{title}{count!==undefined && <span className={styles.count}>{count}</span>}</h2><p>{description}</p></div>{href && <Link href={href} className={styles.textLink}>Tümünü gör</Link>}</div>{children}</section>;
 }
-
-function ActionItem({ project }: { project: ProjectCard }) {
-  const deadline = project.work.currentMilestone?.due_date ?? project.work.overdueMilestones[0]?.due_date ?? null;
-  const needsAction = project.work.workflow.currentUserMustAct || project.proposalCount > 0;
-  return <div className="flex flex-col gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-semibold text-[var(--color-text-primary)]">{project.title}</p><span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${needsAction ? "bg-[var(--color-warning-50)] text-[var(--color-warning-600)]" : "bg-[var(--color-error-50)] text-[var(--color-error-600)]"}`}>{actionType(project)}</span></div><div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-text-secondary)]"><span>{project.teamSummary}</span><span aria-hidden="true">·</span><span>{deadline ? `${formatDeadlineDate(deadline)} · ${formatRemainingTime(deadline).label}` : "Deadline belirtilmemiş"}</span></div><p className="mt-2 text-sm text-[var(--color-text-secondary)]">{actionReason(project)}</p></div><Link href={`/client/projects/${project.id}`} className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition sm:self-auto ${needsAction ? "bg-[var(--color-primary-600)] text-white hover:bg-[var(--color-primary-700)]" : "bg-[var(--color-surface-2)] text-[var(--color-text-secondary)] hover:bg-neutral-200"}`}>{actionCta(project)}<ArrowRight size={14} /></Link></div>;
+function AsideCard({title,icon,href,children,count,className="",linkLabel="Tümünü gör"}:{title:string;icon:ReactNode;href?:string;children:ReactNode;count?:number;className?:string;linkLabel?:string}) {
+  return <section className={styles.asideCard+" "+className}><div className={styles.asideHeader}><h2>{icon}{title}{count!==undefined&&<span className={styles.count}>{count}</span>}</h2>{href&&<Link className={styles.textLink} href={href}>{linkLabel}</Link>}</div>{children}</section>;
 }
-function ActiveProjectCard({ project }: { project: ProjectCard }) {
-  const stage = projectStage(project);
-  const currentMilestone = project.work.currentMilestone;
-  const statusClass = statusTone[project.work.workflow.state] ?? "bg-[var(--color-info-50)] text-[var(--color-info-600)] ring-[var(--color-info-600)]/20";
-  const progress = project.work.totalMilestones ? Math.round((project.work.approvedMilestones / project.work.totalMilestones) * 100) : 0;
-  const deadline = currentMilestone?.due_date ?? project.deadline;
-  const actionOwner = project.work.workflow.currentUserMustAct || project.work.workflow.actionOwner === "Client"
-    ? "Senden aksiyon bekleniyor"
-    : `${project.work.workflow.actionOwner} tarafında`;
-
-  return <article className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4 transition hover:border-neutral-300 hover:shadow-[0_2px_10px_rgb(0_0_0_/_0.04)] sm:p-5"><div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_220px]"><div className="min-w-0"><div className="flex flex-wrap items-start justify-between gap-3"><div><Link href={`/client/projects/${project.id}`} className="text-base font-semibold text-[var(--color-text-primary)] hover:text-[var(--color-primary-600)]">{project.title}</Link><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{project.roles.join(" · ") || "Roller belirtilmemiş"}</p></div><span className={`rounded-full px-2 py-1 text-[11px] font-medium ring-1 ${statusClass}`}>{project.work.workflow.state}</span></div><div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3"><div className="flex items-center gap-2"><AvatarStack members={project.members} /><span className="text-xs text-[var(--color-text-secondary)]">{project.teamSummary}</span></div><div className="text-xs text-[var(--color-text-secondary)]"><span className="font-medium text-[var(--color-text-primary)]">{project.cost === null ? "Maliyet belirtilmemiş" : formatCurrency(project.cost)}</span>{project.cost !== null && " · hizmet bedeli dahil"}</div></div><WorkflowRail currentStage={stage} /></div><div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-surface-2)]/70 p-3.5"><p className="text-xs font-medium text-[var(--color-text-secondary)]">Mevcut iş</p><p className="mt-1 text-sm font-semibold text-[var(--color-text-primary)]">{currentMilestone?.title ?? project.work.workflow.state}</p><p className="mt-2 text-xs leading-5 text-[var(--color-text-secondary)]">{actionOwner}</p>{deadline && <p className={`mt-2 text-xs ${formatRemainingTime(deadline).overdue ? "text-[var(--color-error-600)]" : "text-[var(--color-text-secondary)]"}`}>{formatDeadlineDate(deadline)} · {formatRemainingTime(deadline).label}</p>}<Link href={`/client/projects/${project.id}`} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary-600)] hover:text-[var(--color-primary-700)]">{project.work.workflow.currentUserMustAct ? "İşi incele" : "Projeye git"} <ArrowRight size={14} /></Link></div></div><div className="mt-4 flex items-center gap-3 border-t border-[var(--color-border-subtle)] pt-3"><p className="shrink-0 text-xs text-[var(--color-text-secondary)]">{project.work.totalMilestones ? `${project.work.approvedMilestones} / ${project.work.totalMilestones} aşama onaylandı` : "Aşamalar henüz tanımlanmadı"}</p><div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--color-surface-2)]"><div className="h-full rounded-full bg-[var(--color-primary-600)]" style={{ width: `${progress}%` }} /></div></div></article>;
+function DecisionRow({project}:{project:ProjectCard}) {
+  const gap=project.openRoles?.reduce((sum,row)=>sum+row.remaining,0)??0;
+  const reason=project.proposalCount>0||project.status==="ready_to_start"||project.work.workflow.currentUserMustAct||project.work.overdueMilestones.length ? actionReason(project) : `${gap} rol henüz doldurulmadı`;
+  const label=project.work.workflow.currentUserMustAct||project.proposalCount>0||project.status==="ready_to_start" ? actionType(project) : gap ? "Rol açığı var" : actionType(project);
+  const staffing=gap>0&&!project.work.workflow.currentUserMustAct&&!project.proposalCount;
+  return <div className={styles.decisionRow}><FileText size={20} aria-hidden /><div className={styles.decisionCopy}><h3>{project.title}</h3><p>{reason}</p><span className={styles.rowDate}><CalendarDays size={13} aria-hidden />{project.deadline?formatDeadlineDate(project.deadline):"Tarih belirlenmedi"}</span></div><div className={styles.decisionActions}><div className={styles.decisionMeta}><PanelBadge tone={gap?"danger":project.work.workflow.currentUserMustAct?"warning":"info"}>{label}</PanelBadge></div><Link className={styles.textLink} href={staffing?"/client/freelancers":`/client/projects/${project.id}`}>{staffing?"Freelancer bul":project.work.workflow.state==="Teslim müşteri incelemesinde"?"Teslimi incele":actionCta(project)}<ArrowRight size={15} aria-hidden /></Link></div></div>;
 }
-function WorkflowRail({ currentStage }: { currentStage: number }) {
-  const stages = ["Ekip", "Başlangıç", "Çalışma", "Teslim", "Tamamlandı"];
-  return <div aria-label="Proje akışı" className="mt-4 grid grid-cols-5 border-y border-[var(--color-border-subtle)] py-3">{stages.map((label, index) => <div key={label} className="relative text-center"><span className={`mx-auto flex h-4 w-4 items-center justify-center rounded-full border ${index < currentStage ? "border-emerald-600 bg-emerald-600 text-white" : index === currentStage ? "border-[var(--color-primary-600)] bg-[var(--color-primary-600)]" : "border-neutral-300 bg-white"}`}>{index < currentStage && <Check size={10} strokeWidth={3} />}</span>{index < stages.length - 1 && <span className={`absolute left-[calc(50%+8px)] top-[7px] h-px w-[calc(100%-16px)] ${index < currentStage ? "bg-emerald-500" : "bg-neutral-200"}`} />}{index === currentStage && <span className="mt-1 block text-[10px] font-medium text-[var(--color-primary-600)]">{label}</span>}{index !== currentStage && <span className="mt-1 block text-[10px] text-[var(--color-text-muted)]">{label}</span>}</div>)}</div>;
+function ClientProjectAccordion({projects}:{projects:ProjectCard[]}) {
+  const [openId,setOpenId]=useState("");
+  return <div className={styles.projectList}>{projects.map(project=><ClientProjectAccordionRow key={project.id} project={project} expanded={openId===project.id} onToggle={()=>setOpenId(openId===project.id?"":project.id)} />)}</div>;
 }
-
-function WaitingGroup({ title, projects, empty, type }: { title: string; projects: ProjectCard[]; empty: string; type: "ready" | "open" }) {
-  return <div className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4"><div className="mb-3 flex items-center gap-2"><span className={`rounded-md p-1.5 ${type === "ready" ? "bg-[var(--color-success-50)] text-[var(--color-success-600)]" : "bg-violet-50 text-violet-700"}`}>{type === "ready" ? <Check size={15} /> : <Sparkles size={15} />}</span><h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3></div>{projects.length ? <div className="space-y-3">{projects.slice(0, 3).map((project) => <div key={project.id} className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-sm font-medium text-[var(--color-text-primary)]">{project.title}</p><p className="mt-1 text-xs text-[var(--color-text-secondary)]">{type === "ready" ? project.teamSummary : project.proposalCount ? `${project.proposalCount} yeni teklif` : "Yeni teklif ve eşleşme bekleniyor"}</p></div><Link href={`/client/projects/${project.id}`} className="shrink-0 text-xs font-medium text-[var(--color-primary-600)]">İncele</Link></div>)}</div> : <p className="text-sm leading-6 text-[var(--color-text-secondary)]">{empty}</p>}</div>;
+function ClientProjectAccordionRow({project,expanded,onToggle}:{project:ProjectCard;expanded:boolean;onToggle:()=>void}) {
+  const progress=project.work.totalMilestones?Math.round(project.work.approvedMilestones/project.work.totalMilestones*100):0;
+  const panelId=`dashboard-project-${project.id}`;
+  return <article className={styles.projectRow}><button type="button" id={panelId+"-toggle"} aria-expanded={expanded} aria-controls={panelId} onClick={onToggle} className={styles.projectToggle}><FileText size={20} aria-hidden /><span className={styles.rowIdentity}><strong>{project.title}</strong><span className={styles.rowContext}><span className={styles.projectType}>{project.team_required?"Ekip Projesi":"Tek Freelancer"}</span><span aria-hidden>·</span><span className={styles.rowDate}><CalendarDays size={13} aria-hidden />{project.deadline?formatDeadlineDate(project.deadline):"Tarih belirlenmedi"}</span></span></span><span className={styles.rowMetadata}><PanelBadge tone={project.status==="ready_to_start"?"warning":project.status==="paused"?"neutral":"success"}>{project.status==="ready_to_start"?"Başlangıç bekliyor":project.status==="paused"?"Duraklatıldı":"Aktif"}</PanelBadge><span className={styles.rowCost}>{project.cost===null?"Maliyet belirsiz":formatCurrency(project.cost)}</span><ChevronDown size={15} className={styles.rowChevron} aria-hidden /></span></button>
+  <div id={panelId} role="region" aria-labelledby={panelId+"-toggle"} hidden={!expanded} className={styles.projectDetails}><div><p className={styles.detailLabel}>Ekip durumu</p><strong className={styles.teamValue}><UsersRound size={17} aria-hidden />{project.teamSummary}</strong><AvatarStack members={project.members}/></div><div className={styles.stageBlock}><div className={styles.progressLabel}><span>{project.work.totalMilestones?`${project.work.approvedMilestones} / ${project.work.totalMilestones} aşama onaylandı`:"Aşamalar henüz tanımlanmadı"}</span>{project.work.totalMilestones>0&&<strong>%{progress}</strong>}</div>{project.work.totalMilestones>0&&<progress value={project.work.approvedMilestones} max={project.work.totalMilestones} aria-label="Onaylanan aşamalar"/>}<p className={styles.detailLabel}>Mevcut aşama</p><strong>{project.work.currentMilestone?.title??project.work.workflow.state}</strong></div><div className={styles.pendingBlock}><p className={styles.detailLabel}>Bekleyen aksiyon</p><strong><Clock3 size={15} aria-hidden />{project.work.workflow.currentUserMustAct? actionType(project):"Şu an işlem beklenmiyor"}</strong><Link href={`/client/projects/${project.id}`} className={styles.projectLink}>Projeye git <ArrowRight size={14} aria-hidden /></Link></div></div></article>;
 }
-
-function AsideCard({ title, icon, href, children }: { title: string; icon: ReactNode; href?: string; children: ReactNode }) {
-  return <section className="rounded-[var(--radius-card)] border border-[var(--color-border-subtle)] bg-white p-4"><div className="mb-4 flex items-center justify-between gap-3"><div className="flex items-center gap-2 text-[var(--color-text-primary)]"><span className="text-[var(--color-text-secondary)]">{icon}</span><h2 className="text-sm font-semibold">{title}</h2></div>{href && <Link href={href} className="text-xs font-medium text-[var(--color-primary-600)]">Tümü</Link>}</div>{children}</section>;
+function ProposalPreview({projects,count,invitations=[],invitationCount=null,invitationError=false}:{projects:ProjectCard[];count:number;invitations?:SentInvitation[];invitationCount?:number|null;invitationError?:boolean}) {
+  const [tab,setTab]=useState("received");
+  return <><Tabs className={styles.tabs} items={[{value:"received",label:"Gelen Teklifler",count},{value:"sent",label:"Gönderilen Davetler",...(invitationCount!==null?{count:invitationCount}:{})}]} value={tab} onChange={setTab}/><div className={styles.proposalPanel} aria-label={tab==="received"?"Gelen teklifler":"Gönderilen davetler"}>
+  {tab==="sent" ? invitationError ? <p className={styles.quiet} role="alert">Gönderilen davetler yüklenemedi. <Link href="/client/proposals">Davetlerini görüntüle</Link></p> : invitations.length ? invitations.map(invitation=><div className={styles.compactRow} key={invitation.id}><UsersRound size={20} aria-hidden /><div><h3>{invitation.projectTitle??"Proje daveti"}</h3><p>{invitation.role??"Rol belirtilmemiş"} · {({pending:"Yanıt bekliyor",accepted:"Kabul edildi",rejected:"Reddedildi",cancelled:"İptal edildi",expired:"Süresi doldu"} as Record<string,string>)[invitation.status??""]??invitation.status??"Durum bilinmiyor"}</p></div><Link href="/client/proposals">Görüntüle <ArrowRight size={14} aria-hidden /></Link></div>) : <SmallEmpty icon={<UsersRound size={27}/>} title="Henüz gönderilmiş davetin yok." description="Projelerine uygun freelancerları keşfedip davet edebilirsin." actionHref="/client/freelancers" action="Freelancer keşfet"/> : count>0 ? projects.filter(project=>project.proposalCount>0).slice(0,3).map(project=><div className={styles.compactRow} key={project.id}><FileText size={20} aria-hidden /><div><h3>{project.title}</h3><p>{project.proposalCount} teklif değerlendirilmeyi bekliyor</p></div><Link href={`/client/projects/${project.id}`}>İncele <ArrowRight size={14} aria-hidden /></Link></div>) : <SmallEmpty icon={<FileText size={27}/>} title="Şu anda yeni teklif bulunmuyor." description="Projeni yayınladıktan sonra yeteneklerden teklif alacaksın." actionHref="/client/freelancers" action="Freelancer keşfet"/>}
+  </div></>;
 }
-
-function DeadlineItem({ project, milestone, deadline }: { project: ProjectCard; milestone: DashboardMilestone | null; deadline: string }) {
-  const remaining = formatRemainingTime(deadline);
-  const deadlineStatus = milestone ? getDeadlineStatus({ dueDate: deadline, status: milestone.status }) : remaining.overdue ? "overdue" : remaining.days !== null && remaining.days <= 2 ? "due_soon" : "on_track";
-  const className = deadlineStatus === "overdue" ? "bg-red-50 text-red-700" : deadlineStatus === "due_soon" ? "bg-amber-50 text-amber-700" : "bg-neutral-100 text-neutral-600";
-  return <Link href={`/client/projects/${project.id}`} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"><div className="min-w-0"><p className="truncate text-sm font-medium text-[var(--color-text-primary)]">{project.title}</p><p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{milestone?.title ?? "Proje deadline’ı"}</p></div><div className="shrink-0 text-right"><span className={`rounded-full px-2 py-1 text-[11px] font-medium ${className}`}>{remaining.label}</span><p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{formatDeadlineDate(deadline)}</p></div></Link>;
+function DeadlineItem({project,milestone,deadline}:{project:ProjectCard;milestone:DashboardMilestone|null;deadline:string}) {
+  const remaining=formatRemainingTime(deadline),date=new Date(deadline);
+  const status=milestone?getDeadlineStatus({dueDate:deadline,status:milestone.status}):remaining.overdue?"overdue":remaining.days!==null&&remaining.days<=2?"due_soon":"on_track";
+  return <div className={styles.deadlineItem}><time dateTime={deadline} className={styles.dateTile} data-overdue={status==="overdue"}><strong>{date.getDate()}</strong><span>{date.toLocaleDateString("tr-TR",{month:"short"})}</span></time><div className={styles.deadlineText}><h3>{project.title}</h3><p>{milestone?.title??"Proje son tarihi"}</p><div className={styles.deadlineBottom}><PanelBadge tone={status==="overdue"?"danger":status==="due_soon"?"warning":"neutral"}>{remaining.label}</PanelBadge><Link href={`/client/projects/${project.id}`} className={styles.textLink}>Takip et <ArrowRight size={14} aria-hidden /></Link></div></div></div>;
 }
-
-function TeamStat({ value, label, tone }: { value: number; label: string; tone: string }) {
-  return <div className="flex items-baseline justify-between gap-4"><p className="text-[var(--color-text-secondary)]">{label}</p><p className={`font-semibold ${tone}`}>{value}</p></div>;
+function AvatarStack({members}:{members:TeamMember[]}) {
+  return members.length ? <div className={styles.avatarStack}>{members.slice(0,4).map(member=><Avatar key={member.project_id+member.freelancer_id} src={member.avatar_url} name={member.first_name??member.role} size="sm"/>)}{members.length>4&&<span>+{members.length-4}</span>}</div> : null;
 }
-
-function AvatarStack({ members }: { members: TeamMember[] }) {
-  if (!members.length) return <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"><UsersRound size={15} /></span>;
-  return <div className="flex -space-x-2">{members.slice(0, 4).map((member) => <Avatar key={`${member.project_id}-${member.freelancer_id}`} src={member.avatar_url} name={member.first_name ?? member.role} size="sm" className="ring-2 ring-white" />)}{members.length > 4 && <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-surface-2)] text-[10px] font-medium text-[var(--color-text-secondary)] ring-2 ring-white">+${members.length - 4}</span>}</div>;
+function SmallEmpty({icon,title,description,actionHref,action}:{icon:ReactNode;title:string;description:string;actionHref?:string;action?:string}) {
+  return <div className={styles.smallEmpty}><span aria-hidden>{icon}</span><div><h3>{title}</h3><p>{description}</p>{actionHref&&<Link href={actionHref} className={styles.projectLink}>{action}<ArrowRight size={13} aria-hidden /></Link>}</div></div>;
 }
-
-function ActivityItem({ activity }: { activity: Activity }) {
-  const content = <><p className="text-sm font-medium text-[var(--color-text-primary)]">{activity.title}</p>{activity.message && <p className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">{activity.message}</p>}<time className="mt-1 block text-[11px] text-[var(--color-text-muted)]" dateTime={activity.created_at}>{new Date(activity.created_at).toLocaleDateString("tr-TR", { day: "numeric", month: "short" })}</time></>;
-  return activity.link ? <Link href={activity.link} className="block rounded-lg p-1 transition hover:bg-[var(--color-surface-2)]">{content}</Link> : <div className="rounded-lg p-1">{content}</div>;
-}
-
-function SmallEmpty({ icon, title, description, actionHref, action }: { icon: ReactNode; title: string; description: string; actionHref?: string; action?: string }) {
-  return <div className="rounded-[var(--radius-card)] border border-dashed border-[var(--color-border-subtle)] bg-[var(--color-surface-2)] px-4 py-5"><div className="flex items-start gap-3"><span className="rounded-lg bg-white p-2 text-[var(--color-text-secondary)] ring-1 ring-[var(--color-border-subtle)]">{icon}</span><div><p className="text-sm font-medium text-[var(--color-text-primary)]">{title}</p><p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{description}</p>{actionHref && action && <Link href={actionHref} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--color-primary-600)]">{action}<ArrowRight size={14} /></Link>}</div></div></div>;
-}
-
-function DashboardLoading() {
-  return <div className="flex min-h-[55vh] items-center justify-center text-sm text-[var(--color-text-secondary)]">Çalışma merkezi yükleniyor…</div>;
-}
-
-function DashboardError({ message, retry }: { message: string; retry: () => void }) {
-  return <div role="alert" className="rounded-[var(--radius-card)] border border-[var(--color-error-600)]/20 bg-[var(--color-error-50)] p-5 text-sm text-[var(--color-error-600)]"><p>{message}</p><button type="button" onClick={retry} className="mt-3 rounded-lg border border-[var(--color-error-600)]/20 bg-white px-3 py-2 font-medium text-[var(--color-text-secondary)]">Tekrar dene</button></div>;
-}
+function DashboardLoading(){return <div role="status" className={styles.loading}>Çalışma merkezi yükleniyor…</div>;}
+function DashboardError({message,retry}:{message:string;retry:()=>void}){return <div role="alert" className={styles.error}><p>{message}</p><button type="button" onClick={retry}>Tekrar dene</button></div>;}

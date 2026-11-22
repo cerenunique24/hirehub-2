@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Layers } from "lucide-react";
+import styles from "./ProfileShowcase.module.css";
 
 export type AvailabilityStatus = "available" | "limited" | "unavailable";
 
@@ -59,6 +61,7 @@ export default function AvailabilityCard({
   availabilityNote = null,
   availabilityUpdatedAt = null,
   onStatusChange,
+  compact = false,
 }: {
   status: string | null;
   activeProjectCount: number;
@@ -66,6 +69,7 @@ export default function AvailabilityCard({
   availabilityNote?: string | null;
   availabilityUpdatedAt?: string | null;
   onStatusChange?: (status: AvailabilityStatus) => void;
+  compact?: boolean;
 }) {
   const supabase = createClient();
   const [current, setCurrent] = useState<AvailabilityStatus>(normalizeStatus(status));
@@ -125,27 +129,28 @@ export default function AvailabilityCard({
   const lastUpdated = formatRelativeUpdate(updatedAt);
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className={compact ? styles.compactAvailability : "rounded-xl border border-gray-200 bg-white p-5"}>
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-semibold text-gray-900">Müsaitlik</h2>
-          <p className="mt-1 text-sm text-gray-500">Durumunu istediğin zaman değiştirebilirsin.</p>
+          <h2 className="font-semibold text-gray-900">{compact ? "Çalışma Durumu" : "Müsaitlik"}</h2>
+          {!compact && <p className="mt-1 text-sm text-gray-500">Durumunu istediğin zaman değiştirebilirsin.</p>}
         </div>
 
-        <div className="text-right">
+        {!compact && <div className="text-right">
           <p className="text-xs text-gray-500">Aktif proje</p>
           <p className="mt-0.5 text-base font-semibold text-gray-900">{activeProjectCount}</p>
-        </div>
+        </div>}
       </div>
 
       {/* Kompakt durum kartı */}
-      <div className={`mt-4 rounded-xl border p-4 ${STATUS_SURFACE_CLASS[current]}`}>
+      <div className={compact ? styles.compactStatus : `mt-4 rounded-xl border p-4 ${STATUS_SURFACE_CLASS[current]}`}>
         <div className="flex items-center gap-2">
           <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_CLASS[current]}`} />
           <p className="text-sm font-semibold text-gray-900">{STATUS_LABEL[current]}</p>
         </div>
 
         {note && <p className="mt-1.5 text-sm text-gray-600">{note}</p>}
+        {compact && !note && <p className="mt-1 text-xs text-gray-500">{current === "available" ? "Yeni projelere açığım." : current === "limited" ? "Yeni projeler için sınırlı zaman ayırabiliyorum." : "Şu anda yeni proje kabul etmiyorum."}</p>}
 
         {current !== "available" && displayFromDate && (
           <p className="mt-1 text-xs text-gray-500">{displayFromDate} itibarıyla değişebilir</p>
@@ -159,6 +164,7 @@ export default function AvailabilityCard({
           <p className="mt-2 text-[11px] text-gray-400">Son güncelleme: {lastUpdated}</p>
         )}
       </div>
+      {compact && <div className={styles.activeWork}><Layers size={20} aria-hidden /><div><strong>{activeProjectCount} aktif proje</strong><p>{activeProjectCount ? "Devam eden çalışmaların var." : "Devam eden projen bulunmuyor."}</p></div></div>}
 
       {editing ? (
         <div className="mt-4 space-y-3">

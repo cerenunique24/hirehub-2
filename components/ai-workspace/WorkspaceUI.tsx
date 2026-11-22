@@ -171,11 +171,11 @@ export function LockedFeatureList({ items }: { items: { key: string; label: stri
 export function WorkspaceSkeleton() {
   return (
     <div className="animate-pulse space-y-8">
-      <div className="h-16 w-2/3 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
-      <div className="h-20 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
+      <div className="h-16 w-2/3 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
+      <div className="h-20 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
       <div className="grid gap-10 lg:grid-cols-2">
-        <div className="h-64 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
-        <div className="h-64 rounded-[var(--radius-md)] bg-[var(--color-surface-2)]" />
+        <div className="h-64 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
+        <div className="h-64 rounded-[var(--radius-md)] bg-[var(--color-surface-soft)]" />
       </div>
     </div>
   );

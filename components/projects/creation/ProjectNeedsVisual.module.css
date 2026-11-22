@@ -1,0 +1,216 @@
+.roleEditor { padding:18px var(--space-6); border:var(--border-width) solid var(--color-border-subtle); border-radius:var(--radius-card); background:var(--color-surface-1); min-width:0; }
+.roleTitle { font-size:var(--font-size-h3); font-weight:var(--weight-h3); }
+.responsibility { display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-3); padding-block:var(--space-2); border-bottom:var(--border-width) solid var(--color-border-subtle); color:var(--color-text-secondary); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.responsibility > span { min-width:0; overflow-wrap:anywhere; }
+/* One visual family, two real operations. Motion is decorative, never progress. */
+.roleSkills { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-3); margin-top:var(--space-3); }
+.roleSkills > div { min-width:0; }
+.roleSkills > div:first-child { border-top:var(--border-width) solid var(--color-primary-600); padding-top:var(--space-3); }
+.roleSkills > div:last-child { border-top:var(--border-width) solid var(--color-border-subtle); padding-top:var(--space-3); }
+.skillHelp { font-size:var(--font-size-caption); line-height:var(--line-height-caption); color:var(--color-text-secondary); margin-bottom:var(--space-3); }
+.skillChip { white-space:normal; overflow-wrap:anywhere; max-width:100%; }
+.market { margin-top:var(--space-5); padding-block:var(--space-3); border-top:var(--border-width) solid var(--color-border-subtle); }
+.market p { color:var(--color-text-secondary); font-size:var(--font-size-caption); line-height:var(--line-height-caption); }
+.market p:first-child { color:var(--color-text-primary); margin-bottom:var(--space-1); }
+.market span { color:var(--color-text-secondary); font-weight:var(--weight-body); }
+.matchGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; gap:var(--space-5); }
+.matchOption { min-width:0; background:var(--color-surface-1); border:var(--border-width) solid var(--color-border-subtle); border-radius:var(--radius-card); padding:var(--space-5); text-align:left; cursor:pointer; transition:border-color 160ms ease; }
+.matchOption:hover { border-color:var(--color-primary-600); }
+.matchOption:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:var(--space-1); }
+.matchSelected { border-color:var(--color-primary-600); background:var(--color-primary-50); }
+.matchDisabled { cursor:not-allowed; opacity:.5; }
+.matchRole { display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); padding-block:var(--space-2); border-bottom:var(--border-width) solid var(--color-border-subtle); }
+.matchRole > div { min-width:0; overflow-wrap:anywhere; }
+.matchRole > span { flex-shrink:0; color:var(--color-primary-700); }
+.matchNote { margin-top:var(--space-4); padding-top:var(--space-3); border-top:var(--border-width) solid var(--color-border-subtle); font-size:var(--font-size-caption); line-height:var(--line-height-caption); color:var(--color-text-secondary); }
+.matchReason { margin-top:var(--space-3); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.matchReason summary { cursor:pointer; color:var(--color-primary-700); }
+.matchReason p { margin-top:var(--space-2); color:var(--color-text-secondary); overflow-wrap:anywhere; }
+.matchScore { display:inline-flex; align-items:baseline; flex-wrap:wrap; gap:var(--space-2); }
+.reviewGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-4); background:var(--color-surface-1); padding:var(--space-5); }
+.reviewRow { min-width:0; padding-block:var(--space-2); border-bottom:var(--border-width) solid var(--color-border-subtle); overflow-wrap:anywhere; }
+.reviewSkills { display:flex; flex-wrap:wrap; gap:var(--space-2); margin-top:var(--space-2); }
+@media(max-width:639px) { .roleSkills,.matchGrid,.reviewGrid { grid-template-columns:minmax(0,1fr); } }
+@media(prefers-reduced-motion:reduce) { .matchOption { transition:none; } }
+
+
+.roleIdentity { flex:1; min-width:0; }
+.roleEditLabel { display:block; margin-bottom:var(--space-2); color:var(--color-text-secondary); font-size:var(--font-size-caption); line-height:var(--line-height-caption); }
+.roleSource { color:var(--color-primary-700); font-size:var(--font-size-caption); line-height:var(--line-height-caption); flex-shrink:0; }
+.roleReason { margin-top:var(--space-3); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.roleReason summary { cursor:pointer; color:var(--color-primary-700); }
+.roleReason summary:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:var(--space-1); }
+.roleReason p { color:var(--color-text-secondary); margin-top:var(--space-2); overflow-wrap:anywhere; }
+@media(max-width:639px) { .roleSource { order:-1; flex-basis:100%; } }
+
+.roleReasonPreview { display:block; color:var(--color-text-secondary); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); margin-top:var(--space-2); }
+.matchBlueprint { padding-bottom:var(--space-5); border-bottom:var(--border-width) solid var(--color-border-subtle); }
+.blueprintRole + .blueprintRole { margin-top:var(--space-5); }
+.roleFit { margin-top:var(--space-2); color:var(--color-primary-700); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.roleSkillLine { margin-top:var(--space-3); color:var(--color-text-secondary); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); overflow-wrap:anywhere; }
+.teamExplanation { margin-top:var(--space-4); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.teamExplanation summary { cursor:pointer; color:var(--color-primary-700); }
+.teamExplanation > div { margin-top:var(--space-3); color:var(--color-text-secondary); }
+.teamExplanation h4 { color:var(--color-text-primary); margin-bottom:var(--space-2); }
+.teamExplanation ul { padding-left:var(--space-4); list-style:disc; }
+.candidateDiscovery { margin-block:var(--space-5); }
+.candidateDiscovery h3 + h3 { margin-top:var(--space-2); }
+.candidateDiscovery > p { margin-top:var(--space-3); color:var(--color-text-secondary); font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.strongestMatch { display:flex; align-items:baseline; flex-wrap:wrap; gap:var(--space-3); }
+.strongestMatch strong { font-size:var(--font-size-h2); line-height:var(--line-height-h2); color:var(--color-primary-700); font-weight:var(--weight-h2); }
+.candidateDisclosure > summary { display:inline-flex; align-items:center; gap:var(--space-2); color:var(--color-primary-700); cursor:pointer; font-size:var(--font-size-button); line-height:var(--line-height-button); font-weight:var(--weight-label); padding-block:var(--space-2); list-style:none; }
+.candidateDisclosure > summary::-webkit-details-marker { display:none; }
+.candidateDisclosure > .matchGrid { margin-top:var(--space-4); }
+.candidateDisclosure > summary:focus-visible,.teamExplanation > summary:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:var(--space-1); border-radius:var(--radius-button); }
+.skipMatch { display:flex; flex-direction:column; align-items:center; gap:var(--space-3); margin-top:var(--space-5); padding-top:var(--space-5); border-top:var(--border-width) solid var(--color-border-subtle); }
+.skipMatch > span { color:var(--color-text-muted); font-size:var(--font-size-caption); }
+.skipMatchButton { color:var(--color-text-secondary); cursor:pointer; font-size:var(--font-size-body-sm); line-height:var(--line-height-body-sm); }
+.skipMatchButton:hover { color:var(--color-primary-700); text-decoration:underline; }
+.skipMatchButton:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:var(--space-1); }
+
+/* Scanning is decorative. CSS lifetime ends immediately with the real request. */
+.loading { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--space-5); min-width:0; min-height:calc(var(--space-24) * 5); padding-block:var(--space-6); text-align:center; }
+.analysisScene { position:relative; display:flex; align-items:center; justify-content:center; width:calc(var(--space-24) * 3); height:calc(var(--space-24) * 3); max-width:100%; flex-shrink:0; }
+.loadingMascot { width:100%; height:100%; object-fit:contain; animation:collaScan 4800ms ease-in-out infinite; transform-origin:50% 65%; }
+.sparkleOne,.sparkleTwo { position:absolute; color:var(--color-primary-600); pointer-events:none; animation:scanSpark 4800ms ease-in-out infinite; }
+.sparkleOne { top:var(--space-6); right:var(--space-5); }
+.sparkleTwo { top:var(--space-20); left:var(--space-5); animation-delay:2400ms; }
+.loadingCopy { min-width:0; max-width:calc(var(--space-24) * 5); }
+.loadingLabel { display:flex; align-items:center; justify-content:center; gap:var(--space-2); margin-bottom:var(--space-2); color:var(--color-primary-700); font-size:var(--font-size-label); line-height:var(--line-height-label); font-weight:var(--weight-label); }
+.loadingCopy h2 { color:var(--color-text-primary); }
+.statusCopy { display:grid; margin-top:var(--space-3); min-width:0; }
+.statusLine { grid-area:1/1; opacity:0; color:var(--color-text-secondary); font-size:var(--font-size-body); line-height:var(--line-height-body); overflow-wrap:anywhere; animation:ambientCopy 8s linear infinite; animation-delay:var(--copy-delay); }
+.analysisResultEnter { animation:resultArrive 240ms ease-out both; }
+@keyframes collaScan { 0%,100% { transform:translateY(0) rotate(0) scale(1); } 35% { transform:translateY(-3px) rotate(-1deg) scale(1.015); } 65%,72% { transform:translateY(-3px) rotate(1deg) scale(1.015); } 76% { transform:translateY(-3px) rotate(.5deg) scale(1.025); } 81% { transform:translateY(-3px) rotate(0) scale(1.015); } }
+@keyframes scanSpark { 0%,100% { opacity:.1; transform:scale(.9); } 50% { opacity:.55; transform:scale(1); } }
+@keyframes ambientCopy { 0% { opacity:0; transform:translateY(var(--space-1)); } 3%,21% { opacity:1; transform:translateY(0); } 25%,100% { opacity:0; transform:translateY(calc(-1 * var(--space-1))); } }
+@keyframes resultArrive { from { opacity:0; transform:translateY(var(--space-2)); } to { opacity:1; transform:translateY(0); } }
+@media(max-width:639px) { .analysisScene { width:calc(var(--space-24) * 2 + var(--space-8)); height:calc(var(--space-24) * 2 + var(--space-8)); } .loading { min-height:0; gap:var(--space-4); } }
+@media(max-height:640px) { .analysisScene { width:calc(var(--space-24) * 2); height:calc(var(--space-24) * 2); } .loading { min-height:0; padding-block:var(--space-4); gap:var(--space-3); } }
+@media(prefers-reduced-motion:reduce) { .loadingMascot { animation:none; transform:none; } .sparkleOne,.sparkleTwo { display:none; animation:none; } .statusLine { animation-name:ambientOpacity; } .analysisResultEnter { animation:none; } }
+@keyframes ambientOpacity { 0%,25%,100% { opacity:0; } 3%,21% { opacity:1; } }
+/* Recommendation view and the existing editor share the same role data/handlers. */
+.roleRecommendations { min-width:0; }
+.roleSectionDescription,.roleDescription { color:var(--color-text-secondary); font-size:var(--font-size-body); line-height:1.45; }
+.roleSectionDescription { margin-bottom:var(--space-4); }
+.recommendationTitle { font-size:var(--font-size-h1); line-height:var(--line-height-h1); font-weight:var(--weight-h1); color:var(--color-text-primary); overflow-wrap:anywhere; margin-block:var(--space-2); }
+.roleEditor .roleSource { display:block; font-size:var(--font-size-label); margin-bottom:var(--space-2); }
+.roleEditor .roleReason { font-size:var(--font-size-body-lg); line-height:var(--line-height-body-lg); }
+.roleReason ul { padding-left:var(--space-5); list-style:disc; color:var(--color-text-secondary); margin-top:var(--space-2); }
+.roleReason li + li { margin-top:var(--space-2); }
+.roleSkills:has(>div:only-child) { grid-template-columns:minmax(0,1fr); }
+.skillLabel { color:var(--color-text-secondary); font-size:var(--font-size-caption); line-height:var(--line-height-label); font-weight:var(--weight-h1); margin-bottom:6px; }
+.skillList { display:flex; flex-wrap:wrap; gap:6px; }
+.roleRecommendations .skillChip { min-height:26px; font-size:var(--font-size-label); line-height:18px; padding:4px 9px; }
+.roleActions { display:flex; justify-content:flex-end; margin-top:var(--space-4); }
+.roleRecommendations .skillHelp,.roleRecommendations .responsibility,.roleRecommendations .roleReasonPreview { font-size:var(--font-size-body-lg); line-height:var(--line-height-body-lg); }
+@media(max-width:639px) { .roleRecommendations .roleSkills { grid-template-columns:minmax(0,1fr); gap:var(--space-4); } }
+/* Compact AI recommendation composition; editor handlers remain untouched. */
+.recommendationHeader { display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); margin-bottom:var(--space-1); }
+.recommendationHeader .recommendationTitle { margin:0; font-size:1.25rem; line-height:1.3; font-weight:600; }
+.recommendationHeader > button { flex-shrink:0; min-height:34px; font-size:var(--font-size-label); line-height:18px; padding:8px 12px; }
+.recommendationSkills { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-block:10px; }
+.recommendationSkills:has(>div:only-child) { grid-template-columns:minmax(0,1fr); }
+.recommendationSkills > div { display:grid; grid-template-columns:minmax(0,1fr); gap:6px; align-items:start; align-content:start; }
+.recommendationSkills .skillLabel { margin:0; text-transform:uppercase; }
+.roleRecommendations .recommendationSkills .skillChip { min-height:26px; font-size:var(--font-size-label); line-height:18px; padding:4px 9px; }
+.recommendationReason { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:4px 8px; padding-top:var(--space-2); border-top:var(--border-width) solid var(--color-border-subtle); }
+.recommendationReason h5 { color:var(--color-text-primary); font-size:var(--font-size-body); line-height:1.45; font-weight:600; }
+.recommendationReason p,.recommendationResponsibilities li { margin:0; color:var(--color-text-secondary); font-size:var(--font-size-body); line-height:1.45; overflow-wrap:anywhere; }
+.reasonPreview { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.reasonExpanded { display:block; }
+.recommendationReason > button { grid-column:2; justify-self:start; margin:0; padding:0; }
+.recommendationResponsibilities { margin-top:var(--space-1); }
+.recommendationResponsibilities summary { display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); min-height:32px; list-style:none; color:var(--color-text-primary); font-size:var(--font-size-body); line-height:1.45; font-weight:var(--weight-label); cursor:pointer; }
+.recommendationResponsibilities summary::-webkit-details-marker { display:none; }
+.responsibilityCount { color:var(--color-text-secondary); font-weight:var(--weight-body); }
+.recommendationResponsibilities summary > svg { color:var(--color-text-secondary); transition:transform 160ms ease; }
+.recommendationResponsibilities[open] summary > svg { transform:rotate(180deg); }
+.recommendationResponsibilities ul { list-style:disc; padding-left:var(--space-5); }
+.recommendationResponsibilities summary:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:var(--space-1); border-radius:var(--radius-button); }
+@media(max-width:639px) {
+ .recommendationHeader { flex-wrap:wrap; }
+ .roleEditor { padding:var(--space-4); }
+ .recommendationSkills { grid-template-columns:minmax(0,1fr); gap:10px; }
+ .recommendationSkills > div { grid-template-columns:minmax(0,1fr); gap:6px; }
+ .recommendationReason { grid-template-columns:minmax(0,1fr); }
+ .recommendationReason > button { grid-column:1; }
+}
+
+@media(prefers-reduced-motion:reduce) { .recommendationResponsibilities summary > svg { transition:none; } }
+
+.roleRecommendations > h3 { font-size:1.125rem; line-height:1.3; font-weight:600; }
+.roleRecommendations .skillHelp,.roleRecommendations .responsibility,.roleEditor .roleReason,.roleRecommendations .roleReasonPreview { font-size:var(--font-size-body); line-height:1.45; }
+
+.roleEditor .roleDescription,.roleEditor .recommendationReason p { font-size:var(--font-size-body); line-height:1.45; }
+
+.recommendationSkills > div:nth-child(2) .skillChip { background:var(--color-surface-soft); }
+.compactReview { margin-top:var(--space-5); border:1px solid var(--color-border-subtle); border-radius:var(--radius-card); background:var(--color-surface-1); }
+.compactReview summary { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3); padding:var(--space-4); cursor:pointer; list-style:none; font-size:var(--font-size-body-sm); }
+.compactReview summary>span:first-child { display:grid; gap:var(--space-1); }
+.compactReview summary>span:last-child { display:flex; align-items:center; gap:var(--space-2); color:var(--color-primary-600); }
+.compactReview summary strong { font-size:var(--font-size-body); font-weight:600; }
+.compactReview summary span span { color:var(--color-text-secondary); }
+
+/* Role plan: compact previews first, one controlled detail card at a time. */
+.roleGrid { display:grid; grid-template-columns:minmax(0,1fr); gap:12px; align-items:start; }
+.roleGrid .roleEditor { padding:16px 20px; border-radius:var(--radius-card); min-height:0; display:flex; flex-direction:column; }
+.roleGrid .roleEditor[data-expanded="true"] { grid-column:1/-1; }
+.roleRecommendations>h3 { font-size:16px; font-weight:600; line-height:1.35; }
+.roleGrid .recommendationTitle { font-size:16px; font-weight:600; line-height:1.3; }
+.roleGrid .recommendationHeader { align-items:start; gap:12px; margin-bottom:0; }
+.roleSkillCount { flex-shrink:0; font-size:12px; font-weight:500; color:var(--color-text-secondary); }
+.roleGrid .roleDescription { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; font-size:13px; line-height:1.45; margin-top:4px; }
+.skillPreview { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.roleGrid .skillChip,.roleGrid .recommendationSkills .skillChip { font-size:12px; font-weight:400; min-height:24px; padding:2px 8px; }
+.roleGrid .skillLabel { font-size:12px; }
+.compactRoleFooter { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding-top:8px; margin-top:auto; }
+.compactRoleFooter>div { display:flex; align-items:center; gap:4px; }
+.compactRoleFooter button { font-size:13px; font-weight:500; min-height:28px; height:28px; padding-block:4px; }
+.roleExpand { display:inline-flex; align-items:center; gap:6px; color:var(--color-primary-600); cursor:pointer; }
+.roleExpand svg { transition:transform 220ms ease; }
+.roleExpand[aria-expanded="true"] svg { transform:rotate(180deg); }
+.roleExpand:focus-visible,.compactRoleFooter button:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:2px; }
+.roleGrid .recommendationReason { grid-template-columns:minmax(0,1fr); }
+.roleGrid .recommendationReason>button { grid-column:1; }
+.roleGrid .recommendationReason p,.roleGrid .recommendationReason h5,.roleGrid .recommendationResponsibilities summary,.roleGrid .recommendationResponsibilities li { font-size:13px; line-height:1.5; }
+.roleDetails { min-width:0; }
+@media(max-width:1023px) { .roleGrid { grid-template-columns:minmax(0,1fr); } }
+@media(prefers-reduced-motion:reduce) { .roleExpand svg { transition:none; } }
+
+.roleRecommendations { width:100%; max-width:none; min-width:0; }
+.addRoleAction { display:inline-flex; align-items:center; gap:8px; margin-top:20px; min-height:36px; padding:0 16px; border:1px dashed var(--color-border-subtle); border-radius:var(--radius-button); font-size:13px; font-weight:500; color:var(--color-text-secondary); cursor:pointer; }
+.addRoleAction:hover { border-color:var(--color-primary-600); color:var(--color-primary-600); }
+.addRoleAction:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:2px; }
+@media(max-width:639px) { .roleGrid .roleEditor { padding:16px; } }
+
+.roleGrid .roleDescription,.roleGrid .recommendationReason p { max-width:76ch; }
+
+.budgetSummary { border:1px solid var(--color-border-subtle); border-radius:var(--radius-card); padding:16px; background:var(--color-surface-1); min-width:0; }
+.budgetSummary header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
+.budgetSummary h3,.roleBudgetSection>h3 { font-size:16px; font-weight:600; line-height:1.35; }
+.budgetSummary header button { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:500; color:var(--color-primary-600); cursor:pointer; }
+.budgetSummaryColumns { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:24px; }
+.budgetSummaryColumns>div { min-width:0; }
+.budgetSummary h4 { font-size:15px; font-weight:600; margin-block:4px 8px; }
+.budgetLabel { font-size:12px; font-weight:500; color:var(--color-text-secondary); margin-bottom:4px; }
+.budgetSummaryColumns ul { margin-bottom:12px; font-size:13px; font-weight:500; }
+.budgetDescription,.budgetDescriptionClamped { font-size:13px; line-height:1.5; color:var(--color-text-secondary); overflow-wrap:anywhere; }
+.budgetDescriptionClamped { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+.budgetSkillPreview { display:flex; flex-wrap:wrap; gap:6px; }
+.budgetSkillPreview .skillChip,.budgetSkillPreview button { font-size:12px; min-height:24px; padding:2px 8px; }
+.budgetSkillPreview button { border-radius:var(--radius-pill); background:var(--color-surface-soft); color:var(--color-primary-600); cursor:pointer; }
+.budgetDetails { margin-top:16px; padding-top:16px; border-top:1px solid var(--color-border-subtle); }
+.budgetDetails>div+div { margin-top:12px; }
+.roleBudgetSection { margin-top:24px; }
+.roleBudgetSection>p { font-size:13px; line-height:1.5; margin-top:4px; color:var(--color-text-secondary); }
+.roleBudgetList { display:grid; gap:12px; margin-top:16px; }
+.roleBudgetCard { min-width:0; padding:16px; border:1px solid var(--color-border-subtle); border-radius:var(--radius-card); background:var(--color-surface-1); }
+.roleBudgetCard h4 { font-size:16px; font-weight:600; }
+.roleBudgetCard p { font-size:13px; line-height:1.5; color:var(--color-text-secondary); margin-top:4px; }
+.roleBudgetInputs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:12px; }
+.roleBudgetInputs>div { min-width:0; }
+.roleBudgetInputs label { font-size:12px; font-weight:500; }
+.roleBudgetInputs input,.roleBudgetInputs select { height:40px; min-height:40px; font-size:14px; }
+.budgetSummary button:focus-visible { outline:2px solid var(--color-primary-600); outline-offset:2px; }
+@media(max-width:639px) { .budgetSummaryColumns,.roleBudgetInputs { grid-template-columns:minmax(0,1fr); gap:16px; } }

@@ -9,6 +9,8 @@
   --color-canvas: #ffffff;
   --color-surface-1: #ffffff;
   --color-surface-2: #e9edef;
+  /* Passive information / empty states; interactive neutral states retain surface-2. */
+  --color-surface-soft: #f8f9fc;
 
   /* Text */
   --color-text-primary: #0f1f47;

@@ -617,8 +617,9 @@ export default function CoalitionsPage() {
             members={coalition.members.map(member=>({id:member.id,name:getMemberName(member),avatarUrl:getAvatar(member)}))}
             leadingMetadata={[{label:"Projede rolün",value:coalition.myProjectRole || "Belirtilmedi"},{label:"Koalisyon görevin",value:myMembership?.role==="owner"?"Koalisyon yöneticisi":"Ekip üyesi"}]}
             metadata={[{label:coalition.project?.updated_at?"Proje güncellendi":"Koalisyon oluşturuldu",value:formatDate(coalition.project?.updated_at || coalition.created_at)}]}
+            projectStatus={coalition.project?.status}
+            projectStatusLabel={coalition.project ? coalitionProjectLabel(coalition.project.status) : undefined}
             statusContent={<>
-              {coalition.project && <><span>Proje</span><PanelBadge>{coalitionProjectLabel(coalition.project.status)}</PanelBadge></>}
               {!coalition.team && <span>Rol kontenjanı doğrulanamadı</span>}
               {coalition.team && <span>{coalition.team.ready ? "Tüm roller dolu" : coalition.team.filledRoles+" / "+coalition.team.totalRoles+" rol dolu"}</span>}
               {work.currentStage && <span>Aşaman: {work.currentStage.title}</span>}
