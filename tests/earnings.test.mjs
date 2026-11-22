@@ -23,7 +23,21 @@ test("paid-out and failed-payment records keep distinct actual statuses",async()
 test("missing amount snapshots stay unknown, including malformed values",async()=>{const result=await financials.getFreelancerEarningsSummary(client({...base,project_team_members:[{...base.project_team_members[0],agreed_amount:null}],project_milestones:[milestone({budget:null,freelancer_payout_amount:null})]}),"me");assert.equal(result.movements[0].net,null);assert.equal(result.incompleteAmounts,true);for(const value of [null,undefined,"",Infinity,"oops",-1])assert.equal(presentation.financialAmount(value),null);assert.equal(presentation.financialAmount(0),0);});
 test("query failure never masquerades as zero balance",async()=>{for(const table of ["project_team_members","projects","project_milestones"]){await assert.rejects(()=>financials.getFreelancerEarningsSummary(client(base,{[table]:{message:"denied"}}),"me"),/yüklenemedi/);}});
 test("monthly earnings use approval date and cannot invent missing approval dates",()=>{const now=new Date("2026-10-13T12:00:00Z");const rows=[{status:"approved",approvedAt:"2026-10-05T12:00:00Z",net:100},{status:"approved",approvedAt:"2026-09-30T12:00:00Z",net:200},{status:"active",approvedAt:null,net:300}];assert.equal(presentation.approvedInMonth(rows,now),100);assert.equal(presentation.approvedInMonth([...rows,{status:"approved",approvedAt:null,net:100}],now),null);});
-const View=compile("components/earnings/EarningsView.tsx",name=>{if(name==="react")return React;if(name==="react/jsx-runtime")return jsx;if(name==="next/link")return {__esModule:true,default:({children,...props})=>React.createElement("a",props,children)};if(name.endsWith(".css"))return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};if(name.includes("PanelPrimitives"))return {panelRootClass:"panel"};if(name.includes("Button"))return {Button:({children,variant,...props})=>React.createElement("button",{"data-variant":variant,...props},children)};if(name.includes("formatCurrency"))return {formatCurrency:value=>value+" ₺"};if(name.includes("earningsPresentation"))return presentation;if(name.includes("pricing"))return pricing;throw Error(name);}).EarningsView;
+const financeDeps = name => {
+ if (name === "react") return React;
+ if (name === "react/jsx-runtime") return jsx;
+ if (name === "next/link") return {__esModule:true,default:({children,...props})=>React.createElement("a",props,children)};
+ if (name === "lucide-react") return new Proxy({}, {get:()=>()=>React.createElement("svg")});
+ if (name.endsWith(".css")) return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
+ if (name.includes("PanelPrimitives")) return {panelRootClass:"panel"};
+ if (name.includes("Button")) return {Button:({children,variant,size,...props})=>React.createElement("button",{"data-variant":variant,"data-size":size,...props},children),buttonClasses:()=>"button"};
+ if (name.includes("formatCurrency")) return {formatCurrency:value=>value+" ₺"};
+ if (name.includes("earningsPresentation")) return presentation;
+ if (name.includes("pricing")) return pricing;
+ if (name.includes("FinancePanel")) return compile("components/earnings/FinancePanel.tsx",financeDeps);
+ throw Error(name);
+};
+const View=compile("components/earnings/EarningsView.tsx",financeDeps).EarningsView;
 const render=summary=>renderToStaticMarkup(React.createElement(View,{summary,loading:false,error:"",onRetry(){}}));
 test("no-provider state disables withdrawal, collects no bank data and never claims a success",async()=>{const html=render(await financials.getFreelancerEarningsSummary(client(),"me"));assert.ok(html.includes("Henüz kazancın yok"));assert.ok(html.includes('disabled=""'));assert.ok(html.includes("Henüz hesaplanamıyor"));assert.ok(html.includes("Ödeme hesabı altyapısı henüz bağlı değil"));assert.equal(html.includes("<input"),false);assert.equal(html.includes("talebin alındı"),false);assert.equal(html.includes('class="summary"'),false);});
 test("movement detail shows project, actual net, commission context and payment reference",async()=>{const summary=await financials.getFreelancerEarningsSummary(client({...base,project_milestones:[milestone({payment_status:"paid_out",payment_provider:"provider",provider_payment_id:"reference"})]}),"me");const html=render(summary);for(const text of ["Logo tasarımı","Proje","Aktarıldı","Net hakediş","Client hizmet bedeli","reference"])assert.ok(html.includes(text));assert.equal(html.includes("DashboardMascot"),false);assert.ok(html.includes('scope="col"'));assert.ok(html.includes('data-label="Net hakediş"'));});
@@ -33,4 +47,38 @@ test("pending net uses the real snapshot while cancelled projects add no future 
  const row=milestone({status:"active",approved_at:null,freelancer_payout_amount:950,payment_status:"pending"});
  const pending=await financials.getFreelancerEarningsSummary(client({...base,project_milestones:[row]}),"me");assert.equal(pending.pendingEarnings,950);
  const cancelled=await financials.getFreelancerEarningsSummary(client({...base,projects:[{...base.projects[0],status:"cancelled"}],project_milestones:[row]}),"me");assert.equal(cancelled.pendingEarnings,0);
+});
+
+test("client budget breakdown keeps ownership, existing totals and recorded stages separate", async () => {
+ const fixtures = {
+  projects: [
+   {id:"p",title:"Proje",client_id:"me",status:"in_progress",budget:1000,commission_rate:.12},
+   {id:"missing",title:"Eksik",client_id:"me",status:"open",budget:null},
+   {id:"foreign",title:"Yabancı",client_id:"other",status:"completed",budget:9000},
+  ],
+  project_milestones:[milestone({budget:200,client_total_amount:224,payment_status:null}),milestone({id:"foreign-stage",project_id:"foreign"})],
+ };
+ const result = await financials.getClientPaymentsSummary(client(fixtures),"me");
+ assert.equal(result.totalBudget,1000);
+ assert.equal(result.pendingObligation,800);
+ assert.equal(result.projects[1].budgetMissing,true);
+ assert.equal(result.movements.length,1);
+ assert.equal(result.movements[0].total,224);
+ assert.equal(result.movements[0].paymentStatus,null);
+ for (const table of ["projects","project_milestones"]) {
+  await assert.rejects(()=>financials.getClientPaymentsSummary(client(fixtures,{[table]:{message:"denied"}}),"me"),/yüklenemedi/);
+ }
+});
+
+test("freelancer project table presents the member role and flags unknown agreement amounts", async () => {
+ const summary = await financials.getFreelancerEarningsSummary(client({
+  ...base,
+  project_team_members:[{...base.project_team_members[0],role:"Tasarımcı",agreed_amount:null}],
+  projects:[{...base.projects[0],budget:99999}],
+ }),"me");
+ assert.equal(summary.projects[0].role,"Tasarımcı");
+ assert.equal(summary.projects[0].budgetMissing,true);
+ const html=render(summary);
+ for (const label of ["Tasarımcı","Veri eksik","Projelerim","Hakediş Hareketleri","Para Çek"]) assert.ok(html.includes(label));
+ assert.equal(html.includes("99999"),false);
 });
