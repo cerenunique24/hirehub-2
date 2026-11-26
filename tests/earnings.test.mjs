@@ -29,7 +29,8 @@ const financeDeps = name => {
  if (name === "next/link") return {__esModule:true,default:({children,...props})=>React.createElement("a",props,children)};
  if (name === "lucide-react") return new Proxy({}, {get:()=>()=>React.createElement("svg")});
  if (name.endsWith(".css")) return {__esModule:true,default:new Proxy({},{get:(_,key)=>String(key)})};
- if (name.includes("PanelPrimitives")) return {panelRootClass:"panel"};
+ if (name.includes("PageHeader")) return compile("components/ui/PageHeader.tsx",financeDeps);
+ if (name.includes("Badge")) return compile("components/ui/Badge.tsx",financeDeps);
  if (name.includes("Button")) return {Button:({children,variant,size,...props})=>React.createElement("button",{"data-variant":variant,"data-size":size,...props},children),buttonClasses:()=>"button"};
  if (name.includes("formatCurrency")) return {formatCurrency:value=>value+" ₺"};
  if (name.includes("earningsPresentation")) return presentation;
@@ -39,8 +40,23 @@ const financeDeps = name => {
 };
 const View=compile("components/earnings/EarningsView.tsx",financeDeps).EarningsView;
 const render=summary=>renderToStaticMarkup(React.createElement(View,{summary,loading:false,error:"",onRetry(){}}));
-test("no-provider state disables withdrawal, collects no bank data and never claims a success",async()=>{const html=render(await financials.getFreelancerEarningsSummary(client(),"me"));assert.ok(html.includes("Henüz kazancın yok"));assert.ok(html.includes('disabled=""'));assert.ok(html.includes("Henüz hesaplanamıyor"));assert.ok(html.includes("Ödeme hesabı altyapısı henüz bağlı değil"));assert.equal(html.includes("<input"),false);assert.equal(html.includes("talebin alındı"),false);assert.equal(html.includes('class="summary"'),false);});
-test("movement detail shows project, actual net, commission context and payment reference",async()=>{const summary=await financials.getFreelancerEarningsSummary(client({...base,project_milestones:[milestone({payment_status:"paid_out",payment_provider:"provider",provider_payment_id:"reference"})]}),"me");const html=render(summary);for(const text of ["Logo tasarımı","Proje","Aktarıldı","Net hakediş","Client hizmet bedeli","reference"])assert.ok(html.includes(text));assert.equal(html.includes("DashboardMascot"),false);assert.ok(html.includes('scope="col"'));assert.ok(html.includes('data-label="Net hakediş"'));});
+test("no-provider state disables withdrawal and shows an honest empty state", async () => {
+ const html = render(await financials.getFreelancerEarningsSummary(client(), "me"));
+ for (const label of ["Henüz kazanç hareketin yok", "Çekilebilir bakiye", "Para çekme henüz kullanıma açık değil"]) assert.ok(html.includes(label));
+ assert.ok(html.includes('disabled=""'));
+ assert.equal(html.includes("<input"), false);
+ assert.equal(html.includes("0 ₺"), false);
+});
+test("movement row shows the project, stage, recorded status and actual net", async () => {
+ const summary = await financials.getFreelancerEarningsSummary(client({
+  ...base,
+  project_milestones:[milestone({payment_status:"paid_out",freelancer_payout_amount:950,provider_payment_id:"reference"})],
+ }), "me");
+ const html = render(summary);
+ for (const label of ["Logo tasarımı", "Proje", "Aktarıldı", "950 ₺", "İşlem detayı"]) assert.ok(html.includes(label));
+ assert.ok(html.includes('aria-haspopup="dialog"'));
+ for (const label of ["1000 ₺", "Client hizmet bedeli", "reference"]) assert.equal(html.includes(label), false);
+});
 test("earnings loading and failure states do not show invented totals",()=>{for(const props of [{loading:true,error:""},{loading:false,error:"Kayıtlar yüklenemedi"}]){const html=renderToStaticMarkup(React.createElement(View,{summary:null,onRetry(){},...props}));assert.equal(html.includes('class="summary"'),false);assert.ok(html.includes(props.loading?'role="status"':'role="alert"'));}});
 
 test("pending net uses the real snapshot while cancelled projects add no future income",async()=>{
@@ -70,7 +86,7 @@ test("client budget breakdown keeps ownership, existing totals and recorded stag
  }
 });
 
-test("freelancer project table presents the member role and flags unknown agreement amounts", async () => {
+test("missing agreement amounts are flagged without showing the client budget as earnings", async () => {
  const summary = await financials.getFreelancerEarningsSummary(client({
   ...base,
   project_team_members:[{...base.project_team_members[0],role:"Tasarımcı",agreed_amount:null}],
@@ -79,6 +95,6 @@ test("freelancer project table presents the member role and flags unknown agreem
  assert.equal(summary.projects[0].role,"Tasarımcı");
  assert.equal(summary.projects[0].budgetMissing,true);
  const html=render(summary);
- for (const label of ["Tasarımcı","Veri eksik","Projelerim","Hakediş Hareketleri","Para Çek"]) assert.ok(html.includes(label));
+ for (const label of ["Bazı proje veya tutar bilgileri eksik", "Kazanç hareketleri", "Para çek"]) assert.ok(html.includes(label));
  assert.equal(html.includes("99999"),false);
 });
