@@ -1,14 +1,7 @@
 import {paymentStatusLabel} from "./status";
 export type EarningsTone="neutral"|"success"|"warning"|"info"|"danger";
 export function earningsPaymentPresentation(status:string|null|undefined):{label:string;tone:EarningsTone} {
- const payment=status??"pending";
- if(payment==="held")return {label:"Güvence altında",tone:"info"};
- if(payment==="payout_pending")return {label:"Aktarım hazırlanıyor",tone:"info"};
- if(payment==="paid_out")return {label:"Aktarıldı",tone:"success"};
- if(["payment_failed","cancelled","refund_pending","refunded","partially_refunded"].includes(payment))return {label:paymentStatusLabel(payment),tone:"danger"};
- if(payment==="paid")return {label:paymentStatusLabel(payment),tone:"info"};
- if(payment==="pending"||payment==="payment_initiated")return {label:paymentStatusLabel(payment),tone:"warning"};
- return {label:"Durum doğrulanamadı",tone:"neutral"};
+ return { label: paymentStatusLabel(status), tone: status === "pending" ? "warning" : "neutral" };
 }
 export function earningWorkLabel(status:string|null) {
  return ({approved:"Aşama onaylandı",submitted:"İnceleme bekliyor",in_review:"İnceleme bekliyor",revision:"Revizyon bekliyor",active:"Çalışma sürüyor",pending:"Aşama bekliyor"} as Record<string,string>)[status??""]??"Aşama durumu bilinmiyor";

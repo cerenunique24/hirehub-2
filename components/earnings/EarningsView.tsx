@@ -13,7 +13,7 @@ import {
 } from "./FinancePanel";
 import styles from "./Earnings.module.css";
 
-type Filter = "all" | "approved" | "pending" | "problem";
+type Filter = "all" | "approved" | "pending";
 const columns = ["Rol", "Planlanan kazanç", "Onaylanan", "Onay bekleyen", "Durum"];
 
 function dateLabel(value: string | null) {
@@ -43,8 +43,6 @@ function MovementTable({ rows }: { rows: FreelancerEarningMovement[] }) {
             <div><dt>Freelancer kesintisi</dt><dd>{financeAmount(row.freelancerDeduction)}</dd></div>
             <div><dt>Net hakediş</dt><dd>{financeAmount(row.net)}</dd></div>
             {row.clientPlatformFee !== null && <div><dt>Client hizmet bedeli</dt><dd>{financeAmount(row.clientPlatformFee)} · client tarafından ödenir</dd></div>}
-            {row.paymentReference && <div><dt>Ödeme referansı</dt><dd>{row.paymentReference}</dd></div>}
-            {row.provider && <div><dt>Sağlayıcı kaydı</dt><dd>{row.provider}</dd></div>}
           </dl></details>
         </td>
         <td data-label="Tarih"><time dateTime={row.approvedAt ?? row.createdAt}>{dateLabel(row.approvedAt ?? row.createdAt)}</time>{row.approvedAt && <small>Onay tarihi</small>}</td>
@@ -67,14 +65,12 @@ export function EarningsView({ summary, loading, error, onRetry }: {
   const movements = summary?.movements ?? [];
   const filtered = movements.filter(row => filter === "all"
     || filter === "approved" && row.status === "approved"
-    || filter === "pending" && ["pending", "payment_initiated"].includes(row.paymentStatus ?? "")
-    || filter === "problem" && earningsPaymentPresentation(row.paymentStatus).tone === "danger");
+    || filter === "pending" && row.status !== "approved");
   const projects = summary?.projects ?? [];
   const visibleProjects = projects.filter(project => (!status || status === project.status)
     && project.title.toLocaleLowerCase("tr-TR").includes(query.trim().toLocaleLowerCase("tr-TR")));
   const statuses = [...new Set(projects.flatMap(project => project.status ? [project.status] : []))];
   const empty = Boolean(summary && !summary.incompleteAmounts && projects.length === 0 && movements.length === 0);
-  const hasProblem = movements.some(row => earningsPaymentPresentation(row.paymentStatus).tone === "danger");
 
   return <main className={[panelRootClass, styles.page].join(" ")}>
     <FinanceIntro title="Kazançlarım" subtitle="Hakedişlerini, aşama onaylarını ve ödeme kayıtlarını takip et." tone="warning"
@@ -115,11 +111,11 @@ export function EarningsView({ summary, loading, error, onRetry }: {
               </div>}
             </section>
             <section className={styles.projectPanel} hidden={!movementsOpen} aria-labelledby="earnings-history-title">
-              <div className={styles.panelHeading}><div><h2 id="earnings-history-title">Hakediş Hareketleri</h2><p>Aşama bazında hakediş ve kayıtlı ödeme durumu.</p></div></div>
+              <div className={styles.panelHeading}><div><h2 id="earnings-history-title">Hakediş Hareketleri</h2><p>Aşama bazında brüt ve net hakediş. Doğrulanmış banka aktarımı kaydı yok.</p></div></div>
               {PLATFORM_FEE_MODEL.feePayer === "client" && <p className={styles.commissionNote}>Platform hizmet bedeli client&apos;a eklenir. Freelancer tutarı ve varsa kesintisi hareket detayında ayrı gösterilir.</p>}
               {movements.length > 0 ? <>
                 <div className={styles.filters} role="group" aria-label="Kazanç hareketlerini filtrele">
-                  {([{ id: "all", label: "Tümü" }, { id: "approved", label: "Onaylanan" }, { id: "pending", label: "Ödeme bekleyen" }, ...(hasProblem ? [{ id: "problem", label: "Sorunlu" }] : [])] as { id: Filter; label: string }[]).map(item =>
+                  {([{ id: "all", label: "Tümü" }, { id: "approved", label: "Onaylanan" }, { id: "pending", label: "Onay bekleyen" }] as { id: Filter; label: string }[]).map(item =>
                     <button key={item.id} type="button" aria-pressed={filter === item.id} onClick={() => { setFilter(item.id); setVisibleCount(10); }}>{item.label}</button>)}
                 </div>
                 {filtered.length ? <MovementTable rows={filtered.slice(0, visibleCount)} /> : <p className={styles.panelEmpty}>Bu filtrede kazanç hareketi bulunmuyor.</p>}

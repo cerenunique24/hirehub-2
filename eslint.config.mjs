@@ -27,6 +27,9 @@ const eslintConfig = defineConfig([
     // Claude Code çalışma ağaçları (git worktree kopyaları + derleme çıktıları)
     // proje kaynağı değildir.
     ".claude/**",
+    // Yerel denetim denemeleri ve geçici fixture'lar uygulama kaynağı değildir.
+    ".tmp/**",
+    ".tmp_audit/**",
   ]),
 ]);
 

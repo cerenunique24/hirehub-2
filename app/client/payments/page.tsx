@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { panelRootClass } from "@/components/dashboard/PanelPrimitives";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import {
   FinanceIntro, FinanceMetrics, FinanceProjectTable, FinanceStages, FinanceTabs,
@@ -47,7 +48,7 @@ export default function ClientPaymentsPage() {
   const activeProjects = projects.filter(project => project.status === "in_progress");
   const completedProjects = projects.filter(project => project.status === "completed");
 
-  return <main className={styles.page}>
+  return <main className={[panelRootClass, styles.page].join(" ")}>
     <FinanceIntro title="Bütçe ve Ödemeler" subtitle="Projelerinizin bütçesini, hakedişlerini ve ödeme kayıtlarını takip edin."
       notice={<><strong>Ödeme altyapımız hazırlanıyor.</strong><p>Buradaki tutarlar proje bütçelerini ve aşama kayıtlarını gösterir. CollaCrew üzerinden ödeme henüz yapılamaz.</p></>} />
     {error ? <div className={styles.error} role="alert"><p>{error}</p><Button variant="secondary" onClick={() => { setError(""); setReload(value => value + 1); }}>Tekrar dene</Button></div>
@@ -59,15 +60,16 @@ export default function ClientPaymentsPage() {
           { label: "Tamamlanan işler", value: completedProjects.some(project => project.budgetMissing) ? null : summary.completedBudget, tone: "info" },
           { label: "Bekleyen hakediş", value: activeProjects.some(project => project.budgetMissing || project.stagesMissing) ? null : summary.pendingObligation, tone: "warning" },
         ]} />
-        <FinanceTabs movements={movements} onChange={setMovements} label="Ödeme Hareketleri" />
+        <FinanceTabs movements={movements} onChange={setMovements} label="Aşama Tutarları" />
         {movements ? <section className={styles.projectPanel} aria-labelledby="payment-movements">
-          <div className={styles.panelHeading}><div><h2 id="payment-movements">Ödeme Hareketleri</h2><p>Aşama kayıtları ve varsa kayıtlı ödeme durumu.</p></div></div>
+          <div className={styles.panelHeading}><div><h2 id="payment-movements">Aşama Tutarları</h2><p>Proje ve aşama bazında bütçe ve hizmet bedeli. Doğrulanmış tahsilat kaydı yok.</p></div></div>
           {summary.movements.length ? <ul className={styles.stageList}>{summary.movements.map(stage => {
-            const payment = stage.paymentStatus ? earningsPaymentPresentation(stage.paymentStatus) : null;
+            const payment = earningsPaymentPresentation(stage.paymentStatus);
             return <li key={stage.id}>
               <div><strong>{stage.title}</strong><small>{stage.projectTitle} · {earningWorkLabel(stage.status)}</small></div>
-              <div><span className={styles.status} data-tone={payment?.tone}>{payment?.label ?? "Ödeme durumu eksik"}</span>
-                <small>Hizmet bedeli dahil aşama tutarı</small><strong>{financeAmount(stage.total)}</strong></div>
+              <div><span className={styles.status} data-tone={payment.tone}>{payment.label}</span>
+                <small>Hakediş {financeAmount(stage.budget)} · Hizmet bedeli {financeAmount(stage.platformFee)}</small>
+                <small>Planlanan toplam</small><strong>{financeAmount(stage.total)}</strong></div>
             </li>;
           })}</ul> : <p className={styles.panelEmpty}>Görüntülenebilir aşama kaydı yok.</p>}
         </section> : <section className={styles.projectPanel} aria-labelledby="payment-projects">
@@ -83,7 +85,7 @@ export default function ClientPaymentsPage() {
               id: project.projectId, title: project.title, href: `/client/projects/${project.projectId}`,
               cells: [
                 financeAmount(project.budgetMissing ? null : project.engagementValue),
-                <span key="approved" className={styles.approved}>{financeAmount(project.budgetMissing || (project.status !== "completed" && project.stagesMissing) ? null : project.approvedValue)}</span>,
+                <span key="approved" className={styles.approved}>{financeAmount(project.stagesMissing ? null : project.approvedValue)}</span>,
                 <span key="pending" className={styles.pending}>{financeAmount(project.status === "in_progress" && (project.budgetMissing || project.stagesMissing) ? null : project.pendingValue)}</span>,
                 <div key="fee">{financeAmount(pricing?.platformFee)}{pricing && <small>{formatRatePercent(pricing.rate)}</small>}</div>,
                 <strong key="total">{financeAmount(pricing?.clientTotal)}</strong>,
