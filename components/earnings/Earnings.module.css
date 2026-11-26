@@ -44,7 +44,7 @@
 
 .row:hover, .close:hover { background: var(--color-surface-2); }
 .row:focus-visible, .close:focus-visible, .projectLink:focus-visible {
-  outline: 2px solid var(--color-primary-500);
+  outline: 2px solid var(--color-primary-700);
   outline-offset: -2px;
 }
 
